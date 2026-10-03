@@ -1,0 +1,22 @@
+{
+  "name": "@meridian/ingestor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@meridian/binance-client": "workspace:*",
+    "@meridian/bus": "workspace:*",
+    "@meridian/config": "workspace:*",
+    "@meridian/observability": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1"
+  }
+}

@@ -1,0 +1,8 @@
+title = "Meridian gitleaks config"
+
+[allowlist]
+description = "Allow local example defaults only"
+paths = [
+  '''\.env\.example$''',
+  '''infra/docker-compose\.yml$'''
+]

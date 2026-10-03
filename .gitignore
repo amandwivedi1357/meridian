@@ -1,0 +1,12 @@
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+.turbo/
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo
+pnpm-debug.log*
+Dockerfile.local
