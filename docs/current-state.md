@@ -148,6 +148,9 @@ Phase 1.4: Ingestor service.
     - `binance-backfill-adapter.ts` adapts Binance REST klines to core candles
     - `kline-backfill-service.ts` composes Binance + Postgres dependencies
     - `kline-backfill-cli.ts` and `kline-backfill-command.ts` parse CLI flags and run the service
+  - Runtime wiring:
+    - `apps/ingestor/src/runtime/runtime-clients.ts` creates real Postgres and Redis clients behind testable ingestor interfaces
+    - `apps/ingestor/src/main.ts` loads config, connects Redis/Postgres, creates Binance REST + metrics dependencies, runs startup migrations, dispatches live startup or kline backfill mode, and closes clients on completion
 
 ## Current Verification Baseline
 
@@ -161,7 +164,7 @@ Latest verified package checks:
   - Tests passed: 3 tests across 1 test file.
 - `@meridian/ingestor`
   - Typecheck passed.
-  - Tests passed: 44 tests across 20 test files.
+  - Tests passed: 53 tests across 24 test files.
 - `@meridian/db`
   - Typecheck passed.
   - Tests passed: 9 tests across 3 test files.
@@ -184,7 +187,6 @@ pnpm --filter @meridian/db test
 Continue Phase 1.4. The core unit-tested ingestor pipeline pieces exist. Next work should focus on live infrastructure wiring and persistence completeness:
 
 - decide whether to replace the current JSON-bytes codec with generated protobuf/buf now or keep the tested codec boundary until later
-- add actual runtime clients/dependencies in `main.ts` for Redis, Postgres, Binance REST, and startup/backfill command dispatch
 - smoke test migrations/backfill against local Docker TimescaleDB
 - smoke test market event publishing against local Docker Redis
 - later: continuous aggregates/compression and `packages/bus` consumer/ack helpers

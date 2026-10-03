@@ -97,7 +97,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [x] **P0** Dedup by `(symbol, eventId)`
   - Added in-batch deduplication before DB writes using event kind, symbol, and event id; duplicate trade/kline events are skipped before upsert calls.
 - [x] **P0** Historical kline backfill CLI (resumable, rate-limit aware)
-  - Added planner, CLI arg parser, command runner, Binance REST fetch adapter, and backfill service composition. The backfill path chunks time ranges into rate-limit-friendly requests, fetches Binance klines, converts them to candles, and upserts kline rows through the Timescale writer. Live long-range smoke/backfill verification remains part of Phase 1 exit criteria.
+  - Added planner, CLI arg parser, command runner, Binance REST fetch adapter, and backfill service composition. The backfill path chunks time ranges into rate-limit-friendly requests, fetches Binance klines, converts them to candles, and upserts kline rows through the Timescale writer. Runtime wiring now creates real Redis, Postgres, Binance REST, metrics, startup migration, live startup, and backfill dispatch dependencies from `apps/ingestor/src/main.ts`. Live long-range smoke/backfill verification remains part of Phase 1 exit criteria.
 - [ ] **P1** Continuous aggregates (1m → 5m → 15m → 1h) + compression policy
 - [ ] **P1** `packages/bus`: publish/consume/ack, `XAUTOCLAIM` for stuck messages
 
