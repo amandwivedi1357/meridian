@@ -1,10 +1,10 @@
 # Meridian — Implementation Plan
 
-| Field | Value |
-|---|---|
-| Related docs | `PRD.md`, `TRD.md` |
-| Estimated duration | ~8–10 weeks part-time (adjust to your pace) |
-| Rule | **Do not start a phase until the previous phase's exit criteria are met.** |
+| Field              | Value                                                                                                                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Related docs       | `PRD.md`, `TRD.md`                                                                                                                                                                                                             |
+| Estimated duration | ~10–12 weeks part-time in total (revised 2026-10-04 using Phase 1 actuals; adjust to your pace)                                                                                                                                |
+| Rule               | **Do not declare a phase done until its exit criteria are met.** Criteria that need wall-clock time (24h soak, 48h paper run) may run in the background while the next phase starts, but must pass before the phase is closed. |
 
 Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-have
 
@@ -12,16 +12,29 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 ## Timeline at a glance
 
-| Phase | Focus | Est. | Demo you can show after it |
-|---|---|---|---|
-| 0 | Foundation & tooling | 3–4 days | `docker compose up` works, CI green |
-| 1 | Market data ingestion | 1–1.5 weeks | Live order book + candles stored in DB |
-| 2 | Strategy SDK & backtester | 1.5–2 weeks | Backtest report with real metrics |
-| 3 | Execution & risk (Testnet) | 1.5–2 weeks | Bot paper-trading live with kill switch |
-| 4 | API & dashboard | 1–1.5 weeks | Live dashboard in the browser |
-| 5 | Observability, hardening, deploy | 1 week | Public URL + Grafana + chaos test results |
-| 6 | MCP / AI layer | 3–5 days | Agent answering questions about your portfolio |
-| 7 | Polish & resume packaging | 3–4 days | README, diagrams, demo video, resume bullets |
+| Phase | Focus                            | Est.        | Demo you can show after it                     |
+| ----- | -------------------------------- | ----------- | ---------------------------------------------- |
+| 0     | Foundation & tooling             | 3–4 days    | `docker compose up` works, CI green            |
+| 1     | Market data ingestion            | 1–1.5 weeks | Live order book + candles stored in DB         |
+| 2     | Strategy SDK & backtester        | 1.5–2 weeks | Backtest report with real metrics              |
+| 3     | Execution & risk (Testnet)       | 1.5–2 weeks | Bot paper-trading live with kill switch        |
+| 4     | API & dashboard                  | 1–1.5 weeks | Live dashboard in the browser                  |
+| 5     | Observability, hardening, deploy | 1 week      | Public URL + Grafana + chaos test results      |
+| 6     | MCP / AI layer                   | 3–5 days    | Agent answering questions about your portfolio |
+| 7     | Polish & resume packaging        | 3–4 days    | README, diagrams, demo video, resume bullets   |
+
+---
+
+## Status snapshot (2026-10-04)
+
+| Area                       | State                                                                                                                                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Phase 0                    | Nearly done. Open: gitleaks pre-commit hook, Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                                   |
+| Phase 1 (1.1–1.4 P0 items) | Done in code and unit tests. Open: `packages/bus` (now P0), continuous aggregates (P1), live DB/migration verification, and all four exit criteria (24h soak, spot-check vs REST snapshot, 60s network kill, 6-month backfill) |
+| Phase 2                    | Core types and `Strategy`/`StrategyContext` interfaces done; everything else open                                                                                                                                              |
+| Phases 3–7                 | Not started                                                                                                                                                                                                                    |
+
+**Strategy for the rest of the plan:** get a thin vertical slice working end to end (Phase 2.0) before polishing any single layer. Infrastructure that nothing consumes yet (generated Protobuf, continuous aggregates) is deferred until a real consumer needs it.
 
 ---
 
@@ -42,6 +55,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [x] **P1** ADR template in `docs/adr/`; write ADR-001 through ADR-008 stubs from TRD §1.1
 
 **Exit criteria**
+
 - [x] `docker compose up` starts infra; `pnpm test` and CI pass on an empty-but-wired repo.
   - Verified locally: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, and `docker compose -f infra/docker-compose.yml config`.
 - [ ] No secrets in git history.
@@ -54,6 +68,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 **Goal:** trustworthy, continuously running market data pipeline.
 
 ### 1.1 Binance client (REST, read-only first)
+
 - [x] **P0** Typed client for `exchangeInfo`, `klines`, `depth`, server time
   - Verified with read-only Binance public REST smoke test for `serverTime`, `BTCUSDT` depth, and `BTCUSDT` 1m klines.
 - [x] **P0** Rate limiter (token bucket by weight; initialize from `exchangeInfo.rateLimits`; read used-weight headers)
@@ -66,6 +81,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
   - Added server-time, depth, and kline JSON fixtures with tests that validate response shape assumptions and decimal parser behavior.
 
 ### 1.2 Stream connection manager
+
 - [x] **P0** State machine (`CONNECTING/OPEN/STALE/BACKOFF`), ping/pong, stale-data detection
   - Implemented state transitions, message gating, stale detection, heartbeat timestamp tracking for ping/pong, and unit tests.
 - [x] **P0** Reconnect with backoff + jitter; auto re-subscribe
@@ -78,6 +94,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
   - Added `registerStreamMetrics` helper backed by `prom-client`, using stream manager getters for reconnect count and last-message age.
 
 ### 1.3 Local order book
+
 - [x] **P0** Implement the documented snapshot + diff sync procedure (TRD §4.3)
   - Implemented local book, sequence-aware depth sync, snapshot loading, pre-snapshot event buffering, and buffered event replay.
 - [x] **P0** Gap detection → automatic resync
@@ -88,6 +105,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
   - Added metric-friendly orchestrator getters plus `registerOrderBookMetrics` for `order_book_resyncs_total` and `order_book_update_lag_seconds`.
 
 ### 1.4 Ingestor service
+
 - [x] **P0** zod-validate + normalize trade/kline/depth events
   - Added `apps/ingestor/src/market/market-events.ts` with zod validation for Binance trade, kline, and depth payloads; normalizes them into decimal-safe internal events and rejects malformed payloads before publish/write.
 - [x] **P0** Protobuf encode → `XADD` to Redis Streams (`market.*`)
@@ -98,10 +116,18 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
   - Added in-batch deduplication before DB writes using event kind, symbol, and event id; duplicate trade/kline events are skipped before upsert calls.
 - [x] **P0** Historical kline backfill CLI (resumable, rate-limit aware)
   - Added planner, CLI arg parser, command runner, Binance REST fetch adapter, and backfill service composition. The backfill path chunks time ranges into rate-limit-friendly requests, fetches Binance klines, converts them to candles, and upserts kline rows through the Timescale writer. Runtime wiring now creates real Redis, Postgres, Binance REST, metrics, startup migration, live startup, and backfill dispatch dependencies from `apps/ingestor/src/main.ts`. Live long-range smoke/backfill verification remains part of Phase 1 exit criteria.
-- [ ] **P1** Continuous aggregates (1m → 5m → 15m → 1h) + compression policy
-- [ ] **P1** `packages/bus`: publish/consume/ack, `XAUTOCLAIM` for stuck messages
+- [ ] **P1** Continuous aggregates (1m → 5m → 15m → 1h) + compression policy (can be deferred: the backtester can resample 1m candles in code; the dashboard is the first real need)
+- [ ] **P0** `packages/bus`: publish/consume/ack, `XAUTOCLAIM` for stuck messages (promoted from P1: the engine and executor in Phase 3 cannot run without it; integration-test with Testcontainers Redis)
+
+### 1.5 Close-out (do before Phase 2 gets deep)
+
+- [ ] **P0** Run migrations against a real TimescaleDB and verify live batched writes end to end (writers are currently unit-tested only)
+- [ ] **P0** Define an `EventCodec` interface; keep the current JSON-bytes codec as the default implementation so generated Protobuf can be swapped in later (TRD ADR-2)
+- [ ] **P0** Session recorder: write normalized trade/kline/depth events to disk in a replayable format (needed for the parity test in Phase 3; PRD FR-1.9)
+- [ ] **P0** Start the **24h soak** now and let it run in the background while Phase 2 begins
 
 **Exit criteria**
+
 - Ingestor runs **24h** without an unrecovered desync.
 - Book state matches a fresh REST snapshot within tolerance when spot-checked.
 - Kill the network for 60s → service recovers automatically, metrics show the reconnect.
@@ -115,34 +141,54 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 **Goal:** trustworthy backtests using the same `Strategy` interface that live trading will use.
 
+### 2.0 Vertical slice first (do this before the rest of Phase 2)
+
+One symbol, one strategy, one number. Build the thinnest path that proves the architecture, then widen it.
+
+- [ ] **P0** Kline feed for `BTCUSDT` 1h/15m from Timescale in time order
+- [ ] **P0** EMA crossover (fixed size) implementing the real `Strategy` interface
+- [ ] **P0** Minimal sim broker: market fills at next open ± fixed slippage, taker fee
+- [ ] **P0** Minimal metrics: total return, max drawdown, trade count
+- [ ] **P0** CLI: `pnpm backtest --strategy ema --symbol BTCUSDT --from … --to …` prints the metrics
+- [ ] **P0** Same inputs twice ⇒ identical output (first cut of the determinism test)
+
+**Slice exit:** one command, one backtest result you trust. Everything below then hardens and widens it.
+
 ### 2.1 Core domain (`packages/core`)
+
 - [x] **P0** Types: `Candle`, `Trade`, `BookSnapshot`, `OrderIntent`, `Fill`, `Position`
 - [x] **P0** `Strategy` and `StrategyContext` interfaces (TRD §4.7)
 - [ ] **P0** Decimal helpers + rounding to exchange filters (tick size, step size, min notional)
 - [ ] **P0** Indicators (SMA, EMA, RSI, ATR, Bollinger) with unit tests against known values
-- [ ] **P0** Position/PnL accounting (average entry, realized/unrealized)
+- [ ] **P0** Position/PnL accounting (average entry, realized/unrealized) that is **fee-aware** (fees in quote, base, or BNB; position quantity net of base-asset fees)
 
 ### 2.2 Backtest engine
+
 - [ ] **P0** Data feed reading klines from Timescale in time order
 - [ ] **P0** Simulated clock; strategies use `ctx.now()` only
 - [ ] **P0** Sim broker: market + limit fills, taker/maker fees, slippage model
 - [ ] **P0** Apply the same exchange filters as live
-- [ ] **P0** Look-ahead guard: only closed candles delivered
+- [ ] **P0** Look-ahead guard: only closed candles delivered; orders from candle _N_ fill no earlier than candle _N+1_'s open
+- [ ] **P0** Conservative intrabar rule: if a candle could trigger both a favourable and unfavourable event, assume the unfavourable one first; limit orders fill only on trade-through (TRD §4.8)
+- [ ] **P0** `RecordedSessionFeed` implementing the same feed interface, so recorded live sessions can be replayed (enables the Phase 3 parity test)
 - [ ] **P0** Metrics: return, CAGR, Sharpe, Sortino, max drawdown, win rate, profit factor, exposure
 - [ ] **P0** Determinism test: same input ⇒ byte-identical output
 - [ ] **P1** Walk-forward / train-test split reporting
 
 ### 2.3 Reference strategies
+
 - [ ] **P0** EMA crossover (with ATR-based position sizing)
 - [ ] **P1** Grid or mean-reversion strategy
 - [ ] **P1** Buy-and-hold benchmark for comparison in every report
 
 ### 2.4 Parallel sweeps
+
 - [ ] **P1** `backtest-worker` with BullMQ + `worker_threads`
 - [ ] **P1** `backtest_runs` / `backtest_trades` tables + results CLI
 - [ ] **P1** Report generator (equity curve + drawdown chart as PNG/HTML)
 
 **Exit criteria**
+
 - Backtest results for both strategies over ≥ 6 months, **with fees and slippage on**.
 - Determinism test passing in CI.
 - A written note on overfitting risk and out-of-sample results.
@@ -156,40 +202,54 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 **Goal:** the same strategies trading on Testnet, safely and idempotently.
 
 ### 3.1 Authenticated client
+
 - [ ] **P0** Request signing (Ed25519 and HMAC), time-offset sync, `recvWindow`
 - [ ] **P0** Order endpoints: place, cancel, query by `clientOrderId`, open orders
 - [ ] **P0** User data stream: fills, balance updates; keepalive + reconnect
 - [ ] **P0** Environment guard: refuse `production` without explicit override flag
+- [ ] **P1** `ExchangeGateway` / `MarketDataSource` interfaces in `packages/core`; `binance-client` and the sim broker both implement them (TRD §4.14)
 
 ### 3.2 Order lifecycle
+
 - [ ] **P0** Order state machine in `packages/core` with exhaustive transition tests
-- [ ] **P0** Deterministic `clientOrderId` generation
+- [ ] **P0** Deterministic `clientOrderId` generation that respects Binance's length/charset limits (fixed prefix + truncated hash of strategyId:signalId; verify limits in current docs)
 - [ ] **P0** Write-ahead persistence (`NEW/pending` saved before send)
 - [ ] **P0** Timeout handling: **query before retry**, never blind-resend
 - [ ] **P0** Reconciliation on startup + after reconnect (open orders + recent trades vs DB)
 - [ ] **P0** Handle partial fills and out-of-order events
+- [ ] **P0** Local states `PENDING_NEW` / `UNKNOWN` / `PENDING_CANCEL` in the state machine with exhaustive transition tests
+- [ ] **P0** Fee-aware fills: record `fee` + `fee_asset`; positions net base-asset fees
+- [ ] **P1** Tolerate Testnet resets (wiped orders/balances): detect, re-baseline, alert
 
 ### 3.3 Engine + executor services
-- [ ] **P0** `engine`: consume `market.*`, run strategies via the same interface, publish `Signal`
+
+- [ ] **P0** Swap the JSON-bytes codec for generated Protobuf behind `EventCodec` now that the engine is the first real consumer (keep a JSON debug mode)
+- [ ] **P0** `engine`: consume `market.*`, run strategies via the same interface, publish `Signal` (with `signal_id` and `valid_until_ms`)
 - [ ] **P0** Live `StrategyContext` implementation (wall clock, live positions)
 - [ ] **P0** `executor`: consume `signals` → pre-trade validation → risk gate → send
 - [ ] **P0** Stale-data guard: no signals acted on if market data is older than threshold
+- [ ] **P0** Signal expiry: executor drops signals past `valid_until_ms` and counts them (`signals_expired_total`)
 
 ### 3.4 Risk engine
+
 - [ ] **P0** Checks from TRD §4.10 (notional, position, open orders, orders/min, daily loss, drawdown, price sanity)
-- [ ] **P0** Kill switch (Redis flag + cancel-all + audit entry + alert)
+- [ ] **P0** Kill switch (Redis flag + cancel-all + audit entry + alert), **failing closed**: an unreadable flag counts as engaged; state also recorded in DB so it survives a Redis wipe
 - [ ] **P0** Every rejection persisted to `risk_events` with a reason
 - [ ] **P1** Auto-trip breakers (drawdown/daily loss) engage the kill switch
 
 ### 3.5 Verification
+
 - [ ] **P0** Integration tests with Testcontainers (Redis + Timescale) for the full signal → order → fill loop
 - [ ] **P0** **Parity test**: replay a recorded live session through the backtester; signals must match
 - [ ] **P0** Crash test: kill executor between "persist" and "send" and between "send" and "ack"; verify no duplicate/lost orders after restart
+- [ ] **P0** Fail-closed test: kill Redis ⇒ zero new orders sent and an alert fired; force the write-ahead insert to fail ⇒ nothing sent
 
 **Exit criteria**
+
 - Strategy paper-trades on Testnet for **48h+** without manual intervention.
 - Kill switch verified: halts new orders and cancels open ones within seconds.
 - Zero duplicate orders across all crash tests.
+- Redis killed ⇒ zero new orders (fail closed).
 
 **Deliverable:** screen recording of the bot trading + the kill switch firing.
 
@@ -200,6 +260,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 **Goal:** operate and observe the system through a browser.
 
 ### 4.1 API gateway
+
 - [ ] **P0** Fastify app with `zod` type provider + generated OpenAPI docs
 - [ ] **P0** Auth (JWT) with `viewer`/`operator` roles; rate limiting (Redis store)
 - [ ] **P0** REST: market history, strategies, orders, positions, backtests
@@ -209,6 +270,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [ ] **P1** Backtest job submission + status polling
 
 ### 4.2 Dashboard (`apps/web`)
+
 - [ ] **P0** Layout, auth flow, SSE hook with auto-reconnect → Zustand store
 - [ ] **P0** Market view: candlestick chart, order book depth, trades tape
 - [ ] **P0** Positions / orders / fills tables with live PnL
@@ -219,6 +281,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [ ] **P2** Playwright E2E for start/stop and kill switch flows
 
 **Exit criteria**
+
 - Dashboard shows live data with < 1s perceived latency and recovers after the API restarts.
 - Load test: 500 concurrent SSE clients on one API instance (k6).
 
@@ -246,6 +309,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [ ] **P1** Nightly DB backup
 
 **Exit criteria**
+
 - Public URL live; Grafana screenshots captured.
 - Chaos suite passes; results documented.
 - Benchmark numbers meet (or honestly report against) TRD §10 targets.
@@ -265,6 +329,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [ ] **P1** Demo: connect a Claude client and record a short session ("how is my portfolio doing?", "backtest EMA 12/26 on ETH for 3 months")
 
 **Exit criteria**
+
 - Agent can answer portfolio and strategy questions and launch a backtest end-to-end.
 - Audit log shows every agent action.
 
@@ -281,6 +346,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [ ] **P0** Final secret scan of the entire git history
 
 ### Resume bullet templates (fill with **your real numbers**)
+
 - Built an event-driven algorithmic trading platform in TypeScript (Node.js, Redis Streams, Protobuf, TimescaleDB) processing **{X}k market events/sec** with p95 internal latency of **{Y} ms**.
 - Implemented exchange-documented local order book synchronization with sequence-gap detection and automatic resync; verified with property-based tests.
 - Designed a unified strategy interface shared by backtesting and live execution, with a parity test proving identical signals on replayed sessions.
@@ -289,12 +355,26 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 ---
 
+## Phase 8 — Optional, post-v1: derivatives exploration
+
+Only start after v1 ships (Phases 0–7 done, README published). Goal: learn the extra risk machinery of leveraged products, not to chase more features.
+
+- [ ] **P2** Read Binance USDⓈ-M Futures docs; write a short note on mark price, funding, leverage, margin ratio, liquidation, one-way vs hedge mode
+- [ ] **P2** Second `ExchangeGateway` implementation against the **Futures testnet** (verify it exists and its endpoints in the docs)
+- [ ] **P2** New risk checks: max leverage, liquidation distance, funding-rate awareness
+- [ ] **P2** Backtester support for funding payments and short positions
+- Options are **out of scope**: they need a different strategy model (Greeks, IV, expiry). Treat as a separate project.
+
+---
+
 ## Cross-cutting checklists
 
 **Every PR**
+
 - [ ] Tests added/updated · [ ] Types strict, no `any` · [ ] No secrets · [ ] Metrics/logs for new behavior · [ ] Docs/ADR updated
 
 **Weekly**
+
 - [ ] Demo the current phase deliverable to yourself (record it)
 - [ ] Review risks in PRD §7; update status
 - [ ] Prune scope: move anything non-essential to P2
@@ -304,22 +384,36 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 ## Cut-list (if you run out of time)
 
 Drop in this order, keeping the core story intact:
-1. Playwright E2E, blog post, nightly backup
-2. OpenTelemetry tracing, Sentry
-3. Grid/mean-reversion strategy, walk-forward reporting
-4. `explain_trade` MCP tool
-5. Parallel parameter sweeps (keep single-run backtests)
 
-**Never cut:** order book sync, decimal math, idempotent orders + reconciliation, risk engine + kill switch, backtest/live parity, Testnet-only guard, README with real numbers.
+1. Playwright E2E, blog post, nightly backup
+2. Timescale continuous aggregates / compression (resample in code instead)
+3. OpenTelemetry tracing, Sentry
+4. Generated Protobuf (keep the JSON-bytes codec behind `EventCodec`; be honest about it in the README)
+5. Grid/mean-reversion strategy, walk-forward reporting
+6. `explain_trade` MCP tool
+7. Parallel parameter sweeps (keep single-run backtests)
+
+**Never cut:** order book sync, decimal math, idempotent orders + reconciliation, risk engine + kill switch **(fail-closed)**, backtest/live parity, Testnet-only guard, README with real numbers.
 
 ---
 
-## Suggested first 5 days (start here)
+## Suggested next 10 working days (from where you are now)
 
-| Day | Tasks |
-|---|---|
-| 1 | Monorepo, TS/ESLint/Prettier, config package, `.env.example`, gitleaks |
-| 2 | Docker Compose (Redis, Timescale, Prometheus, Grafana), CI pipeline |
-| 3 | Binance REST client: `exchangeInfo`, `klines`, `depth` + fixtures/tests |
-| 4 | Rate limiter + retry/backoff + decimal parsing |
-| 5 | Stream connection manager (reconnect, heartbeat, stale detection) |
+| Day | Tasks                                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------ |
+| 1   | Close Phase 0 leftovers: gitleaks pre-commit, Testnet keys in `.env`, secret scan                      |
+| 2   | Run migrations on real Timescale; verify live batched writes; kick off a short backfill                |
+| 3   | `packages/bus` (publish/consume/ack/`XAUTOCLAIM`) with Testcontainers tests                            |
+| 4   | `EventCodec` interface + session recorder; **start the 24h soak**                                      |
+| 5   | Phase 2.0: kline feed + EMA crossover + minimal sim broker                                             |
+| 6   | Phase 2.0: metrics + `pnpm backtest` CLI + first determinism test (**vertical slice done**)            |
+| 7   | Decimal rounding to exchange filters; indicators (SMA/EMA/ATR) with known-value tests                  |
+| 8   | Fee-aware position/PnL accounting; intrabar rule                                                       |
+| 9   | Full metrics set (Sharpe, Sortino, profit factor, exposure) + buy-and-hold benchmark                   |
+| 10  | Check the soak results, spot-check book vs REST snapshot, run the 60s network-kill test, close Phase 1 |
+
+---
+
+## Change log
+
+- **2026-10-04:** Added status snapshot; promoted `packages/bus` to P0; added Phase 1.5 close-out and a Phase 2.0 vertical slice; background wall-clock soaks allowed; added fail-closed, signal expiry, fee-aware accounting, local order states, clientOrderId limits, Testnet-reset tolerance, `ExchangeGateway`, and codec-swap tasks; added optional Phase 8 (derivatives exploration); revised cut-list and next-10-days plan; timeline revised to ~10–12 weeks.

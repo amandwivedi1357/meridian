@@ -1,1 +1,4 @@
-pnpm lint-staged
+#!/usr/bin/env sh
+export PATH="/c/Program Files/nodejs:$PATH"
+
+./node_modules/.bin/lint-staged
