@@ -25,13 +25,13 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 ---
 
-## Status snapshot (2026-10-04)
+## Status snapshot (2026-10-05)
 
 | Area                       | State                                                                                                                                                                                      |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 0                    | Nearly done. Open: Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                         |
 | Phase 1 (1.1–1.5 P0 items) | Done in code and unit tests except wall-clock verification. Open: continuous aggregates (P1), 24h soak, spot-check vs REST snapshot, 60s network kill, and 6-month backfill exit criterion |
-| Phase 2                    | Core types and `Strategy`/`StrategyContext` interfaces done; everything else open                                                                                                          |
+| Phase 2                    | Phase 2.0 complete: real historical CLI, 233 tests, repeat-output determinism verified. Phase 2.1 remaining tasks onward are open                                                          |
 | Phases 3–7                 | Not started                                                                                                                                                                                |
 
 **Strategy for the rest of the plan:** get a thin vertical slice working end to end (Phase 2.0) before polishing any single layer. Infrastructure that nothing consumes yet (generated Protobuf, continuous aggregates) is deferred until a real consumer needs it.
@@ -150,14 +150,22 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 One symbol, one strategy, one number. Build the thinnest path that proves the architecture, then widen it.
 
-- [ ] **P0** Kline feed for `BTCUSDT` 1h/15m from Timescale in time order
-- [ ] **P0** EMA crossover (fixed size) implementing the real `Strategy` interface
-- [ ] **P0** Minimal sim broker: market fills at next open ± fixed slippage, taker fee
-- [ ] **P0** Minimal metrics: total return, max drawdown, trade count
-- [ ] **P0** CLI: `pnpm backtest --strategy ema --symbol BTCUSDT --from … --to …` prints the metrics
-- [ ] **P0** Same inputs twice ⇒ identical output (first cut of the determinism test)
+- [x] **P0** Kline feed for `BTCUSDT` 1h/15m from Timescale in time order
+  - Reader implemented in `apps/backtest-worker/src/feeds/`: lazy 1,000-row timestamp pagination, closed candles only, Decimal mapping. Fifteen tests pass; real Timescale temporary-table smoke returned 1,001 candles across two batches and verified filters/precision. January 2024 backfills are verified: 2,976 15m and 744 1h closed candles in the exclusive-end range, with zero continuity gaps.
+- [x] **P0** EMA crossover (fixed size) implementing the real `Strategy` interface
+  - Decimal EMA with SMA warm-up and a long-only crossover strategy are implemented. Tests cover signals, position guards, closed/symbol/interval filtering, reset behavior, and invalid settings. Backtest worker baseline: 49 passing tests, type check and lint pass.
+- [x] **P0** Minimal sim broker: market fills at next open ± fixed slippage, taker fee
+  - Fixed slippage and quote-asset fees, bounded pending-order queue, fee-aware balances/cost basis/PnL, equity marking, next-open eligibility, and atomic batch accounting are implemented. Fill failures halt the broker. Backtest worker baseline: 155 passing tests, build and lint pass.
+- [x] **P0** Minimal metrics: total return, max drawdown, trade count
+  - Decimal percentage return and peak-based drawdown are implemented; starting capital is included in the drawdown curve. Trade count denotes executed fills in this slice. Twenty metric tests pass; backtest worker baseline is 175 passing tests, type check and lint pass.
+- [x] **P0** CLI: `pnpm backtest --strategy ema --symbol BTCUSDT --from … --to …` prints the metrics
+  - Executable entry point, Postgres dependency, root script, and strict argument validation are verified. Real January 2024 CLI runs processed 2,976 15m candles / 128 fills and 744 1h candles / 28 fills. Invalid date ranges exit with status 1. Backtest worker baseline: 233 passing tests across 14 files, build and lint pass.
+- [x] **P0** Same inputs twice ⇒ identical output (first cut of the determinism test)
+  - The historical runner drives the real EMA strategy and simulated broker using candle timestamps. A non-zero-trade fixture repeated twice produces identical serialized fills, equity curves, and metrics including fees/slippage. Two real January 2024 15m root CLI runs also produced identical parsed JSON summaries. Backtest worker baseline: 233 passing tests, build and lint pass.
 
 **Slice exit:** one command, one backtest result you trust. Everything below then hardens and widens it.
+
+**Completed 2026-10-05:** `pnpm backtest --strategy ema --symbol BTCUSDT --from 2024-01-01 --to 2024-02-01` returned -0.112751% total return and 0.144664% maximum drawdown. Settings: EMA 12/26, 0.001 BTC fixed quantity, 10,000 USDT initial equity, 10 bps slippage, 0.1% taker fee. This completes only Phase 2.0; the full Phase 2 and Phase 1 soak remain open.
 
 ### 2.1 Core domain (`packages/core`)
 

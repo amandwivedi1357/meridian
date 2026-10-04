@@ -15,7 +15,12 @@ When progress is reported:
 
 ## Open Items
 
-No finishing items recorded yet.
+- [ ] **`architecture` / `prototype-gap`: Generalize prototype symbol configuration.**
+  - Recorded: 2026-10-04. Phase 2.0 deliberately targets one symbol; keep the BTCUSDT prototype moving and revisit this after the vertical slice works end to end.
+  - Replace the CLI's BTCUSDT-only restriction and the command's fixed BTC/USDT asset settings with validated symbol configuration. Resolve base/quote assets, tick size, quantity step size, and minimum notional from exchange metadata; do not infer assets by splitting symbol strings.
+  - Make the monitoring dashboard/API stream selection and soak recording/log paths configurable rather than fixed to BTCUSDT and the Phase 1.5 session.
+  - Acceptance: a second supported symbol can run through the same feed, strategy, broker, CLI, and monitoring code with correct assets and filters, without editing production source. Add focused tests for symbol selection, metadata validation, and asset isolation.
+  - Fixed BTCUSDT test fixtures may remain; the finishing work concerns production restrictions and duplicated configuration.
 
 ## Resolved Items
 
@@ -33,4 +38,3 @@ Use these labels when adding items:
 - `architecture`
 - `prototype-gap`
 - `resume-polish`
-

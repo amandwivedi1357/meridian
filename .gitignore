@@ -11,6 +11,7 @@ coverage/
 pnpm-debug.log*
 Dockerfile.local
 sessions/
+logs/
 
 # Local Obsidian notes/vault
 meridian-vault/

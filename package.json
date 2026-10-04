@@ -7,6 +7,7 @@
   "packageManager": "pnpm@9.12.3",
   "scripts": {
     "build": "turbo run build",
+    "backtest": "pnpm --filter @meridian/backtest-worker exec tsx src/main.ts",
     "check": "turbo run check",
     "dev": "turbo run dev --parallel",
     "format": "prettier --write .",

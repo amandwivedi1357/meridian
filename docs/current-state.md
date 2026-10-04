@@ -18,7 +18,7 @@ This file is the quick resume point for the project. Use it with `docs/implement
 Suggested first message when resuming in a new chat:
 
 ```txt
-Read docs/current-state.md and docs/implementation-plan.md, then continue from Phase 1.4. I will write implementation code; you guide me and write/update tests.
+Read docs/current-state.md and docs/implementation-plan.md, then continue from Phase 2.1 while monitoring the pending Phase 1.5 soak. I will write implementation code; you guide me and write/update tests.
 ```
 
 Before continuing feature work, verify the baseline:
@@ -47,6 +47,15 @@ The project should be resume-grade, not a toy app. The core engineering story is
 ## Current Phase
 
 Phase 1.5: Ingestor close-out and soak verification.
+Phase 2.0 completed on 2026-10-05. The Timescale candle feed, Decimal EMA crossover, next-open simulated broker with fees/slippage, return/drawdown metrics, historical runner, and executable CLI are verified end to end. Backtest worker baseline: 233 tests across 14 files; build and lint pass. Invalid CLI ranges exit with status 1.
+
+January 2024 BTCUSDT history is available for 15m and 1h, with 2,976 and 744 closed candles respectively in the exclusive-end range; continuity checks found zero gaps. Repeated real-data 15m CLI runs produced identical summaries: 128 fills, total return -0.112751%, maximum drawdown 0.144664%. The hourly run produced 28 fills, return -0.031776%, drawdown 0.049409%. Trade count means executed fills, not completed round trips; no forced final liquidation is applied.
+
+```powershell
+pnpm backtest --strategy ema --symbol BTCUSDT --from 2024-01-01 --to 2024-02-01
+```
+
+Next coding work is Phase 2.1: shared Decimal helpers and exchange-filter rounding. The rest of Phase 2 and the Phase 1 exit criteria remain open.
 
 ## Completed
 
@@ -222,7 +231,27 @@ pnpm --filter @meridian/config test
 
 ## Next Work
 
-Continue Phase 1.5. The core unit-tested ingestor pipeline pieces exist, real Redis/Timescale smoke paths pass, and bounded live ingest has written real public Binance trade events through Redis and Timescale. Next work should focus on soak and Phase 1 exit criteria:
+### Live Monitoring Dashboard
+
+- Read-only local dashboard at `http://127.0.0.1:5173` with a Fastify API at `http://127.0.0.1:3000`.
+- Shows BTCUSDT prices and volumes from the latest 500 Redis trade events, recent trades with side filtering, Redis/Timescale counts, Redis memory, recording size, and soak elapsed time.
+- Refreshes every 2 seconds; Timescale counts are cached for 15 seconds. Counts are cumulative and include earlier smoke events.
+- Reports stale/unavailable data and recording inactivity. A finished CLI result still requires review before marking the 24-hour soak passed.
+- Local dashboard server logs and browser-check screenshots are under ignored `logs/dashboard/`.
+- To restart after closing the servers, run these in separate terminals from the repository root:
+
+```powershell
+pnpm --filter @meridian/api build
+node apps/api/dist/main.js
+```
+
+```powershell
+pnpm --filter @meridian/web dev
+```
+
+Redis/Timescale must be running. `DATABASE_URL` and `REDIS_URL` can override the default local connections. The dashboard currently monitors the fixed Phase 1.5 BTCUSDT soak paths.
+
+Continue Phase 2.1 coding while Phase 1.5 verification runs separately. The Phase 2.0 January backfills do not satisfy the six-month, three-symbol 1m backfill requirement. Remaining Phase 1 work:
 
 - monitor the running 24h soak, then summarize Redis/Timescale/session counts when it completes
 - after soak: spot-check book state against a fresh REST snapshot, run the 60s network-kill recovery test, and complete the longer historical backfill exit criterion
