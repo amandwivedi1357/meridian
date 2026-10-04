@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   decodeMarketEvent,
   encodeMarketEvent,
+  marketEventJsonCodec,
   type MarketEventMessage
 } from "./index.js";
 
@@ -107,5 +108,26 @@ describe("market event protobuf codec", () => {
     expect(decoded.depth.bids[0]?.price.toString()).toBe("300.1");
     expect(decoded.depth.bids[1]?.quantity.toString()).toBe("0");
     expect(decoded.depth.asks[0]?.quantity.toString()).toBe("2.25");
+  });
+
+  it("exposes the default JSON bytes codec behind the EventCodec interface", () => {
+    const event: MarketEventMessage = {
+      kind: "trade",
+      symbol: "BTCUSDT",
+      eventId: "12345",
+      occurredAtMs: 1_700_000_000_000,
+      trade: {
+        symbol: "BTCUSDT",
+        tradeId: "12345",
+        price: new Decimal("100.10000001"),
+        quantity: new Decimal("0.02000003"),
+        eventTimeMs: 1_700_000_000_000,
+        isBuyerMaker: true
+      }
+    };
+
+    const decoded = marketEventJsonCodec.decode(marketEventJsonCodec.encode(event));
+
+    expect(decoded).toEqual(decodeMarketEvent(encodeMarketEvent(event)));
   });
 });

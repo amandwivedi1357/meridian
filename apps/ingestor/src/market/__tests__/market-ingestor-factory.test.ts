@@ -71,4 +71,43 @@ describe("createMarketIngestor", () => {
       })
     );
   });
+
+  it("uses an injected event codec for Redis payload encoding", async () => {
+    let publishedFields: Parameters<MarketEventPublisherDeps["xadd"]>[2] | undefined;
+    const xadd = vi.fn(async (...args: Parameters<MarketEventPublisherDeps["xadd"]>) => {
+      publishedFields = args[2];
+      return "1700000000000-0";
+    });
+    const codec = {
+      encode: vi.fn(() => new Uint8Array([1, 2, 3])),
+      decode: vi.fn()
+    };
+    const ingestor = createMarketIngestor({
+      codec,
+      xadd,
+      upsertTrades: vi.fn(async () => undefined),
+      upsertKlines: vi.fn(async () => undefined)
+    });
+
+    await ingestor.ingest({
+      e: "trade",
+      E: 1_700_000_000_000,
+      s: "BTCUSDT",
+      t: 12345,
+      p: "100.10",
+      q: "0.0200",
+      T: 1_700_000_000_001,
+      m: true,
+      M: true
+    });
+
+    expect(codec.encode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "trade",
+        symbol: "BTCUSDT",
+        eventId: "12345"
+      })
+    );
+    expect(publishedFields?.payload).toEqual(Buffer.from([1, 2, 3]));
+  });
 });

@@ -46,7 +46,7 @@ The project should be resume-grade, not a toy app. The core engineering story is
 
 ## Current Phase
 
-Phase 1.4: Ingestor service.
+Phase 1.5: Ingestor close-out and soak verification.
 
 ## Completed
 
@@ -107,7 +107,7 @@ Phase 1.4: Ingestor service.
     - normalizes them into decimal-safe internal market events
     - rejects malformed payloads before publish/write
   - `packages/proto/src/index.ts`
-    - exposes `MarketEventMessage`, `encodeMarketEvent`, and `decodeMarketEvent`
+    - exposes `MarketEventMessage`, `EventCodec<TMessage>`, `marketEventJsonCodec`, `encodeMarketEvent`, and `decodeMarketEvent`
     - current codec is stable JSON bytes with Decimal values serialized as strings
   - `apps/ingestor/src/market/market-publisher.ts`
     - encodes normalized events and publishes Redis Stream field payloads via injected `xadd`
@@ -122,7 +122,7 @@ Phase 1.4: Ingestor service.
     - orchestrates normalize → publish → batch write
     - malformed events reject before publish/write
   - `apps/ingestor/src/market/market-ingestor-factory.ts`
-    - wires shared codec, publisher, and batch writer behind `createMarketIngestor`
+    - wires injected/default event codec, publisher, and batch writer behind `createMarketIngestor`
   - `packages/db/src/market-data-migrations.ts`
     - defines Timescale market data schema for `trades` and `klines`
     - includes hypertable setup and unique keys for idempotent upserts
@@ -172,10 +172,12 @@ Latest verified package checks:
   - Tests passed: 35 tests across 10 test files.
 - `@meridian/proto`
   - Typecheck passed.
-  - Tests passed: 3 tests across 1 test file.
+  - Build passed.
+  - Tests passed: 4 tests across 1 test file.
 - `@meridian/ingestor`
   - Typecheck passed.
-  - Tests passed: 63 tests across 26 test files.
+  - Build passed with dependent packages via `pnpm --filter @meridian/ingestor... build`.
+  - Tests passed: 72 tests across 27 test files.
 - `@meridian/config`
   - Typecheck passed.
   - Tests passed: 1 test across 1 test file.
@@ -215,13 +217,11 @@ pnpm --filter @meridian/config test
 
 ## Next Work
 
-Continue Phase 1.4/1.5. The core unit-tested ingestor pipeline pieces exist, and the first local Timescale migration/backfill smoke has passed. Next work should focus on live infrastructure wiring and persistence completeness:
+Continue Phase 1.5. The core unit-tested ingestor pipeline pieces exist, real Redis/Timescale smoke paths pass, and bounded live ingest has written real public Binance trade events through Redis and Timescale. Next work should focus on soak and Phase 1 exit criteria:
 
-- decide whether to replace the current JSON-bytes codec with generated protobuf/buf now or keep the tested codec boundary until later
-- verify live batched trade/kline writes end to end beyond the bounded backfill smoke
-- decide whether to start the 24h soak now or first add a bounded live-ingest smoke command
 - start the 24h soak command path, then spot-check book state and recovery behavior
-- later: continuous aggregates/compression and `packages/bus` consumer/ack helpers
+- after soak: spot-check book state against a fresh REST snapshot, run the 60s network-kill recovery test, and complete the longer historical backfill exit criterion
+- later: continuous aggregates/compression and generated protobuf/buf behind the existing `EventCodec` boundary
 
 ## GitHub / Repository Note
 

@@ -27,12 +27,12 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 ## Status snapshot (2026-10-04)
 
-| Area                       | State                                                                                                                                                                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Phase 0                    | Nearly done. Open: gitleaks pre-commit hook, Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                                   |
-| Phase 1 (1.1–1.4 P0 items) | Done in code and unit tests. Open: `packages/bus` (now P0), continuous aggregates (P1), live DB/migration verification, and all four exit criteria (24h soak, spot-check vs REST snapshot, 60s network kill, 6-month backfill) |
-| Phase 2                    | Core types and `Strategy`/`StrategyContext` interfaces done; everything else open                                                                                                                                              |
-| Phases 3–7                 | Not started                                                                                                                                                                                                                    |
+| Area                       | State                                                                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Phase 0                    | Nearly done. Open: Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                         |
+| Phase 1 (1.1–1.5 P0 items) | Done in code and unit tests except wall-clock verification. Open: continuous aggregates (P1), 24h soak, spot-check vs REST snapshot, 60s network kill, and 6-month backfill exit criterion |
+| Phase 2                    | Core types and `Strategy`/`StrategyContext` interfaces done; everything else open                                                                                                          |
+| Phases 3–7                 | Not started                                                                                                                                                                                |
 
 **Strategy for the rest of the plan:** get a thin vertical slice working end to end (Phase 2.0) before polishing any single layer. Infrastructure that nothing consumes yet (generated Protobuf, continuous aggregates) is deferred until a real consumer needs it.
 
@@ -109,7 +109,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [x] **P0** zod-validate + normalize trade/kline/depth events
   - Added `apps/ingestor/src/market/market-events.ts` with zod validation for Binance trade, kline, and depth payloads; normalizes them into decimal-safe internal events and rejects malformed payloads before publish/write.
 - [x] **P0** Protobuf encode → `XADD` to Redis Streams (`market.*`)
-  - Added shared market event codec in `@meridian/proto` plus `publishNormalizedMarketEvent`; routes trades, klines, and depth updates to `market.trade.*`, `market.kline.*`, and `market.book.*`. Current codec is a stable JSON-bytes boundary with decimal strings; replacing it with generated protobuf can happen behind the same tests.
+  - Added shared market event codec in `@meridian/proto` plus `publishNormalizedMarketEvent`; routes trades, klines, and depth updates to `market.trade.*`, `market.kline.*`, and `market.book.*`. Current codec is a stable JSON-bytes boundary with decimal strings behind `EventCodec`; replacing it with generated protobuf can happen behind the same tests.
 - [x] **P0** Batched writes to Timescale (`trades`, `klines`), idempotent upserts
   - Added `writeMarketEventBatch` and `createTimescaleMarketWriter`; trade/kline batches are converted into multi-row SQL `INSERT ... ON CONFLICT` statements with Decimal values serialized as strings. Live DB client and migrations are still pending.
 - [x] **P0** Dedup by `(symbol, eventId)`
@@ -122,9 +122,10 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 ### 1.5 Close-out (do before Phase 2 gets deep)
 
-- [ ] **P0** Run migrations against a real TimescaleDB and verify live batched writes end to end (writers are currently unit-tested only)
-  - Status: real TimescaleDB migration smoke passes locally, a bounded `BTCUSDT` 1m kline backfill wrote rows successfully, Redis publish smoke wrote a normalized trade event to `market.trade.BTCUSDT`, and bounded live ingest smoke wrote real public `BTCUSDT` trade rows to TimescaleDB. Still open: longer-running soak verification.
-- [ ] **P0** Define an `EventCodec` interface; keep the current JSON-bytes codec as the default implementation so generated Protobuf can be swapped in later (TRD ADR-2)
+- [x] **P0** Run migrations against a real TimescaleDB and verify live batched writes end to end (writers are currently unit-tested only)
+  - Status: real TimescaleDB migration smoke passes locally, a bounded `BTCUSDT` 1m kline backfill wrote rows successfully, Redis publish smoke wrote a normalized trade event to `market.trade.BTCUSDT`, and bounded live ingest smoke wrote real public `BTCUSDT` trade rows to TimescaleDB. Longer-running soak verification remains an exit criterion.
+- [x] **P0** Define an `EventCodec` interface; keep the current JSON-bytes codec as the default implementation so generated Protobuf can be swapped in later (TRD ADR-2)
+  - Status: `@meridian/proto` exposes `EventCodec<TMessage>` and `marketEventJsonCodec`; `createMarketIngestor` accepts an injected codec and defaults to the JSON-bytes implementation.
 - [x] **P0** Session recorder: write normalized trade/kline/depth events to disk in a replayable format (needed for the parity test in Phase 3; PRD FR-1.9)
   - Status: recorder writes replayable NDJSON with Decimal values serialized as strings and is wired into the normalized ingest flow behind optional runtime config.
 - [ ] **P0** Start the **24h soak** now and let it run in the background while Phase 2 begins

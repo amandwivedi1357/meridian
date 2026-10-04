@@ -30,8 +30,18 @@ export type MarketEventMessage =
       };
     };
 
+export interface EventCodec<TMessage> {
+  readonly encode: (message: TMessage) => Uint8Array;
+  readonly decode: (bytes: Uint8Array) => TMessage;
+}
+
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+
+export const marketEventJsonCodec: EventCodec<MarketEventMessage> = {
+  encode: encodeMarketEvent,
+  decode: decodeMarketEvent
+};
 
 export function encodeMarketEvent(event: MarketEventMessage): Uint8Array {
   return textEncoder.encode(JSON.stringify(toWireMarketEvent(event)));
