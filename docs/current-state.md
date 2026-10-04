@@ -197,6 +197,11 @@ Latest local infrastructure smoke checks:
 - Bounded kline backfill smoke wrote 6 `BTCUSDT` 1m candles for `2024-01-01T00:00:00Z` through `2024-01-01T00:05:00Z`.
 - Redis publish smoke wrote a normalized trade event to `market.trade.BTCUSDT` and verified the stream entry fields.
 - Bounded live ingest smoke consumed 2 real public `BTCUSDT` trade events from Binance production WebSocket, published them to Redis, and wrote 2 trade rows to TimescaleDB.
+- Phase 1.5 soak started on 2026-10-04 with PID `21124`:
+  - command mode: `smoke-live-ingest --symbol BTCUSDT --events 5000000 --timeoutMs 86400000 --environment production`
+  - stdout log: `logs/soak/phase-1-5-live-ingest.out.log`
+  - stderr log: `logs/soak/phase-1-5-live-ingest.err.log`
+  - session recording: `sessions/soak/phase-1-5-events.ndjson`
 
 Run:
 
@@ -219,7 +224,7 @@ pnpm --filter @meridian/config test
 
 Continue Phase 1.5. The core unit-tested ingestor pipeline pieces exist, real Redis/Timescale smoke paths pass, and bounded live ingest has written real public Binance trade events through Redis and Timescale. Next work should focus on soak and Phase 1 exit criteria:
 
-- start the 24h soak command path, then spot-check book state and recovery behavior
+- monitor the running 24h soak, then summarize Redis/Timescale/session counts when it completes
 - after soak: spot-check book state against a fresh REST snapshot, run the 60s network-kill recovery test, and complete the longer historical backfill exit criterion
 - later: continuous aggregates/compression and generated protobuf/buf behind the existing `EventCodec` boundary
 

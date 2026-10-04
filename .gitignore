@@ -10,6 +10,7 @@ coverage/
 *.tsbuildinfo
 pnpm-debug.log*
 Dockerfile.local
+sessions/
 
 # Local Obsidian notes/vault
 meridian-vault/

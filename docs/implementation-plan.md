@@ -129,6 +129,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [x] **P0** Session recorder: write normalized trade/kline/depth events to disk in a replayable format (needed for the parity test in Phase 3; PRD FR-1.9)
   - Status: recorder writes replayable NDJSON with Decimal values serialized as strings and is wired into the normalized ingest flow behind optional runtime config.
 - [ ] **P0** Start the **24h soak** now and let it run in the background while Phase 2 begins
+  - Status: started on 2026-10-04 with `smoke-live-ingest --symbol BTCUSDT --events 5000000 --timeoutMs 86400000 --environment production`; PID `21124`; logs under `logs/soak/`; session recording at `sessions/soak/phase-1-5-events.ndjson`. Mark complete after the run finishes cleanly and counts are summarized.
 
 **Exit criteria**
 
