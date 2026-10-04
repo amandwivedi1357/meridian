@@ -1,4 +1,4 @@
-# Meridian — Technical Requirements Document (TRD)
+# Meridian — Technical Requirements Documents (TRD)
 
 | Field        | Value                              |
 | ------------ | ---------------------------------- |
