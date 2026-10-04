@@ -48,8 +48,8 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [x] **P0** `packages/observability`: `pino` logger with redaction, `prom-client` registry helper
 - [x] **P0** `infra/docker-compose.yml`: Redis 7 (AOF on), TimescaleDB, Prometheus, Grafana
 - [x] **P0** GitHub Actions: install → typecheck → lint → test → build
-- [ ] **P0** `gitleaks` pre-commit hook + CI step; `.env.example` committed, `.env` ignored
-  - Status: `.env.example`, `.env` ignore rule, `.gitleaks.toml`, and CI gitleaks step are done. Pre-commit currently runs `lint-staged`; add gitleaks to the hook before closing this item.
+- [x] **P0** `gitleaks` pre-commit hook + CI step; `.env.example` committed, `.env` ignored
+  - Status: `.env.example`, `.env` ignore rule, `.gitleaks.toml`, CI gitleaks step, and local pre-commit gitleaks scan are done.
 - [ ] **P0** Create Binance **Spot Testnet** API keys (Ed25519 preferred); store in `.env`
 - [ ] **P1** `packages/proto` with `buf` config (`buf lint`, `buf breaking` in CI)
 - [x] **P1** ADR template in `docs/adr/`; write ADR-001 through ADR-008 stubs from TRD §1.1
@@ -58,8 +58,8 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 - [x] `docker compose up` starts infra; `pnpm test` and CI pass on an empty-but-wired repo.
   - Verified locally: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, and `docker compose -f infra/docker-compose.yml config`.
-- [ ] No secrets in git history.
-  - Pending final secret scan after first commit / before publishing.
+- [x] No secrets in git history.
+  - Verified locally with `gitleaks git --redact`; no leaks found across 7 commits.
 
 ---
 

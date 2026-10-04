@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
-export PATH="/c/Program Files/nodejs:$PATH"
+export PATH="/c/Program Files/nodejs:/c/Users/thinkpad/scoop/shims:$PATH"
 
+gitleaks protect --staged --redact
 ./node_modules/.bin/lint-staged
