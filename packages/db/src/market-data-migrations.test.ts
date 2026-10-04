@@ -24,7 +24,7 @@ describe("market data migrations", () => {
   it("defines idempotency keys used by the ingestor upserts", () => {
     const sql = normalizeSql(marketDataMigrations[0]?.sql ?? "");
 
-    expect(sql).toContain("unique (symbol, event_id)");
+    expect(sql).toContain("unique (symbol, event_id, event_time)");
     expect(sql).toContain("unique (symbol, interval, open_time)");
   });
 

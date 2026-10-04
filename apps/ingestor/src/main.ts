@@ -5,12 +5,12 @@ import { runKlineBackfillCommand } from "./backfill/kline-backfill-command.js";
 import { createKlineBackfillService } from "./backfill/kline-backfill-service.js";
 import { createIngestorApp } from "./runtime/app-bootstrap.js";
 import { createMain } from "./runtime/main-entry.js";
-import {
-  runIngestorMain,
-  type IngestorMainResult
-} from "./runtime/main-runner.js";
+import { runIngestorMain, type IngestorMainResult } from "./runtime/main-runner.js";
 import { loadIngestorConfig } from "./runtime/config.js";
 import { createRuntimeClients } from "./runtime/runtime-clients.js";
+import { runLiveIngestSmoke as runLiveIngestSmokeCommand } from "./smoke/live-ingest-smoke.js";
+import { runRedisPublishSmoke as runRedisPublishSmokeCommand } from "./smoke/redis-publish-smoke.js";
+import { createSessionRecorder } from "./market/session-recorder.js";
 
 const logger = createLogger("ingestor");
 
@@ -21,6 +21,9 @@ export async function runCliMain(
   const clients = createRuntimeClients(config);
   const metricsRegistry = createMetricsRegistry("ingestor");
   const binance = new BinanceRestClient();
+  const sessionRecorder = config.sessionRecordingPath
+    ? createSessionRecorder(config.sessionRecordingPath)
+    : undefined;
 
   try {
     await clients.redis.connect();
@@ -28,7 +31,8 @@ export async function runCliMain(
     const app = createIngestorApp({
       redis: clients.redis,
       postgres: clients.postgres,
-      metricsRegistry
+      metricsRegistry,
+      ...(sessionRecorder ? { sessionRecorder } : {})
     });
     const backfillService = createKlineBackfillService({
       binance,
@@ -40,10 +44,7 @@ export async function runCliMain(
           async runLive() {
             const migrations = await app.start();
 
-            logger.info(
-              { migrations },
-              "ingestor live startup completed"
-            );
+            logger.info({ migrations }, "ingestor live startup completed");
 
             return { kind: "live-started" };
           },
@@ -53,6 +54,18 @@ export async function runCliMain(
 
             return runKlineBackfillCommand(args, {
               service: backfillService
+            });
+          },
+
+          async runRedisPublishSmoke() {
+            return runRedisPublishSmokeCommand(clients.redis);
+          },
+
+          async runLiveIngestSmoke(args) {
+            await app.start();
+
+            return runLiveIngestSmokeCommand(args, {
+              ingestor: app
             });
           }
         });
@@ -66,8 +79,7 @@ export async function runCliMain(
 }
 
 function isEntrypoint(): boolean {
-  return process.argv[1] !== undefined &&
-    pathToFileURL(process.argv[1]).href === import.meta.url;
+  return process.argv[1] !== undefined && pathToFileURL(process.argv[1]).href === import.meta.url;
 }
 
 if (isEntrypoint()) {

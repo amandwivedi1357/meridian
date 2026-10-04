@@ -1,26 +1,20 @@
 import { encodeMarketEvent } from "@meridian/proto";
-import {
-  ingestMarketStreamEvent,
-  type MarketIngestResult
-} from "./market-ingestor.js";
+import { ingestMarketStreamEvent, type MarketIngestResult } from "./market-ingestor.js";
 import { writeMarketEventBatch } from "./market-batch-writer.js";
 import type { MarketBatchWriterDeps } from "./market-batch-writer.js";
-import {
-  publishNormalizedMarketEvent,
-  type MarketEventPublisherDeps
-} from "./market-publisher.js";
+import { publishNormalizedMarketEvent, type MarketEventPublisherDeps } from "./market-publisher.js";
+import type { SessionRecorder } from "./session-recorder.js";
 
 export interface MarketIngestorFactoryDeps
-  extends Pick<MarketEventPublisherDeps, "xadd">,
-    MarketBatchWriterDeps {}
+  extends Pick<MarketEventPublisherDeps, "xadd">, MarketBatchWriterDeps {
+  readonly sessionRecorder?: SessionRecorder;
+}
 
 export interface MarketIngestor {
   readonly ingest: (input: unknown) => Promise<MarketIngestResult>;
 }
 
-export function createMarketIngestor(
-  deps: MarketIngestorFactoryDeps
-): MarketIngestor {
+export function createMarketIngestor(deps: MarketIngestorFactoryDeps): MarketIngestor {
   return {
     ingest(input) {
       return ingestMarketStreamEvent(input, {
@@ -35,7 +29,8 @@ export function createMarketIngestor(
             upsertTrades: deps.upsertTrades,
             upsertKlines: deps.upsertKlines
           });
-        }
+        },
+        ...(deps.sessionRecorder ? { sessionRecorder: deps.sessionRecorder } : {})
       });
     }
   };

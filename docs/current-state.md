@@ -151,6 +151,17 @@ Phase 1.4: Ingestor service.
   - Runtime wiring:
     - `apps/ingestor/src/runtime/runtime-clients.ts` creates real Postgres and Redis clients behind testable ingestor interfaces
     - `apps/ingestor/src/main.ts` loads config, connects Redis/Postgres, creates Binance REST + metrics dependencies, runs startup migrations, dispatches live startup or kline backfill mode, and closes clients on completion
+- Initial `packages/bus` Redis Streams helper API:
+  - keeps stable stream-name helpers for market, signals, orders, and control streams
+  - adds injected-client helpers for publish, consumer group creation, group reads, ack, and stale pending message claim
+  - adds a Redis command adapter for `XADD`, `XGROUP CREATE`, `XREADGROUP`, `XACK`, and `XAUTOCLAIM`
+  - unit-tested with mocked Redis client behavior and smoke-tested against local Docker Redis
+  - Session recorder foundation:
+    - `apps/ingestor/src/market/session-recorder.ts` appends normalized events to replayable NDJSON
+    - serializes Decimal values as strings for trade, kline, and depth events
+    - optionally records normalized events inside `ingestMarketStreamEvent` before publish/write
+    - runtime config is opt-in via `INGESTOR_SESSION_RECORDING_PATH`
+    - unit-tested with injected filesystem dependencies, config coverage, and ingestion-order coverage
 
 ## Current Verification Baseline
 
@@ -164,10 +175,26 @@ Latest verified package checks:
   - Tests passed: 3 tests across 1 test file.
 - `@meridian/ingestor`
   - Typecheck passed.
-  - Tests passed: 53 tests across 24 test files.
+  - Tests passed: 63 tests across 26 test files.
+- `@meridian/config`
+  - Typecheck passed.
+  - Tests passed: 1 test across 1 test file.
 - `@meridian/db`
   - Typecheck passed.
   - Tests passed: 9 tests across 3 test files.
+- `@meridian/bus`
+  - Typecheck passed.
+  - Tests passed: 15 tests across 1 test file.
+
+Latest local infrastructure smoke checks:
+
+- Docker Compose infra is running locally: Redis, TimescaleDB, Prometheus, and Grafana.
+- Redis responds to `PING`.
+- TimescaleDB accepts connections.
+- Ingestor startup applied `001_market_data_schema` against real TimescaleDB.
+- Bounded kline backfill smoke wrote 6 `BTCUSDT` 1m candles for `2024-01-01T00:00:00Z` through `2024-01-01T00:05:00Z`.
+- Redis publish smoke wrote a normalized trade event to `market.trade.BTCUSDT` and verified the stream entry fields.
+- Bounded live ingest smoke consumed 2 real public `BTCUSDT` trade events from Binance production WebSocket, published them to Redis, and wrote 2 trade rows to TimescaleDB.
 
 Run:
 
@@ -180,15 +207,20 @@ pnpm --filter @meridian/ingestor typecheck
 pnpm --filter @meridian/ingestor test
 pnpm --filter @meridian/db typecheck
 pnpm --filter @meridian/db test
+pnpm --filter @meridian/bus typecheck
+pnpm --filter @meridian/bus test
+pnpm --filter @meridian/config typecheck
+pnpm --filter @meridian/config test
 ```
 
 ## Next Work
 
-Continue Phase 1.4. The core unit-tested ingestor pipeline pieces exist. Next work should focus on live infrastructure wiring and persistence completeness:
+Continue Phase 1.4/1.5. The core unit-tested ingestor pipeline pieces exist, and the first local Timescale migration/backfill smoke has passed. Next work should focus on live infrastructure wiring and persistence completeness:
 
 - decide whether to replace the current JSON-bytes codec with generated protobuf/buf now or keep the tested codec boundary until later
-- smoke test migrations/backfill against local Docker TimescaleDB
-- smoke test market event publishing against local Docker Redis
+- verify live batched trade/kline writes end to end beyond the bounded backfill smoke
+- decide whether to start the 24h soak now or first add a bounded live-ingest smoke command
+- start the 24h soak command path, then spot-check book state and recovery behavior
 - later: continuous aggregates/compression and `packages/bus` consumer/ack helpers
 
 ## GitHub / Repository Note

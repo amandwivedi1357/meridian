@@ -9,8 +9,8 @@ describe("ingestMarketStreamEvent", () => {
     const publish = vi.fn(async (event: NormalizedMarketEvent) => {
       publishedEvent = event;
       return {
-      stream: "market.trade.BTCUSDT",
-      id: "1700000000000-0"
+        stream: "market.trade.BTCUSDT",
+        id: "1700000000000-0"
       };
     });
     const writeBatch = vi.fn(async () => ({
@@ -18,6 +18,9 @@ describe("ingestMarketStreamEvent", () => {
       klinesWritten: 0,
       duplicatesSkipped: 0
     }));
+    const sessionRecorder = {
+      record: vi.fn(async () => undefined)
+    };
 
     const result = await ingestMarketStreamEvent(
       {
@@ -33,9 +36,10 @@ describe("ingestMarketStreamEvent", () => {
         m: true,
         M: true
       },
-      { publish, writeBatch }
+      { publish, writeBatch, sessionRecorder }
     );
 
+    expect(sessionRecorder.record).toHaveBeenCalledOnce();
     expect(publish).toHaveBeenCalledOnce();
     expect(writeBatch).toHaveBeenCalledOnce();
 
@@ -53,6 +57,7 @@ describe("ingestMarketStreamEvent", () => {
         isBuyerMaker: true
       }
     });
+    expect(sessionRecorder.record).toHaveBeenCalledWith(publishedEvent);
     expect(writeBatch).toHaveBeenCalledWith([publishedEvent]);
     expect(result).toEqual({
       event: publishedEvent,
@@ -68,6 +73,49 @@ describe("ingestMarketStreamEvent", () => {
     });
   });
 
+  it("records normalized events before publishing and writing", async () => {
+    const calls: string[] = [];
+    const publish = vi.fn(async () => {
+      calls.push("publish");
+      return {
+        stream: "market.trade.BTCUSDT",
+        id: "1700000000000-0"
+      };
+    });
+    const writeBatch = vi.fn(async () => {
+      calls.push("writeBatch");
+      return {
+        tradesWritten: 1,
+        klinesWritten: 0,
+        duplicatesSkipped: 0
+      };
+    });
+    const sessionRecorder = {
+      record: vi.fn(async () => {
+        calls.push("record");
+      })
+    };
+
+    await ingestMarketStreamEvent(
+      {
+        e: "trade",
+        E: 1_700_000_000_000,
+        s: "BTCUSDT",
+        t: 12345,
+        p: "100.10",
+        q: "0.0200",
+        b: 1,
+        a: 2,
+        T: 1_700_000_000_001,
+        m: true,
+        M: true
+      },
+      { publish, writeBatch, sessionRecorder }
+    );
+
+    expect(calls).toEqual(["record", "publish", "writeBatch"]);
+  });
+
   it("does not publish or write malformed events", async () => {
     const publish = vi.fn(async () => ({
       stream: "market.trade.BTCUSDT",
@@ -78,6 +126,9 @@ describe("ingestMarketStreamEvent", () => {
       klinesWritten: 0,
       duplicatesSkipped: 0
     }));
+    const sessionRecorder = {
+      record: vi.fn(async () => undefined)
+    };
 
     await expect(
       ingestMarketStreamEvent(
@@ -94,10 +145,11 @@ describe("ingestMarketStreamEvent", () => {
           m: true,
           M: true
         },
-        { publish, writeBatch }
+        { publish, writeBatch, sessionRecorder }
       )
     ).rejects.toThrow();
 
+    expect(sessionRecorder.record).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
     expect(writeBatch).not.toHaveBeenCalled();
   });

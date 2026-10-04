@@ -16,7 +16,10 @@ describe("createIngestorApp", () => {
     const postgres = {
       query: vi.fn(async () => ({ rows: [] }))
     };
-    const app = createIngestorApp({ redis, postgres });
+    const sessionRecorder = {
+      record: vi.fn(async () => undefined)
+    };
+    const app = createIngestorApp({ redis, postgres, sessionRecorder });
 
     const startResult = await app.start();
     const ingestResult = await app.ingest({
@@ -39,6 +42,7 @@ describe("createIngestorApp", () => {
       []
     );
     expect(redis.xAdd).toHaveBeenCalledOnce();
+    expect(sessionRecorder.record).toHaveBeenCalledOnce();
     expect(ingestResult.publishResult.stream).toBe("market.trade.BTCUSDT");
 
     const decoded = decodeMarketEvent(publishedFields?.payload ?? Buffer.from([]));

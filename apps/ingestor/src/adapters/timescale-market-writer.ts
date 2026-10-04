@@ -50,7 +50,7 @@ export function createTimescaleMarketWriter(
             is_buyer_maker
           )
           VALUES ${placeholders.join(", ")}
-          ON CONFLICT (symbol, event_id)
+          ON CONFLICT (symbol, event_id, event_time)
           DO UPDATE SET
             trade_id = EXCLUDED.trade_id,
             event_time = EXCLUDED.event_time,

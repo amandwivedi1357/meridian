@@ -1,4 +1,6 @@
 import type { KlineBackfillResult } from "../backfill/kline-backfill-runner.js";
+import type { LiveIngestSmokeResult } from "../smoke/live-ingest-smoke.js";
+import type { RedisPublishSmokeResult } from "../smoke/redis-publish-smoke.js";
 import { parseIngestorMainMode } from "./main-mode.js";
 
 export interface LiveIngestResult {
@@ -7,12 +9,13 @@ export interface LiveIngestResult {
 
 export interface IngestorMainRunnerDeps {
   readonly runLive: () => Promise<LiveIngestResult>;
-  readonly runBackfillKlines: (
-    args: readonly string[]
-  ) => Promise<KlineBackfillResult>;
+  readonly runBackfillKlines: (args: readonly string[]) => Promise<KlineBackfillResult>;
+  readonly runRedisPublishSmoke: () => Promise<RedisPublishSmokeResult>;
+  readonly runLiveIngestSmoke: (args: readonly string[]) => Promise<LiveIngestSmokeResult>;
 }
 
-export type IngestorMainResult = LiveIngestResult | KlineBackfillResult;
+export type IngestorMainResult =
+  LiveIngestResult | KlineBackfillResult | RedisPublishSmokeResult | LiveIngestSmokeResult;
 
 export function runIngestorMain(
   args: readonly string[],
@@ -26,5 +29,11 @@ export function runIngestorMain(
 
     case "backfill-klines":
       return deps.runBackfillKlines(mode.args);
+
+    case "smoke-redis-publish":
+      return deps.runRedisPublishSmoke();
+
+    case "smoke-live-ingest":
+      return deps.runLiveIngestSmoke(mode.args);
   }
 }

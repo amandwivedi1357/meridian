@@ -32,6 +32,30 @@ describe("normalizeMarketStreamEvent", () => {
     expect(event.trade.isBuyerMaker).toBe(true);
   });
 
+  it("normalizes trade stream events when optional order ids are absent", () => {
+    const event = normalizeMarketStreamEvent({
+      e: "trade",
+      E: 1_700_000_000_000,
+      s: "BTCUSDT",
+      t: 12345,
+      p: "100.10",
+      q: "0.0200",
+      T: 1_700_000_000_001,
+      m: true,
+      M: true
+    });
+
+    expect(event.kind).toBe("trade");
+    expect(event.eventId).toBe("12345");
+
+    if (event.kind !== "trade") {
+      throw new Error("expected trade event");
+    }
+
+    expect(event.trade.price.toString()).toBe("100.1");
+    expect(event.trade.quantity.toString()).toBe("0.02");
+  });
+
   it("validates and normalizes kline stream events", () => {
     const event = normalizeMarketStreamEvent({
       e: "kline",

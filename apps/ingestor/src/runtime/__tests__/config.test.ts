@@ -15,6 +15,21 @@ describe("loadIngestorConfig", () => {
     });
   });
 
+  it("loads optional session recording path", () => {
+    const config = loadIngestorConfig({
+      DATABASE_URL: "postgres://meridian:meridian@localhost:5432/meridian",
+      INGESTOR_SESSION_RECORDING_PATH: "sessions/local/events.ndjson",
+      JWT_SECRET: "super-secret-value",
+      REDIS_URL: "redis://localhost:6379"
+    });
+
+    expect(config).toEqual({
+      postgresUrl: "postgres://meridian:meridian@localhost:5432/meridian",
+      redisUrl: "redis://localhost:6379",
+      sessionRecordingPath: "sessions/local/events.ndjson"
+    });
+  });
+
   it("rejects invalid URLs before startup", () => {
     expect(() =>
       loadIngestorConfig({

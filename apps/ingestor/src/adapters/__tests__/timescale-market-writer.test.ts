@@ -2,9 +2,14 @@ import { Decimal } from "@meridian/core";
 import { describe, expect, it, vi } from "vitest";
 import { createTimescaleMarketWriter } from "../timescale-market-writer.js";
 
+function normalizeSql(sql: string): string {
+  return sql.replace(/\s+/g, " ").trim();
+}
+
 describe("createTimescaleMarketWriter", () => {
   it("upserts trade rows with decimal values serialized as strings", async () => {
-    let executedQuery: Parameters<Parameters<typeof createTimescaleMarketWriter>[0]["execute"]>[0] | undefined;
+    let executedQuery:
+      Parameters<Parameters<typeof createTimescaleMarketWriter>[0]["execute"]>[0] | undefined;
     const execute = vi.fn(async (query: NonNullable<typeof executedQuery>) => {
       executedQuery = query;
     });
@@ -35,7 +40,9 @@ describe("createTimescaleMarketWriter", () => {
         true
       ]
     });
-    expect(executedQuery?.text).toContain("ON CONFLICT (symbol, event_id)");
+    expect(normalizeSql(executedQuery?.text ?? "")).toContain(
+      "ON CONFLICT (symbol, event_id, event_time)"
+    );
   });
 
   it("upserts multiple trade rows in one SQL statement", async () => {
@@ -65,7 +72,9 @@ describe("createTimescaleMarketWriter", () => {
 
     expect(execute).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledWith({
-      text: expect.stringContaining("VALUES ($1, $2, $3, $4, $5, $6, $7), ($8, $9, $10, $11, $12, $13, $14)"),
+      text: expect.stringContaining(
+        "VALUES ($1, $2, $3, $4, $5, $6, $7), ($8, $9, $10, $11, $12, $13, $14)"
+      ),
       values: [
         "BTCUSDT",
         "12345",
@@ -86,7 +95,8 @@ describe("createTimescaleMarketWriter", () => {
   });
 
   it("upserts kline rows with decimal values serialized as strings", async () => {
-    let executedQuery: Parameters<Parameters<typeof createTimescaleMarketWriter>[0]["execute"]>[0] | undefined;
+    let executedQuery:
+      Parameters<Parameters<typeof createTimescaleMarketWriter>[0]["execute"]>[0] | undefined;
     const execute = vi.fn(async (query: NonNullable<typeof executedQuery>) => {
       executedQuery = query;
     });

@@ -43,8 +43,8 @@ const tradeSchema = z.object({
   t: z.number(),
   p: decimalString,
   q: decimalString,
-  b: z.number(),
-  a: z.number(),
+  b: z.number().optional(),
+  a: z.number().optional(),
   T: z.number(),
   m: z.boolean(),
   M: z.boolean()

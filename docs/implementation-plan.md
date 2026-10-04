@@ -117,13 +117,16 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [x] **P0** Historical kline backfill CLI (resumable, rate-limit aware)
   - Added planner, CLI arg parser, command runner, Binance REST fetch adapter, and backfill service composition. The backfill path chunks time ranges into rate-limit-friendly requests, fetches Binance klines, converts them to candles, and upserts kline rows through the Timescale writer. Runtime wiring now creates real Redis, Postgres, Binance REST, metrics, startup migration, live startup, and backfill dispatch dependencies from `apps/ingestor/src/main.ts`. Live long-range smoke/backfill verification remains part of Phase 1 exit criteria.
 - [ ] **P1** Continuous aggregates (1m → 5m → 15m → 1h) + compression policy (can be deferred: the backtester can resample 1m candles in code; the dashboard is the first real need)
-- [ ] **P0** `packages/bus`: publish/consume/ack, `XAUTOCLAIM` for stuck messages (promoted from P1: the engine and executor in Phase 3 cannot run without it; integration-test with Testcontainers Redis)
+- [x] **P0** `packages/bus`: publish/consume/ack, `XAUTOCLAIM` for stuck messages (promoted from P1: the engine and executor in Phase 3 cannot run without it; integration-test with Testcontainers Redis)
+  - Status: initial injected-client helper API and Redis command adapter are implemented, unit-tested, and smoke-tested against local Docker Redis.
 
 ### 1.5 Close-out (do before Phase 2 gets deep)
 
 - [ ] **P0** Run migrations against a real TimescaleDB and verify live batched writes end to end (writers are currently unit-tested only)
+  - Status: real TimescaleDB migration smoke passes locally, a bounded `BTCUSDT` 1m kline backfill wrote rows successfully, Redis publish smoke wrote a normalized trade event to `market.trade.BTCUSDT`, and bounded live ingest smoke wrote real public `BTCUSDT` trade rows to TimescaleDB. Still open: longer-running soak verification.
 - [ ] **P0** Define an `EventCodec` interface; keep the current JSON-bytes codec as the default implementation so generated Protobuf can be swapped in later (TRD ADR-2)
-- [ ] **P0** Session recorder: write normalized trade/kline/depth events to disk in a replayable format (needed for the parity test in Phase 3; PRD FR-1.9)
+- [x] **P0** Session recorder: write normalized trade/kline/depth events to disk in a replayable format (needed for the parity test in Phase 3; PRD FR-1.9)
+  - Status: recorder writes replayable NDJSON with Decimal values serialized as strings and is wired into the normalized ingest flow behind optional runtime config.
 - [ ] **P0** Start the **24h soak** now and let it run in the background while Phase 2 begins
 
 **Exit criteria**

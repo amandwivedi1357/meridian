@@ -9,6 +9,7 @@ const envSchema = z.object({
   BINANCE_PRIVATE_KEY_PATH: z.string().optional(),
   DATABASE_URL: z.string().url(),
   GRAFANA_PORT: z.coerce.number().int().positive().default(3001),
+  INGESTOR_SESSION_RECORDING_PATH: z.string().min(1).optional(),
   JWT_SECRET: z.string().min(12),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

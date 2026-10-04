@@ -15,7 +15,7 @@ export const marketDataMigrations: readonly SqlMigration[] = [
         quantity numeric NOT NULL,
         is_buyer_maker boolean NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now(),
-        UNIQUE (symbol, event_id)
+        UNIQUE (symbol, event_id, event_time)
       );
 
       SELECT create_hypertable('trades', 'event_time', if_not_exists => TRUE);

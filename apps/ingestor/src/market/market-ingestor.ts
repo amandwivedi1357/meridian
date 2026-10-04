@@ -1,15 +1,14 @@
-import {
-  normalizeMarketStreamEvent,
-  type NormalizedMarketEvent
-} from "./market-events.js";
+import { normalizeMarketStreamEvent, type NormalizedMarketEvent } from "./market-events.js";
 import type { MarketBatchWriteResult } from "./market-batch-writer.js";
 import type { PublishedMarketEvents } from "./market-publisher.js";
+import type { SessionRecorder } from "./session-recorder.js";
 
 export interface MarketIngestorDeps {
   readonly publish: (event: NormalizedMarketEvent) => Promise<PublishedMarketEvents>;
   readonly writeBatch: (
     events: readonly NormalizedMarketEvent[]
   ) => Promise<MarketBatchWriteResult>;
+  readonly sessionRecorder?: SessionRecorder;
 }
 
 export interface MarketIngestResult {
@@ -23,6 +22,7 @@ export async function ingestMarketStreamEvent(
   deps: MarketIngestorDeps
 ): Promise<MarketIngestResult> {
   const event = normalizeMarketStreamEvent(input);
+  await deps.sessionRecorder?.record(event);
   const publishResult = await deps.publish(event);
   const batchWriteResult = await deps.writeBatch([event]);
 

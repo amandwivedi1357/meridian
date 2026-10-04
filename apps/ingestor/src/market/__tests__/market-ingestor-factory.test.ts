@@ -12,10 +12,14 @@ describe("createMarketIngestor", () => {
     });
     const upsertTrades = vi.fn(async () => undefined);
     const upsertKlines = vi.fn(async () => undefined);
+    const sessionRecorder = {
+      record: vi.fn(async () => undefined)
+    };
     const ingestor = createMarketIngestor({
       xadd,
       upsertTrades,
-      upsertKlines
+      upsertKlines,
+      sessionRecorder
     });
 
     const result = await ingestor.ingest({
@@ -33,6 +37,7 @@ describe("createMarketIngestor", () => {
     });
 
     expect(xadd).toHaveBeenCalledOnce();
+    expect(sessionRecorder.record).toHaveBeenCalledOnce();
     expect(upsertTrades).toHaveBeenCalledOnce();
     expect(upsertKlines).not.toHaveBeenCalled();
     expect(result.publishResult).toEqual({
@@ -58,5 +63,12 @@ describe("createMarketIngestor", () => {
         tradeId: "12345"
       })
     ]);
+    expect(sessionRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "trade",
+        symbol: "BTCUSDT",
+        eventId: "12345"
+      })
+    );
   });
 });
