@@ -25,6 +25,14 @@ function candle(price: number, index = 0): Candle {
   };
 }
 
+function candleWithRange(price: number, range: number, index = 0): Candle {
+  return {
+    ...candle(price, index),
+    high: new Decimal(price + range / 2),
+    low: new Decimal(price - range / 2)
+  };
+}
+
 function setup(positionQuantity = "0") {
   const strategy = createEmaCrossover(options);
   const submit = vi.fn<StrategyContext["submit"]>();
@@ -73,6 +81,69 @@ describe("EMA crossover strategy", () => {
       quantity: options.quantity,
       reason: "EMA bullish crossover"
     });
+  });
+
+  it("sizes bullish crossover entries from ATR risk when configured", () => {
+    const strategy = createEmaCrossover({
+      ...options,
+      quantity: new Decimal("99"),
+      atrSizing: {
+        atrPeriod: 3,
+        riskFraction: new Decimal("0.01"),
+        stopAtrMultiple: new Decimal(2)
+      }
+    });
+    const submit = vi.fn<StrategyContext["submit"]>();
+    const ctx: StrategyContext = {
+      now: () => 0,
+      position: (symbol) => ({
+        symbol,
+        quantity: new Decimal(0),
+        avgEntry: new Decimal(0),
+        realizedPnl: new Decimal(0)
+      }),
+      balance: () => new Decimal(1000),
+      submit,
+      log: () => {}
+    };
+
+    [10, 10, 10, 12].forEach((price, index) =>
+      strategy.onCandle?.(candleWithRange(price, 2, index), ctx)
+    );
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit.mock.calls[0]?.[0].quantity.toString()).toBe("2.1428571428571428572");
+  });
+
+  it("caps ATR-sized entries by the configured maximum quantity", () => {
+    const strategy = createEmaCrossover({
+      ...options,
+      atrSizing: {
+        atrPeriod: 3,
+        riskFraction: new Decimal("0.5"),
+        stopAtrMultiple: new Decimal(1),
+        maxQuantity: new Decimal("0.25")
+      }
+    });
+    const submit = vi.fn<StrategyContext["submit"]>();
+    const ctx: StrategyContext = {
+      now: () => 0,
+      position: (symbol) => ({
+        symbol,
+        quantity: new Decimal(0),
+        avgEntry: new Decimal(0),
+        realizedPnl: new Decimal(0)
+      }),
+      balance: () => new Decimal(1000),
+      submit,
+      log: () => {}
+    };
+
+    [10, 10, 10, 12].forEach((price, index) =>
+      strategy.onCandle?.(candleWithRange(price, 2, index), ctx)
+    );
+
+    expect(submit.mock.calls[0]?.[0].quantity.toString()).toBe("0.25");
   });
 
   it("does not repeatedly buy while the fast EMA stays above the slow EMA", () => {
@@ -147,6 +218,26 @@ describe("EMA crossover strategy", () => {
     expect(() => createEmaCrossover({ ...options, quantity: new Decimal(quantity) })).toThrow(
       "Quantity must be finite and positive"
     );
+  });
+
+  it.each([
+    { atrPeriod: 0 },
+    { riskFraction: new Decimal(0) },
+    { riskFraction: new Decimal(1) },
+    { stopAtrMultiple: new Decimal(0) },
+    { maxQuantity: new Decimal(0) }
+  ])("rejects invalid ATR sizing options %j", (atrSizing) => {
+    expect(() =>
+      createEmaCrossover({
+        ...options,
+        atrSizing: {
+          atrPeriod: 3,
+          riskFraction: new Decimal("0.01"),
+          stopAtrMultiple: new Decimal(2),
+          ...atrSizing
+        }
+      })
+    ).toThrow();
   });
 
   it.each([

@@ -12,7 +12,8 @@ describe("parseBacktestArgs", () => {
         interval: "15m",
         fromMs: Date.UTC(2024, 0, 1),
         toMs: Date.UTC(2024, 1, 1)
-      }
+      },
+      saveRun: false
     });
   });
 
@@ -90,6 +91,26 @@ describe("parseBacktestArgs", () => {
     );
   });
 
+  it("accepts saving a run with an optional explicit run id", () => {
+    expect(parseBacktestArgs([...dates, "--save-run"])).toMatchObject({
+      saveRun: true
+    });
+    expect(parseBacktestArgs([...dates, "--save-run", "--run-id", "ema:BTCUSDT:jan-2024"])).toMatchObject({
+      saveRun: true,
+      runId: "ema:BTCUSDT:jan-2024"
+    });
+  });
+
+  it("requires save-run before accepting an explicit run id", () => {
+    expect(() => parseBacktestArgs([...dates, "--run-id", "manual-id"])).toThrow(
+      "--run-id requires --save-run"
+    );
+  });
+
+  it.each(["", "bad id", "bad/id", "bad$id"])("rejects unsafe run ids %s", (runId) => {
+    expect(() => parseBacktestArgs([...dates, "--save-run", "--run-id", runId])).toThrow();
+  });
+
   it.each(
     [
       ["--unknown", "value"],
@@ -97,6 +118,7 @@ describe("parseBacktestArgs", () => {
       ["--interval", "--symbol"],
       ["--from", "2024-01-01"],
       ["--symbol", "BTCUSDT", "--symbol", "BTCUSDT"],
+      ["--save-run", "--save-run"],
       ["ema"],
       ["--interval", ""]
     ].map((flags) => ({ flags }))

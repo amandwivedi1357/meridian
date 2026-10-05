@@ -2,8 +2,18 @@ import { describe, expect, it } from "vitest";
 import { Decimal, type OrderIntent } from "@meridian/core";
 import { createPendingOrders } from "./pending-orders.js";
 
-function order(reason = "signal"): OrderIntent {
-  return { symbol: "BTCUSDT", side: "BUY", type: "MARKET", quantity: new Decimal("0.01"), reason };
+function order(reason = "signal", type: "MARKET" | "LIMIT" | "STOP_MARKET" = "MARKET"): OrderIntent {
+  const intent: OrderIntent = {
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type,
+    quantity: new Decimal("0.01"),
+    reason
+  };
+
+  if (type === "LIMIT") return { ...intent, limitPrice: new Decimal(100) };
+  if (type === "STOP_MARKET") return { ...intent, stopPrice: new Decimal(90) };
+  return intent;
 }
 
 describe("pending orders", () => {
@@ -52,13 +62,66 @@ describe("pending orders", () => {
     expect(queue.takeBefore(2).map((item) => item.intent.reason)).toEqual(["after drain"]);
   });
 
-  it.each([{ symbol: "ETHUSDT" }, { type: "LIMIT" as const }])(
-    "rejects unsupported orders %j without queueing them",
-    (override) => {
+  it("accepts limit orders with a positive finite limit price", () => {
+    const queue = createPendingOrders("BTCUSDT");
+    queue.enqueue(order("limit", "LIMIT"), 0);
+    expect(queue.takeBefore(1)).toEqual([{ intent: order("limit", "LIMIT"), submittedAtMs: 0 }]);
+  });
+
+  it("accepts stop market orders with a positive finite stop price", () => {
+    const queue = createPendingOrders("BTCUSDT");
+    queue.enqueue(order("stop", "STOP_MARKET"), 0);
+    expect(queue.takeBefore(1)).toEqual([
+      { intent: order("stop", "STOP_MARKET"), submittedAtMs: 0 }
+    ]);
+  });
+
+  it("rejects orders for other symbols without queueing them", () => {
+    const queue = createPendingOrders("BTCUSDT");
+    expect(() => queue.enqueue({ ...order(), symbol: "ETHUSDT" }, 0)).toThrow(
+      "Unsupported simulated order"
+    );
+    expect(queue.takeBefore(1)).toEqual([]);
+  });
+
+  it.each([undefined, "0", "-1", "NaN", "Infinity"])(
+    "rejects invalid limit prices %s",
+    (limitPrice) => {
       const queue = createPendingOrders("BTCUSDT");
-      expect(() => queue.enqueue({ ...order(), ...override }, 0)).toThrow(
-        "Unsupported simulated order"
-      );
+      const intent =
+        limitPrice === undefined
+          ? {
+              symbol: "BTCUSDT",
+              side: "BUY" as const,
+              type: "LIMIT" as const,
+              quantity: new Decimal("0.01"),
+              reason: "limit"
+            }
+          : { ...order("limit", "LIMIT"), limitPrice: new Decimal(limitPrice) };
+
+      expect(() =>
+        queue.enqueue(intent, 0)
+      ).toThrow("Limit price must be finite and positive");
+      expect(queue.takeBefore(1)).toEqual([]);
+    }
+  );
+
+  it.each([undefined, "0", "-1", "NaN", "Infinity"])(
+    "rejects invalid stop prices %s",
+    (stopPrice) => {
+      const queue = createPendingOrders("BTCUSDT");
+      const intent =
+        stopPrice === undefined
+          ? {
+              symbol: "BTCUSDT",
+              side: "BUY" as const,
+              type: "STOP_MARKET" as const,
+              quantity: new Decimal("0.01"),
+              reason: "stop"
+            }
+          : { ...order("stop", "STOP_MARKET"), stopPrice: new Decimal(stopPrice) };
+
+      expect(() => queue.enqueue(intent, 0)).toThrow("Stop price must be finite and positive");
       expect(queue.takeBefore(1)).toEqual([]);
     }
   );

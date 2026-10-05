@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Decimal, type OrderIntent } from "@meridian/core";
+import { Decimal, type ExchangeFilters, type OrderIntent } from "@meridian/core";
 import { createMarketFill } from "./market-fill.js";
 
 const options = {
@@ -16,6 +16,14 @@ const intent: OrderIntent = {
   quantity: new Decimal("0.5"),
   reason: "test signal"
 };
+
+function filters(): ExchangeFilters {
+  return {
+    tickSize: new Decimal("0.01"),
+    stepSize: new Decimal("0.001"),
+    minNotional: new Decimal("10")
+  };
+}
 
 describe("createMarketFill", () => {
   it("charges the buy fee on the slipped execution notional", () => {
@@ -61,6 +69,56 @@ describe("createMarketFill", () => {
     );
     expect(fill.price.toString()).toBe("0.1001");
     expect(fill.fee.toFixed()).toBe("0.000000000001001");
+  });
+
+  it("rounds market fills conservatively to exchange filters", () => {
+    const buy = createMarketFill(
+      { ...intent, quantity: new Decimal("0.123456") },
+      new Decimal("100.003"),
+      timestamp,
+      {
+        ...options,
+        slippageBps: new Decimal(0),
+        exchangeFilters: filters()
+      }
+    );
+    const sell = createMarketFill(
+      { ...intent, side: "SELL", quantity: new Decimal("0.123456") },
+      new Decimal("100.003"),
+      timestamp,
+      {
+        ...options,
+        slippageBps: new Decimal(0),
+        exchangeFilters: filters()
+      }
+    );
+
+    expect(buy.price.toString()).toBe("100.01");
+    expect(buy.quantity.toString()).toBe("0.123");
+    expect(buy.fee.toString()).toBe("0.01230123");
+    expect(sell.price.toString()).toBe("100");
+    expect(sell.quantity.toString()).toBe("0.123");
+    expect(sell.fee.toString()).toBe("0.0123");
+  });
+
+  it("rejects orders that round below exchange quantity or notional filters", () => {
+    expect(() =>
+      createMarketFill(
+        { ...intent, quantity: new Decimal("0.0009") },
+        new Decimal(100),
+        timestamp,
+        { ...options, exchangeFilters: filters() }
+      )
+    ).toThrow("Quantity is below exchange step size");
+
+    expect(() =>
+      createMarketFill(
+        { ...intent, quantity: new Decimal("0.01") },
+        new Decimal(100),
+        timestamp,
+        { ...options, exchangeFilters: filters() }
+      )
+    ).toThrow("Order notional is below exchange minimum");
   });
 
   it.each([{ symbol: "ETHUSDT" }, { type: "LIMIT" as const, limitPrice: new Decimal(100) }])(

@@ -10,7 +10,27 @@ function options(): SimBrokerOptions {
     quoteAsset: "USDT",
     initialQuoteBalance: new Decimal(1000),
     slippageBps: new Decimal(10),
-    takerFeeRate: new Decimal("0.001")
+    takerFeeRate: new Decimal("0.001"),
+    makerFeeRate: new Decimal("0.0002")
+  };
+}
+
+function optionsWithFeeBalances(): SimBrokerOptions {
+  return {
+    ...options(),
+    initialFeeBalances: new Map([["BNB", new Decimal("2")]])
+  };
+}
+
+function optionsWithExchangeFilters(): SimBrokerOptions {
+  return {
+    ...options(),
+    slippageBps: new Decimal(0),
+    exchangeFilters: {
+      tickSize: new Decimal("0.01"),
+      stepSize: new Decimal("0.001"),
+      minNotional: new Decimal("10")
+    }
   };
 }
 
@@ -39,6 +59,22 @@ function order(side: "BUY" | "SELL" = "BUY", quantity = "1"): OrderIntent {
   };
 }
 
+function limitOrder(side: "BUY" | "SELL", limitPrice: string, quantity = "1"): OrderIntent {
+  return {
+    ...order(side, quantity),
+    type: "LIMIT",
+    limitPrice: new Decimal(limitPrice)
+  };
+}
+
+function stopMarketOrder(side: "BUY" | "SELL", stopPrice: string, quantity = "1"): OrderIntent {
+  return {
+    ...order(side, quantity),
+    type: "STOP_MARKET",
+    stopPrice: new Decimal(stopPrice)
+  };
+}
+
 describe("createSimBroker", () => {
   it("starts flat with quote cash and marks equity without holdings", () => {
     const broker = createSimBroker(options());
@@ -46,6 +82,12 @@ describe("createSimBroker", () => {
     expect(broker.balance("BTC").isZero()).toBe(true);
     expect(broker.balance("ETH").isZero()).toBe(true);
     expect(broker.position().avgEntry.isZero()).toBe(true);
+    expect(broker.equity(new Decimal(100)).toString()).toBe("1000");
+  });
+
+  it("exposes configured external fee balances without adding them to quote equity", () => {
+    const broker = createSimBroker(optionsWithFeeBalances());
+    expect(broker.balance("BNB").toString()).toBe("2");
     expect(broker.equity(new Decimal(100)).toString()).toBe("1000");
   });
 
@@ -63,6 +105,88 @@ describe("createSimBroker", () => {
     expect(broker.position().avgEntry.toString()).toBe("100.2001");
     expect(broker.equity(new Decimal(120)).toString()).toBe("1019.7999");
     expect(broker.processCandle(candle(1800000))).toEqual([]);
+  });
+
+  it("applies exchange filters before accounting a market fill", () => {
+    const broker = createSimBroker(optionsWithExchangeFilters());
+    broker.submit(order("BUY", "0.123456"), 0);
+    const fills = broker.processCandle(candle(1, "100.003"));
+
+    expect(fills[0]?.price.toString()).toBe("100.01");
+    expect(fills[0]?.quantity.toString()).toBe("0.123");
+    expect(fills[0]?.fee.toString()).toBe("0.01230123");
+    expect(broker.balance("BTC").toString()).toBe("0.123");
+    expect(broker.balance("USDT").toString()).toBe("987.68646877");
+  });
+
+  it("keeps an untouched buy limit pending and fills it later at the limit price with maker fees", () => {
+    const broker = createSimBroker(options());
+    broker.submit(limitOrder("BUY", "95"), 0);
+
+    expect(broker.processCandle({ ...candle(1, "100"), low: new Decimal(96) })).toEqual([]);
+    const fills = broker.processCandle({ ...candle(2, "100"), low: new Decimal(94) });
+
+    expect(fills).toHaveLength(1);
+    expect(fills[0]?.price.toString()).toBe("95");
+    expect(fills[0]?.quantity.toString()).toBe("1");
+    expect(fills[0]?.fee.toString()).toBe("0.019");
+    expect(broker.balance("BTC").toString()).toBe("1");
+    expect(broker.balance("USDT").toString()).toBe("904.981");
+  });
+
+  it("requires trade-through before filling a limit order", () => {
+    const broker = createSimBroker(options());
+    broker.submit(limitOrder("BUY", "95"), 0);
+
+    expect(broker.processCandle({ ...candle(1, "100"), low: new Decimal(95) })).toEqual([]);
+    expect(broker.processCandle({ ...candle(2, "100"), low: new Decimal("94.99") })).toHaveLength(
+      1
+    );
+  });
+
+  it("fills a sell limit when the candle trades through the limit price", () => {
+    const broker = createSimBroker(options());
+    broker.submit(order("BUY"), 0);
+    broker.processCandle(candle(1));
+    broker.submit(limitOrder("SELL", "120"), 1);
+
+    const fills = broker.processCandle({ ...candle(2, "100"), high: new Decimal(121) });
+
+    expect(fills).toHaveLength(1);
+    expect(fills[0]?.side).toBe("SELL");
+    expect(fills[0]?.price.toString()).toBe("120");
+    expect(fills[0]?.fee.toString()).toBe("0.024");
+    expect(broker.balance("BTC").isZero()).toBe(true);
+    expect(broker.position().realizedPnl.toString()).toBe("19.7759");
+  });
+
+  it("does not fill a touched limit order on the same candle open it was submitted at", () => {
+    const broker = createSimBroker(options());
+    broker.submit(limitOrder("BUY", "95"), 100);
+
+    expect(broker.processCandle({ ...candle(100, "100"), low: new Decimal(94) })).toEqual([]);
+    expect(broker.processCandle({ ...candle(101, "100"), low: new Decimal(94) })).toHaveLength(1);
+  });
+
+  it("fills the unfavourable stop before a favourable target when both are possible intrabar", () => {
+    const broker = createSimBroker(options());
+    broker.submit(order("BUY"), 0);
+    broker.processCandle(candle(1));
+
+    broker.submit(limitOrder("SELL", "120"), 1);
+    broker.submit(stopMarketOrder("SELL", "90"), 1);
+
+    const fills = broker.processCandle({
+      ...candle(2, "100"),
+      high: new Decimal(121),
+      low: new Decimal(89)
+    });
+
+    expect(fills).toHaveLength(1);
+    expect(fills[0]?.side).toBe("SELL");
+    expect(fills[0]?.price.toString()).toBe("89.91");
+    expect(broker.balance("BTC").isZero()).toBe(true);
+    expect(broker.position().realizedPnl.toString()).toBe("-10.38001");
   });
 
   it("does not execute orders submitted at or after a candle's open", () => {

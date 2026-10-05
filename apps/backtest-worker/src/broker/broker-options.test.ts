@@ -10,7 +10,8 @@ function options(): SimBrokerOptions {
     quoteAsset: "USDT",
     initialQuoteBalance: new Decimal(1000),
     slippageBps: new Decimal(10),
-    takerFeeRate: new Decimal("0.001")
+    takerFeeRate: new Decimal("0.001"),
+    makerFeeRate: new Decimal("0.0002")
   };
 }
 
@@ -47,9 +48,24 @@ describe("validateSimBrokerOptions", () => {
     ).toThrow("Initial quote balance must be finite and positive");
   });
 
+  it.each(["-1", "NaN", "Infinity"])("rejects invalid fee asset balance %s", (balance) => {
+    expect(() =>
+      validateSimBrokerOptions({
+        ...options(),
+        initialFeeBalances: new Map([["BNB", new Decimal(balance)]])
+      })
+    ).toThrow("Initial fee balances must be finite and non-negative");
+  });
+
   it.each(["-0.001", "1", "NaN", "Infinity"])("rejects invalid taker fee %s", (rate) => {
     expect(() =>
       validateSimBrokerOptions({ ...options(), takerFeeRate: new Decimal(rate) })
+    ).toThrow("Fee rate must be between 0 and 1");
+  });
+
+  it.each(["-0.001", "1", "NaN", "Infinity"])("rejects invalid maker fee %s", (rate) => {
+    expect(() =>
+      validateSimBrokerOptions({ ...options(), makerFeeRate: new Decimal(rate) })
     ).toThrow("Fee rate must be between 0 and 1");
   });
 
@@ -57,5 +73,25 @@ describe("validateSimBrokerOptions", () => {
     expect(() => validateSimBrokerOptions({ ...options(), slippageBps: new Decimal(bps) })).toThrow(
       "Slippage must be between 0 and 10000 bps"
     );
+  });
+
+  it.each([
+    { tickSize: "0" },
+    { stepSize: "-0.001" },
+    { minNotional: "NaN" }
+  ])("rejects invalid exchange filters %j", (override) => {
+    expect(() =>
+      validateSimBrokerOptions({
+        ...options(),
+        exchangeFilters: {
+          tickSize: new Decimal("0.01"),
+          stepSize: new Decimal("0.001"),
+          minNotional: new Decimal("10"),
+          ...Object.fromEntries(
+            Object.entries(override).map(([key, value]) => [key, new Decimal(value)])
+          )
+        }
+      })
+    ).toThrow();
   });
 });

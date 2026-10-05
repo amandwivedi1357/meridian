@@ -1,5 +1,4 @@
-import type { Candle, Decimal, Fill, OrderIntent, Position } from "@meridian/core";
-
+import type { Candle, Decimal, ExchangeFilters, Fill, OrderIntent, Position } from "@meridian/core";
 export interface SimBrokerOptions {
   readonly symbol: string;
   readonly baseAsset: string;
@@ -7,6 +6,9 @@ export interface SimBrokerOptions {
   readonly initialQuoteBalance: Decimal;
   readonly slippageBps: Decimal;
   readonly takerFeeRate: Decimal;
+  readonly makerFeeRate?: Decimal;
+  readonly initialFeeBalances?: ReadonlyMap<string, Decimal>;
+  readonly exchangeFilters?: ExchangeFilters;
 }
 
 export interface SimBroker {

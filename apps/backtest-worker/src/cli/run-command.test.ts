@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runBacktestCommand } from "./run-command.js";
 import type { KlineRow, TimescaleCandleFeedDeps } from "../feeds/timescale-candle-feed.js";
+import type { SqlQuery } from "../results/backtest-result-writer.js";
 
 const args = [
   "--strategy",
@@ -54,7 +55,15 @@ describe("runBacktestCommand", () => {
       tradeCount: 2
     });
     expect(result.totalReturnPct).toMatch(/^-\d+\.\d{6}$/);
+    expect(result.buyAndHoldReturnPct).toMatch(/^-?\d+\.\d{6}$/);
+    expect(result.strategyVsBuyAndHoldPct).toMatch(/^-?\d+\.\d{6}$/);
     expect(result.maxDrawdownPct).toMatch(/^\d+\.\d{6}$/);
+    expect(result.cagrPct).toMatch(/^-?\d+\.\d{6}$/);
+    expect(result.sharpeRatio).toMatch(/^-?\d+\.\d{6}$/);
+    expect(result.sortinoRatio).toMatch(/^-?\d+\.\d{6}$/);
+    expect(result.winRatePct).toMatch(/^\d+\.\d{6}$/);
+    expect(result.profitFactor).toMatch(/^\d+\.\d{6}$/);
+    expect(result.exposurePct).toMatch(/^\d+\.\d{6}$/);
     expect(query.mock.calls[0]?.[1]).toEqual([
       "BTCUSDT",
       "15m",
@@ -71,6 +80,56 @@ describe("runBacktestCommand", () => {
     expect(result.interval).toBe("1h");
     expect(result.tradeCount).toBe(2);
     expect(query.mock.calls[0]?.[1]?.[1]).toBe("1h");
+  });
+
+  it("persists a saved run and returns its run id", async () => {
+    const query = vi.fn<TimescaleCandleFeedDeps["query"]>().mockResolvedValue({ rows: rows() });
+    const execute = vi.fn<(query: SqlQuery) => Promise<void>>().mockResolvedValue(undefined);
+
+    const result = await runBacktestCommand([...args, "--save-run", "--run-id", "manual-run"], {
+      query,
+      execute
+    });
+
+    expect(result.runId).toBe("manual-run");
+    expect(execute.mock.calls[0]?.[0].text).toContain("INSERT INTO backtest_runs");
+    expect(execute.mock.calls[0]?.[0].values.slice(0, 6)).toEqual([
+      "manual-run",
+      "ema",
+      "BTCUSDT",
+      "15m",
+      Date.UTC(2024, 0, 1),
+      Date.UTC(2024, 1, 1)
+    ]);
+    expect(JSON.parse(String(execute.mock.calls[0]?.[0].values[6]))).toEqual({
+      fastPeriod: 12,
+      slowPeriod: 26,
+      quantity: "0.001",
+      initialEquity: "10000",
+      slippageBps: "10",
+      takerFeeRate: "0.001"
+    });
+  });
+
+  it("generates a run id when saving without an explicit id", async () => {
+    const query = vi.fn<TimescaleCandleFeedDeps["query"]>().mockResolvedValue({ rows: rows() });
+    const execute = vi.fn<(query: SqlQuery) => Promise<void>>().mockResolvedValue(undefined);
+
+    const result = await runBacktestCommand([...args, "--save-run"], {
+      query,
+      execute,
+      nowMs: () => Date.UTC(2024, 2, 1, 2, 3, 4, 5)
+    });
+
+    expect(result.runId).toBe("ema:BTCUSDT:15m:2024-03-01T02-03-04-005Z");
+  });
+
+  it("requires a SQL executor before saving a run", async () => {
+    const query = vi.fn<TimescaleCandleFeedDeps["query"]>().mockResolvedValue({ rows: rows() });
+
+    await expect(runBacktestCommand([...args, "--save-run"], { query })).rejects.toThrow(
+      "Saving backtest runs requires a SQL executor"
+    );
   });
 
   it("validates arguments before querying the database", async () => {

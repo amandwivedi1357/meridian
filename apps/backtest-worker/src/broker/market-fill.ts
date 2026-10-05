@@ -1,4 +1,12 @@
-import type { Decimal, Fill, OrderIntent } from "@meridian/core";
+import {
+  calculateNotional,
+  normalizeQuantity,
+  roundDownToIncrement,
+  roundUpToIncrement,
+  type Decimal,
+  type Fill,
+  type OrderIntent
+} from "@meridian/core";
 import type { SimBrokerOptions } from "./sim-broker.js";
 import { calculateMarketFillPrice } from "./fill-price.js";
 
@@ -6,7 +14,10 @@ export function createMarketFill(
   intent: OrderIntent,
   openPrice: Decimal,
   tsMs: number,
-  options: Pick<SimBrokerOptions, "symbol" | "quoteAsset" | "slippageBps" | "takerFeeRate">
+  options: Pick<
+    SimBrokerOptions,
+    "symbol" | "quoteAsset" | "slippageBps" | "takerFeeRate" | "exchangeFilters"
+  >
 ): Fill {
   if (intent.symbol !== options.symbol || intent.type !== "MARKET") {
     throw new Error("Unsupported simulated order");
@@ -25,13 +36,33 @@ export function createMarketFill(
     throw new Error("Invalid fill timestamp");
   }
 
-  const price = calculateMarketFillPrice(openPrice, intent.side, options.slippageBps);
-  const fee = price.times(intent.quantity).times(options.takerFeeRate);
+  const rawPrice = calculateMarketFillPrice(openPrice, intent.side, options.slippageBps);
+  const filters = options.exchangeFilters;
+
+  const price =
+    filters === undefined
+      ? rawPrice
+      : intent.side === "BUY"
+        ? roundUpToIncrement(rawPrice, filters.tickSize)
+        : roundDownToIncrement(rawPrice, filters.tickSize);
+
+  const quantity =
+    filters === undefined ? intent.quantity : normalizeQuantity(intent.quantity, filters);
+
+  if (quantity.lte(0)) {
+    throw new Error("Quantity is below exchange step size");
+  }
+
+  if (filters !== undefined && calculateNotional(price, quantity).lt(filters.minNotional)) {
+    throw new Error("Order notional is below exchange minimum");
+  }
+
+  const fee = price.times(quantity).times(options.takerFeeRate);
 
   return {
     symbol: intent.symbol,
     side: intent.side,
-    quantity: intent.quantity,
+    quantity,
     price,
     fee,
     feeAsset: options.quoteAsset,

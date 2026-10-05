@@ -31,7 +31,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 0                    | Nearly done. Open: Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                         |
 | Phase 1 (1.1–1.5 P0 items) | Done in code and unit tests except wall-clock verification. Open: continuous aggregates (P1), 24h soak, spot-check vs REST snapshot, 60s network kill, and 6-month backfill exit criterion |
-| Phase 2                    | Phase 2.0 complete: real historical CLI, 233 tests, repeat-output determinism verified. Phase 2.1 remaining tasks onward are open                                                          |
+| Phase 2                    | Phase 2.0–2.3 complete except walk-forward reporting. Phase 2.4 persistence + CLI save is started; saved-run listing/report generation remain open                                         |
 | Phases 3–7                 | Not started                                                                                                                                                                                |
 
 **Strategy for the rest of the plan:** get a thin vertical slice working end to end (Phase 2.0) before polishing any single layer. Infrastructure that nothing consumes yet (generated Protobuf, continuous aggregates) is deferred until a real consumer needs it.
@@ -129,7 +129,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [x] **P0** Session recorder: write normalized trade/kline/depth events to disk in a replayable format (needed for the parity test in Phase 3; PRD FR-1.9)
   - Status: recorder writes replayable NDJSON with Decimal values serialized as strings and is wired into the normalized ingest flow behind optional runtime config.
 - [ ] **P0** Start the **24h soak** now and let it run in the background while Phase 2 begins
-  - Status: started on 2026-10-04 with `smoke-live-ingest --symbol BTCUSDT --events 5000000 --timeoutMs 86400000 --environment production`; PID `21124`; logs under `logs/soak/`; session recording at `sessions/soak/phase-1-5-events.ndjson`. Mark complete after the run finishes cleanly and counts are summarized.
+  - Status: restarted on 2026-10-05 with `smoke-live-ingest --symbol BTCUSDT --events 5000000 --timeoutMs 86400000 --environment production` and manually stopped the same day before the 24h exit criterion. Stop snapshot: Redis `market.trade.BTCUSDT` length 1,071,912; Timescale `BTCUSDT` trade rows 536,742; session recording `sessions/soak/phase-1-5-events.ndjson` size 121,784,825 bytes. Mark complete only after a future full 24h run finishes cleanly and counts are summarized.
 
 **Exit criteria**
 
@@ -171,33 +171,49 @@ One symbol, one strategy, one number. Build the thinnest path that proves the ar
 
 - [x] **P0** Types: `Candle`, `Trade`, `BookSnapshot`, `OrderIntent`, `Fill`, `Position`
 - [x] **P0** `Strategy` and `StrategyContext` interfaces (TRD §4.7)
-- [ ] **P0** Decimal helpers + rounding to exchange filters (tick size, step size, min notional)
-- [ ] **P0** Indicators (SMA, EMA, RSI, ATR, Bollinger) with unit tests against known values
-- [ ] **P0** Position/PnL accounting (average entry, realized/unrealized) that is **fee-aware** (fees in quote, base, or BNB; position quantity net of base-asset fees)
+- [x] **P0** Decimal helpers + rounding to exchange filters (tick size, step size, min notional)
+  - Added shared `@meridian/core` Decimal helpers and `ExchangeFilters` utilities for tick-size price rounding, step-size quantity rounding, exact notional calculation, and min-notional checks. Verified with focused unit tests plus backtest-worker downstream typecheck/tests.
+- [x] **P0** Indicators (SMA, EMA, RSI, ATR, Bollinger) with unit tests against known values
+  - Added shared `@meridian/core` indicator helpers for SMA, EMA, RSI, ATR, and Bollinger Bands with Decimal-safe calculations and focused known-value tests.
+- [x] **P0** Position/PnL accounting (average entry, realized/unrealized) that is **fee-aware** (fees in quote, base, or BNB; position quantity net of base-asset fees)
+  - The simulated broker now handles quote-asset fees, base-asset fees that net position quantity, and external fee assets such as BNB through configured fee balances. Average entry, realized PnL, and mark-to-market equity are covered by focused accounting and broker tests. Backtest worker baseline: 242 passing tests across 14 files, type check passes.
 
 ### 2.2 Backtest engine
 
-- [ ] **P0** Data feed reading klines from Timescale in time order
-- [ ] **P0** Simulated clock; strategies use `ctx.now()` only
-- [ ] **P0** Sim broker: market + limit fills, taker/maker fees, slippage model
-- [ ] **P0** Apply the same exchange filters as live
-- [ ] **P0** Look-ahead guard: only closed candles delivered; orders from candle _N_ fill no earlier than candle _N+1_'s open
-- [ ] **P0** Conservative intrabar rule: if a candle could trigger both a favourable and unfavourable event, assume the unfavourable one first; limit orders fill only on trade-through (TRD §4.8)
-- [ ] **P0** `RecordedSessionFeed` implementing the same feed interface, so recorded live sessions can be replayed (enables the Phase 3 parity test)
-- [ ] **P0** Metrics: return, CAGR, Sharpe, Sortino, max drawdown, win rate, profit factor, exposure
-- [ ] **P0** Determinism test: same input ⇒ byte-identical output
+- [x] **P0** Data feed reading klines from Timescale in time order
+  - Timescale candle feed reads closed candles by symbol/interval in ascending `open_time` order with timestamp pagination and Decimal mapping. Covered by focused feed tests and the backtest runtime path.
+- [x] **P0** Simulated clock; strategies use `ctx.now()` only
+  - Backtest runtime drives `ctx.now()` from candle open while processing fills and candle close while delivering closed candles. Runtime tests verify initialization time, fill time, and candle callback time ordering.
+- [x] **P0** Sim broker: market + limit fills, taker/maker fees, slippage model
+  - Simulated broker now supports market fills at next open with fixed slippage/taker fees and limit fills when candle high/low trades through the limit price with maker fees. Untouched limit orders remain pending across candles, and same-open submissions still cannot fill on that candle. Backtest worker baseline: 260 passing tests across 14 files, type check passes.
+- [x] **P0** Apply the same exchange filters as live
+  - Simulated market fills can now apply configured exchange filters: BUY prices round up to the tick, SELL prices round down, quantities round down to step size, and orders below quantity/notional limits are rejected before accounting. Backtest worker baseline: 248 passing tests across 14 files, type check passes.
+- [x] **P0** Look-ahead guard: only closed candles delivered; orders from candle _N_ fill no earlier than candle _N+1_'s open
+  - Runtime rejects open/out-of-range/out-of-order candles; broker queue only releases orders submitted before the candle open, including limit/stop orders, so same-open submissions cannot fill on that candle.
+- [x] **P0** Conservative intrabar rule: if a candle could trigger both a favourable and unfavourable event, assume the unfavourable one first; limit orders fill only on trade-through (TRD §4.8)
+  - Added `STOP_MARKET` order intents for stop-loss style exits, strict trade-through handling for limit orders, and conservative same-candle ordering that processes stop orders before favourable limit targets. Core tests remain green; backtest worker baseline: 268 passing tests across 14 files, type check passes.
+- [x] **P0** `RecordedSessionFeed` implementing the same feed interface, so recorded live sessions can be replayed (enables the Phase 3 parity test)
+  - Added a replay feed for session-recorder NDJSON that filters closed kline records by symbol, interval, and time range, preserves Decimal precision from string fields, sorts candles in time order, and rejects malformed replay lines/candles. Runtime coverage now replays recorded-session candles through the normal backtest path and verifies deterministic fills/metrics. Backtest worker baseline: 278 passing tests across 15 files, type check passes.
+- [x] **P0** Metrics: return, CAGR, Sharpe, Sortino, max drawdown, win rate, profit factor, exposure
+  - Backtest metrics now include duration-aware CAGR, period-return Sharpe/Sortino, max drawdown, closed-trade win rate/profit factor, and exposure percentage. The runtime passes closed-trade PnLs, exposure bars, request time range, and interval-based annualization into the metrics layer, and the CLI prints the new fields. Backtest worker baseline: 277 passing tests across 15 files, type check passes.
+- [x] **P0** Determinism test: same input ⇒ byte-identical output
+  - Runtime tests verify identical serialized fills, equity curves, and metrics for repeated runs over both direct candle fixtures and recorded-session replay input.
 - [ ] **P1** Walk-forward / train-test split reporting
 
 ### 2.3 Reference strategies
 
-- [ ] **P0** EMA crossover (with ATR-based position sizing)
-- [ ] **P1** Grid or mean-reversion strategy
-- [ ] **P1** Buy-and-hold benchmark for comparison in every report
+- [x] **P0** EMA crossover (with ATR-based position sizing)
+  - EMA crossover now supports optional ATR-based entry sizing: `quoteBalance * riskFraction / (ATR * stopAtrMultiple)`, with optional max-quantity cap and validation. Fixed-size behavior remains the default. Backtest worker baseline: 285 passing tests across 15 files, type check passes.
+- [x] **P1** Grid or mean-reversion strategy
+  - Added a Decimal-safe grid mean-reversion reference strategy using an SMA mean, percentage grid bands, staged market buy/sell intents, max-position caps, irrelevant-candle filtering, and reset behavior. Backtest worker baseline: 308 passing tests across 17 files, type check passes.
+- [x] **P1** Buy-and-hold benchmark for comparison in every report
+  - Backtest metrics now include buy-and-hold return from first close to last close and strategy-vs-benchmark return. Runtime passes the benchmark into metrics, and CLI summaries print both fields. Backtest worker baseline: 286 passing tests across 15 files, type check passes.
 
 ### 2.4 Parallel sweeps
 
 - [ ] **P1** `backtest-worker` with BullMQ + `worker_threads`
 - [ ] **P1** `backtest_runs` / `backtest_trades` tables + results CLI
+  - Status: started. Added `backtest_runs`, `backtest_fills`, and `backtest_equity_points` schema migration plus a `backtest-worker` result writer that persists run metadata, params, metrics, fills, and equity curve with Decimal values serialized safely. The backtest CLI now supports `--save-run` and optional `--run-id`, runs migrations at startup, saves results, and returns the saved `runId`. Saved-run list/show commands are still pending, so the item remains open.
 - [ ] **P1** Report generator (equity curve + drawdown chart as PNG/HTML)
 
 **Exit criteria**

@@ -47,7 +47,7 @@ The project should be resume-grade, not a toy app. The core engineering story is
 ## Current Phase
 
 Phase 1.5: Ingestor close-out and soak verification.
-Phase 2.0 completed on 2026-10-05. The Timescale candle feed, Decimal EMA crossover, next-open simulated broker with fees/slippage, return/drawdown metrics, historical runner, and executable CLI are verified end to end. Backtest worker baseline: 233 tests across 14 files; build and lint pass. Invalid CLI ranges exit with status 1.
+Phase 2.0 completed on 2026-10-05. The Timescale candle feed, Decimal EMA crossover, next-open simulated broker with fees/slippage, return/drawdown metrics, historical runner, and executable CLI are verified end to end. Phase 2.1 core helpers, indicators, and fee-aware position/PnL accounting are complete. Phase 2.2 exchange-filter enforcement, market/limit/stop simulated broker fills, conservative intrabar ordering, recorded-session replay feed plus parity-style runtime coverage, and richer metrics are complete. Phase 2.3 reference strategies and buy-and-hold benchmark comparison are complete. Phase 2.4 persistence foundation is started with DB tables, a result writer, and CLI `--save-run`; saved-run list/show and report generation remain open. Backtest worker baseline: 318 tests across 17 files; typecheck passes. Invalid CLI ranges exit with status 1.
 
 January 2024 BTCUSDT history is available for 15m and 1h, with 2,976 and 744 closed candles respectively in the exclusive-end range; continuity checks found zero gaps. Repeated real-data 15m CLI runs produced identical summaries: 128 fills, total return -0.112751%, maximum drawdown 0.144664%. The hourly run produced 28 fills, return -0.031776%, drawdown 0.049409%. Trade count means executed fills, not completed round trips; no forced final liquidation is applied.
 
@@ -55,7 +55,7 @@ January 2024 BTCUSDT history is available for 15m and 1h, with 2,976 and 744 clo
 pnpm backtest --strategy ema --symbol BTCUSDT --from 2024-01-01 --to 2024-02-01
 ```
 
-Next coding work is Phase 2.1: shared Decimal helpers and exchange-filter rounding. The rest of Phase 2 and the Phase 1 exit criteria remain open.
+Next coding work is Phase 2.4: add saved-run listing/report retrieval, then report rendering. Shared Decimal helpers, exchange-filter rounding, SMA/EMA/RSI/ATR/Bollinger indicators, fee-aware simulated broker accounting, simulated exchange-filter enforcement, limit-order simulation, stop-market exits, conservative intrabar ordering, `RecordedSessionFeed`, richer metrics, determinism/parity-style runtime coverage, ATR-based EMA sizing, grid mean-reversion, buy-and-hold benchmark comparison, result-persistence schema/writer, and CLI save support are now implemented. The rest of Phase 2 and the Phase 1 exit criteria remain open.
 
 ## Completed
 
@@ -192,10 +192,17 @@ Latest verified package checks:
   - Tests passed: 1 test across 1 test file.
 - `@meridian/db`
   - Typecheck passed.
-  - Tests passed: 9 tests across 3 test files.
+  - Tests passed after backtest result schema migration: 11 tests across 3 test files.
 - `@meridian/bus`
   - Typecheck passed.
   - Tests passed: 15 tests across 1 test file.
+- `@meridian/core`
+  - Typecheck passed.
+  - Build passed.
+  - Tests passed: 34 tests across 3 test files.
+- `@meridian/backtest-worker`
+  - Typecheck passed after CLI result persistence.
+  - Tests passed: 318 tests across 17 test files.
 
 Latest local infrastructure smoke checks:
 
@@ -206,11 +213,12 @@ Latest local infrastructure smoke checks:
 - Bounded kline backfill smoke wrote 6 `BTCUSDT` 1m candles for `2024-01-01T00:00:00Z` through `2024-01-01T00:05:00Z`.
 - Redis publish smoke wrote a normalized trade event to `market.trade.BTCUSDT` and verified the stream entry fields.
 - Bounded live ingest smoke consumed 2 real public `BTCUSDT` trade events from Binance production WebSocket, published them to Redis, and wrote 2 trade rows to TimescaleDB.
-- Phase 1.5 soak started on 2026-10-04 with PID `21124`:
+- Phase 1.5 soak was restarted on 2026-10-05 with PID `24416` after confirming the old documented PID was no longer running, then manually stopped the same day before the 24h exit criterion:
   - command mode: `smoke-live-ingest --symbol BTCUSDT --events 5000000 --timeoutMs 86400000 --environment production`
   - stdout log: `logs/soak/phase-1-5-live-ingest.out.log`
   - stderr log: `logs/soak/phase-1-5-live-ingest.err.log`
   - session recording: `sessions/soak/phase-1-5-events.ndjson`
+  - stop snapshot: Redis `market.trade.BTCUSDT` length 1,071,912; Timescale `BTCUSDT` trade rows 536,742; recording size 121,784,825 bytes.
 
 Run:
 

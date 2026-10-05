@@ -1,4 +1,9 @@
 import { Pool } from "pg";
+import {
+  createPostgresMigrationRunnerDeps,
+  marketDataMigrations,
+  runMigrations
+} from "@meridian/db";
 import type { KlineRow } from "./feeds/timescale-candle-feed.js";
 import { runBacktestCommand } from "./cli/run-command.js";
 
@@ -16,9 +21,14 @@ pool.on("error", (error) => {
 });
 
 try {
+  await runMigrations(marketDataMigrations, createPostgresMigrationRunnerDeps(pool));
+
   const summary = await runBacktestCommand(process.argv.slice(2), {
     query(text, values) {
       return pool.query<KlineRow>(text, [...values]);
+    },
+    async execute(query) {
+      await pool.query(query.text, [...query.values]);
     }
   });
 

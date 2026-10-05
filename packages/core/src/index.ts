@@ -1,10 +1,11 @@
 import { Decimal } from "decimal.js";
-
+export * from "./decimal.js";
+export * from "./indicators.js";
 export type SymbolCode = string;
 export type StrategyId = string;
 
 export type Side = "BUY" | "SELL";
-export type OrderType = "MARKET" | "LIMIT";
+export type OrderType = "MARKET" | "LIMIT" | "STOP_MARKET";
 
 export interface Candle {
   readonly symbol: SymbolCode;
@@ -53,6 +54,7 @@ export interface OrderIntent {
   readonly type: OrderType;
   readonly quantity: Decimal;
   readonly limitPrice?: Decimal;
+  readonly stopPrice?: Decimal;
   readonly reason: string;
 }
 

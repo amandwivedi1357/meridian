@@ -3,6 +3,7 @@ import { Decimal, type Candle, type Strategy } from "@meridian/core";
 import { createSimBroker } from "../broker/create-sim-broker.js";
 import { createEmaCrossover } from "../strategies/ema-crossover.js";
 import type { CandleFeed } from "../feeds/candle-feed.js";
+import { createRecordedSessionCandleFeed } from "../feeds/recorded-session-feed.js";
 import { runBacktest } from "./run-backtest.js";
 
 const fromMs = Date.UTC(2024, 0, 1);
@@ -30,6 +31,27 @@ function feed(candles: readonly Candle[]): CandleFeed {
       yield* candles;
     }
   };
+}
+
+function recordedLine(candle: Candle): string {
+  return JSON.stringify({
+    kind: "kline",
+    symbol: candle.symbol,
+    eventId: `${candle.interval}:${candle.openTimeMs}`,
+    occurredAtMs: candle.closeTimeMs + 1,
+    candle: {
+      symbol: candle.symbol,
+      interval: candle.interval,
+      openTimeMs: candle.openTimeMs,
+      closeTimeMs: candle.closeTimeMs,
+      open: candle.open.toString(),
+      high: candle.high.toString(),
+      low: candle.low.toString(),
+      close: candle.close.toString(),
+      volume: candle.volume.toString(),
+      closed: candle.closed
+    }
+  });
 }
 
 function broker(symbol = "BTCUSDT", slippage = "0", fee = "0") {
@@ -129,8 +151,13 @@ describe("runBacktest", () => {
       "1010"
     ]);
     expect(result.metrics.totalReturnPct.toString()).toBe("1");
+    expect(result.metrics.buyAndHoldReturnPct.toString()).toBe("-10");
+    expect(result.metrics.strategyVsBuyAndHoldPct.toString()).toBe("11");
     expect(result.metrics.maxDrawdownPct.toString()).toBe("1.2");
     expect(result.metrics.tradeCount).toBe(2);
+    expect(result.metrics.winRatePct.toString()).toBe("100");
+    expect(result.metrics.profitFactor.toString()).toBe("10");
+    expect(result.metrics.exposurePct.toString()).toBe("16.666666666666666667");
   });
 
   it("produces identical serialized fills, equity, and metrics on two runs with the same inputs", async () => {
@@ -163,6 +190,54 @@ describe("runBacktest", () => {
     expect(first.fills).toHaveLength(2);
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
     expect(first.metrics.totalReturnPct.toString()).toBe("0.990001");
+  });
+
+  it("replays recorded session candles through the normal backtest path deterministically", async () => {
+    const candles = [
+      candle(0),
+      candle(1),
+      candle(2),
+      candle(3, 12),
+      candle(4, 8, 20),
+      candle(5, 9, 30)
+    ];
+    const recording = [
+      JSON.stringify({
+        kind: "trade",
+        symbol: "BTCUSDT",
+        eventId: "trade-1",
+        occurredAtMs: fromMs,
+        trade: {}
+      }),
+      ...candles.map(recordedLine)
+    ].join("\n");
+
+    async function run() {
+      return runBacktest({
+        feed: createRecordedSessionCandleFeed("sessions/replay.ndjson", {
+          readFile: async () => recording
+        }),
+        request,
+        strategy: createEmaCrossover({
+          symbol: "BTCUSDT",
+          interval: "15m",
+          fastPeriod: 1,
+          slowPeriod: 3,
+          quantity: new Decimal(1)
+        }),
+        broker: broker(),
+        initialEquity: new Decimal(1000)
+      });
+    }
+
+    const first = await run();
+    const second = await run();
+
+    expect(first.fills.map((fill) => [fill.side, fill.tsMs, fill.price.toString()])).toEqual([
+      ["BUY", fromMs + 4 * step, "20"],
+      ["SELL", fromMs + 5 * step, "30"]
+    ]);
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
   });
 
   it("does not force-fill a final-candle signal without a later open", async () => {
@@ -206,7 +281,10 @@ describe("runBacktest", () => {
       initialEquity: new Decimal(1000)
     });
     expect(result.metrics.totalReturnPct.toString()).toBe("2");
+    expect(result.metrics.buyAndHoldReturnPct.toString()).toBe("1100");
+    expect(result.metrics.strategyVsBuyAndHoldPct.toString()).toBe("-1098");
     expect(result.metrics.tradeCount).toBe(1);
+    expect(result.metrics.exposurePct.toString()).toBe("50");
     expect(simBroker.position().quantity.toString()).toBe("1");
   });
 

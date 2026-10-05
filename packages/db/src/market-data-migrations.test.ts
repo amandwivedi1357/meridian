@@ -7,7 +7,7 @@ function normalizeSql(sql: string): string {
 
 describe("market data migrations", () => {
   it("creates Timescale extension and trades/klines hypertables", () => {
-    expect(marketDataMigrations).toHaveLength(1);
+    expect(marketDataMigrations).toHaveLength(2);
 
     const migration = marketDataMigrations[0];
     expect(migration?.id).toBe("001_market_data_schema");
@@ -38,5 +38,31 @@ describe("market data migrations", () => {
     expect(sql).toContain("low numeric");
     expect(sql).toContain("close numeric");
     expect(sql).toContain("volume numeric");
+  });
+
+  it("creates backtest run, fill, and equity result tables", () => {
+    const migration = marketDataMigrations[1];
+    expect(migration?.id).toBe("002_backtest_results_schema");
+
+    const sql = normalizeSql(migration?.sql ?? "");
+
+    expect(sql).toContain("create table if not exists backtest_runs");
+    expect(sql).toContain("run_id text primary key");
+    expect(sql).toContain("params jsonb not null");
+    expect(sql).toContain("metrics jsonb not null");
+    expect(sql).toContain("create table if not exists backtest_fills");
+    expect(sql).toContain("references backtest_runs(run_id) on delete cascade");
+    expect(sql).toContain("primary key (run_id, fill_index)");
+    expect(sql).toContain("create table if not exists backtest_equity_points");
+    expect(sql).toContain("primary key (run_id, point_index)");
+  });
+
+  it("stores backtest monetary values as exact numeric values", () => {
+    const sql = normalizeSql(marketDataMigrations[1]?.sql ?? "");
+
+    expect(sql).toContain("quantity numeric");
+    expect(sql).toContain("price numeric");
+    expect(sql).toContain("fee numeric");
+    expect(sql).toContain("equity numeric");
   });
 });

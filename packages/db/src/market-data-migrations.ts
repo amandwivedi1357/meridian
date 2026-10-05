@@ -38,5 +38,45 @@ export const marketDataMigrations: readonly SqlMigration[] = [
 
       SELECT create_hypertable('klines', 'open_time', if_not_exists => TRUE);
     `
+  },
+  {
+    id: "002_backtest_results_schema",
+    sql: `
+      CREATE TABLE IF NOT EXISTS backtest_runs (
+        run_id text PRIMARY KEY,
+        strategy text NOT NULL,
+        symbol text NOT NULL,
+        interval text NOT NULL,
+        from_ms bigint NOT NULL,
+        to_ms bigint NOT NULL,
+        params jsonb NOT NULL,
+        metrics jsonb NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS backtest_runs_strategy_created_at_idx
+        ON backtest_runs (strategy, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS backtest_fills (
+        run_id text NOT NULL REFERENCES backtest_runs(run_id) ON DELETE CASCADE,
+        fill_index integer NOT NULL,
+        symbol text NOT NULL,
+        side text NOT NULL,
+        quantity numeric NOT NULL,
+        price numeric NOT NULL,
+        fee numeric NOT NULL,
+        fee_asset text NOT NULL,
+        ts_ms bigint NOT NULL,
+        PRIMARY KEY (run_id, fill_index)
+      );
+
+      CREATE TABLE IF NOT EXISTS backtest_equity_points (
+        run_id text NOT NULL REFERENCES backtest_runs(run_id) ON DELETE CASCADE,
+        point_index integer NOT NULL,
+        ts_ms bigint NOT NULL,
+        equity numeric NOT NULL,
+        PRIMARY KEY (run_id, point_index)
+      );
+    `
   }
 ];
