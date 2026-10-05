@@ -15,6 +15,20 @@ When progress is reported:
 
 ## Open Items
 
+- [ ] **`prototype-gap` / `frontend`: Replace the mock Backtests Strategy Lab preview with API-backed data later.**
+  - Recorded: 2026-10-05. `apps/web/src/features/backtests/BacktestPreview.tsx` is a temporary visual helper using static mock data to show Phase 2.4 progress before the real frontend/API integration exists.
+  - It intentionally does not connect to the backend and should not be treated as the final Phase 4 backtest launcher/results UI.
+  - Acceptance: replace static mock runs with API-backed saved-run list/show/report data, remove mock-only data, and wire loading/error/empty states through the real dashboard API.
+
+- [ ] **`reliability` / `testing`: Worker-thread backtest jobs should settle when a worker exits cleanly without a message.**
+  - Recorded: 2026-10-05. `runBacktestJobInWorker` resolves on `message`, `error`, and non-zero `exit`, but a worker that exits with code `0` before posting a result can leave the returned promise pending forever.
+  - This is acceptable for the current queue/worker foundation, but sweep execution should not be able to hang silently.
+  - Acceptance: add a focused test for exit code `0` without a message and decide the behavior, for example return `{ ok: false, error: "Worker exited before sending a result" }`.
+
+- [ ] **`docs`: Refresh the next-chat prompt in `docs/current-state.md` before handing off again.**
+  - Recorded: 2026-10-05. The top handoff prompt still says to continue from Phase 2.1, while the state summary says Phase 2.4 is implemented and next coding can move toward Phase 3.
+  - Acceptance: the handoff prompt, current phase, and implementation-plan status all point to the same next step.
+
 - [ ] **`architecture` / `prototype-gap`: Generalize prototype symbol configuration.**
   - Recorded: 2026-10-04. Phase 2.0 deliberately targets one symbol; keep the BTCUSDT prototype moving and revisit this after the vertical slice works end to end.
   - Replace the CLI's BTCUSDT-only restriction and the command's fixed BTC/USDT asset settings with validated symbol configuration. Resolve base/quote assets, tick size, quantity step size, and minimum notional from exchange metadata; do not infer assets by splitting symbol strings.

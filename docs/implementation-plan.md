@@ -31,7 +31,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 0                    | Nearly done. Open: Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                         |
 | Phase 1 (1.1–1.5 P0 items) | Done in code and unit tests except wall-clock verification. Open: continuous aggregates (P1), 24h soak, spot-check vs REST snapshot, 60s network kill, and 6-month backfill exit criterion |
-| Phase 2                    | Phase 2.0–2.3 complete except walk-forward reporting. Phase 2.4 persistence + CLI save is started; saved-run listing/report generation remain open                                         |
+| Phase 2                    | Phase 2 code items are complete for the local backtester. Remaining proof work: run a full ≥6-month validation once enough local historical data is loaded                                 |
 | Phases 3–7                 | Not started                                                                                                                                                                                |
 
 **Strategy for the rest of the plan:** get a thin vertical slice working end to end (Phase 2.0) before polishing any single layer. Infrastructure that nothing consumes yet (generated Protobuf, continuous aggregates) is deferred until a real consumer needs it.
@@ -198,7 +198,8 @@ One symbol, one strategy, one number. Build the thinnest path that proves the ar
   - Backtest metrics now include duration-aware CAGR, period-return Sharpe/Sortino, max drawdown, closed-trade win rate/profit factor, and exposure percentage. The runtime passes closed-trade PnLs, exposure bars, request time range, and interval-based annualization into the metrics layer, and the CLI prints the new fields. Backtest worker baseline: 277 passing tests across 15 files, type check passes.
 - [x] **P0** Determinism test: same input ⇒ byte-identical output
   - Runtime tests verify identical serialized fills, equity curves, and metrics for repeated runs over both direct candle fixtures and recorded-session replay input.
-- [ ] **P1** Walk-forward / train-test split reporting
+- [x] **P1** Walk-forward / train-test split reporting
+  - Added walk-forward window generation and out-of-sample summary reporting with train/test return averages and profitable test-window counts. Backtest worker baseline: 352 passing tests across 23 files, type check passes.
 
 ### 2.3 Reference strategies
 
@@ -211,16 +212,19 @@ One symbol, one strategy, one number. Build the thinnest path that proves the ar
 
 ### 2.4 Parallel sweeps
 
-- [ ] **P1** `backtest-worker` with BullMQ + `worker_threads`
-- [ ] **P1** `backtest_runs` / `backtest_trades` tables + results CLI
-  - Status: started. Added `backtest_runs`, `backtest_fills`, and `backtest_equity_points` schema migration plus a `backtest-worker` result writer that persists run metadata, params, metrics, fills, and equity curve with Decimal values serialized safely. The backtest CLI now supports `--save-run` and optional `--run-id`, runs migrations at startup, saves results, and returns the saved `runId`. Saved-run list/show commands are still pending, so the item remains open.
-- [ ] **P1** Report generator (equity curve + drawdown chart as PNG/HTML)
+- [x] **P1** `backtest-worker` with BullMQ + `worker_threads`
+  - Added a worker-thread job runner and a BullMQ-shaped queue enqueue boundary for sweep jobs. The queue adapter is dependency-injected so a real BullMQ `Queue` can be supplied by runtime wiring without coupling tests to Redis. Backtest worker baseline: 352 passing tests across 23 files, type check passes.
+- [x] **P1** `backtest_runs` / `backtest_trades` tables + results CLI
+  - Added `backtest_runs`, `backtest_fills`, and `backtest_equity_points` schema migration plus result writer/reader modules. `backtest_fills` is the implemented execution-record table for the plan's `backtest_trades` intent. The backtest CLI supports `--save-run` and optional `--run-id`, runs migrations at startup, saves results, returns the saved `runId`, lists recent saved runs with `pnpm backtest list`, shows saved run summaries with `pnpm backtest show --run-id <id>`, and feeds HTML report generation. Backtest worker baseline: 343 passing tests across 21 files, type check passes.
+- [x] **P1** Report generator (equity curve + drawdown chart as PNG/HTML)
+  - Added `pnpm backtest report --run-id <id>` to render a saved run into an HTML report under `reports/backtests/` by default. The report includes metric cards, equity curve SVG, drawdown SVG, run details, params, and fills. Backtest worker baseline: 343 passing tests across 21 files, type check passes. PNG export is not implemented yet.
 
 **Exit criteria**
 
 - Backtest results for both strategies over ≥ 6 months, **with fees and slippage on**.
 - Determinism test passing in CI.
 - A written note on overfitting risk and out-of-sample results.
+  - Status: deterministic tests pass locally; overfitting note added in `docs/backtesting-overfitting.md`. Full ≥6-month validation still depends on loading enough historical data locally and should be run before claiming production-quality strategy performance.
 
 **Deliverable:** backtest report you can screenshot for the README.
 

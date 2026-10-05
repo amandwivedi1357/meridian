@@ -8,6 +8,9 @@
   "scripts": {
     "build": "turbo run build",
     "backtest": "pnpm --filter @meridian/backtest-worker exec tsx src/main.ts",
+    "backtest:list": "pnpm backtest list",
+    "backtest:report": "pnpm backtest report",
+    "backtest:show": "pnpm backtest show",
     "check": "turbo run check",
     "dev": "turbo run dev --parallel",
     "format": "prettier --write .",

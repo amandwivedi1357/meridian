@@ -47,7 +47,7 @@ The project should be resume-grade, not a toy app. The core engineering story is
 ## Current Phase
 
 Phase 1.5: Ingestor close-out and soak verification.
-Phase 2.0 completed on 2026-10-05. The Timescale candle feed, Decimal EMA crossover, next-open simulated broker with fees/slippage, return/drawdown metrics, historical runner, and executable CLI are verified end to end. Phase 2.1 core helpers, indicators, and fee-aware position/PnL accounting are complete. Phase 2.2 exchange-filter enforcement, market/limit/stop simulated broker fills, conservative intrabar ordering, recorded-session replay feed plus parity-style runtime coverage, and richer metrics are complete. Phase 2.3 reference strategies and buy-and-hold benchmark comparison are complete. Phase 2.4 persistence foundation is started with DB tables, a result writer, and CLI `--save-run`; saved-run list/show and report generation remain open. Backtest worker baseline: 318 tests across 17 files; typecheck passes. Invalid CLI ranges exit with status 1.
+Phase 2.0 completed on 2026-10-05. The Timescale candle feed, Decimal EMA crossover, next-open simulated broker with fees/slippage, return/drawdown metrics, historical runner, and executable CLI are verified end to end. Phase 2.1 core helpers, indicators, and fee-aware position/PnL accounting are complete. Phase 2.2 exchange-filter enforcement, market/limit/stop simulated broker fills, conservative intrabar ordering, recorded-session replay feed plus parity-style runtime coverage, and richer metrics are complete. Phase 2.3 reference strategies and buy-and-hold benchmark comparison are complete. Phase 2.4 saved-result flow, HTML report generation, walk-forward reporting, and worker-thread/queue sweep foundation are implemented. Backtest worker baseline: 352 tests across 23 files; typecheck passes. Invalid CLI ranges exit with status 1.
 
 January 2024 BTCUSDT history is available for 15m and 1h, with 2,976 and 744 closed candles respectively in the exclusive-end range; continuity checks found zero gaps. Repeated real-data 15m CLI runs produced identical summaries: 128 fills, total return -0.112751%, maximum drawdown 0.144664%. The hourly run produced 28 fills, return -0.031776%, drawdown 0.049409%. Trade count means executed fills, not completed round trips; no forced final liquidation is applied.
 
@@ -55,7 +55,9 @@ January 2024 BTCUSDT history is available for 15m and 1h, with 2,976 and 744 clo
 pnpm backtest --strategy ema --symbol BTCUSDT --from 2024-01-01 --to 2024-02-01
 ```
 
-Next coding work is Phase 2.4: add saved-run listing/report retrieval, then report rendering. Shared Decimal helpers, exchange-filter rounding, SMA/EMA/RSI/ATR/Bollinger indicators, fee-aware simulated broker accounting, simulated exchange-filter enforcement, limit-order simulation, stop-market exits, conservative intrabar ordering, `RecordedSessionFeed`, richer metrics, determinism/parity-style runtime coverage, ATR-based EMA sizing, grid mean-reversion, buy-and-hold benchmark comparison, result-persistence schema/writer, and CLI save support are now implemented. The rest of Phase 2 and the Phase 1 exit criteria remain open.
+Next coding work can move to Phase 3, with one caveat: a full ≥6-month validation report still requires loading enough historical data locally. Shared Decimal helpers, exchange-filter rounding, SMA/EMA/RSI/ATR/Bollinger indicators, fee-aware simulated broker accounting, simulated exchange-filter enforcement, limit-order simulation, stop-market exits, conservative intrabar ordering, `RecordedSessionFeed`, richer metrics, determinism/parity-style runtime coverage, ATR-based EMA sizing, grid mean-reversion, buy-and-hold benchmark comparison, result-persistence schema/writer/reader, CLI save/list/show support, HTML report generation, walk-forward reporting, and queue/worker-thread sweep foundation are now implemented. Phase 1 exit criteria remain open.
+
+Temporary web preview: `apps/web` includes a static mock Backtests / Strategy Lab page to visualize Phase 2.4 saved reports. It is not API-backed and is tracked in `docs/finishings.md` as a prototype helper to replace during the real frontend/API phase.
 
 ## Completed
 
@@ -201,8 +203,8 @@ Latest verified package checks:
   - Build passed.
   - Tests passed: 34 tests across 3 test files.
 - `@meridian/backtest-worker`
-  - Typecheck passed after CLI result persistence.
-  - Tests passed: 318 tests across 17 test files.
+  - Typecheck passed after walk-forward reporting and worker-thread/queue sweep foundation.
+  - Tests passed: 352 tests across 23 test files.
 
 Latest local infrastructure smoke checks:
 

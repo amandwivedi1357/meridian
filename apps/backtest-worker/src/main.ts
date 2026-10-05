@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { mkdir, writeFile } from "node:fs/promises";
 import {
   createPostgresMigrationRunnerDeps,
   marketDataMigrations,
@@ -6,6 +7,8 @@ import {
 } from "@meridian/db";
 import type { KlineRow } from "./feeds/timescale-candle-feed.js";
 import { runBacktestCommand } from "./cli/run-command.js";
+import { runBacktestReportCommand } from "./cli/report-command.js";
+import { runBacktestResultsCommand } from "./cli/results-command.js";
 
 const pool = new Pool({
   connectionString:
@@ -23,14 +26,35 @@ pool.on("error", (error) => {
 try {
   await runMigrations(marketDataMigrations, createPostgresMigrationRunnerDeps(pool));
 
-  const summary = await runBacktestCommand(process.argv.slice(2), {
-    query(text, values) {
-      return pool.query<KlineRow>(text, [...values]);
-    },
-    async execute(query) {
-      await pool.query(query.text, [...query.values]);
-    }
-  });
+  const args = process.argv.slice(2);
+  const query = (text: string, values: readonly unknown[]) =>
+    pool.query<KlineRow>(text, [...values]);
+  const execute = async (query: { readonly text: string; readonly values: readonly unknown[] }) => {
+    await pool.query(query.text, [...query.values]);
+  };
+
+  const summary = await (args[0] === "report"
+    ? runBacktestReportCommand(args.slice(1), {
+        query(query) {
+          return pool.query(query.text, [...query.values]);
+        },
+        async mkdir(path) {
+          await mkdir(path, { recursive: true });
+        },
+        writeFile(path, contents) {
+          return writeFile(path, contents, "utf8");
+        }
+      })
+    : args[0] === "list" || args[0] === "show"
+    ? runBacktestResultsCommand(args, {
+        query(query) {
+          return pool.query(query.text, [...query.values]);
+        }
+      })
+    : runBacktestCommand(args, {
+        query,
+        execute
+      }));
 
   console.log(JSON.stringify(summary, null, 2));
 } catch (error) {

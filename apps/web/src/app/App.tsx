@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleAlert,
   Database,
+  FlaskConical,
   HardDrive,
   Layers,
   Pause,
@@ -19,6 +20,7 @@ import {
   Waves
 } from "lucide-react";
 import { ColorType, createChart, type UTCTimestamp } from "lightweight-charts";
+import { BacktestPreview } from "../features/backtests/BacktestPreview.js";
 
 interface Trade {
   id: string;
@@ -166,7 +168,7 @@ function Metric({
 
 export function App() {
   const [paused, setPaused] = useState(false);
-  const [view, setView] = useState<"market" | "system">("market");
+  const [view, setView] = useState<"market" | "system" | "backtests">("market");
   const [mode, setMode] = useState<"price" | "volume">("price");
   const [side, setSide] = useState("all");
   const [now, setNow] = useState(Date.now());
@@ -186,6 +188,7 @@ export function App() {
     refetchInterval: paused ? false : 2000,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: !paused,
+    enabled: view !== "backtests",
     retry: 1
   });
   const data = query.data;
@@ -196,8 +199,10 @@ export function App() {
     (data && now - data.checkedAt > 10_000) ||
     (latest && now - latest.time > 15_000)
   );
-  const live = Boolean(!paused && !stale && data?.feed === "live");
-  const status = paused
+  const live = Boolean(view !== "backtests" && !paused && !stale && data?.feed === "live");
+  const status = view === "backtests"
+    ? "Preview"
+    : paused
     ? "Paused"
     : query.isError
       ? "Disconnected"
@@ -282,6 +287,14 @@ export function App() {
             System health
             <ChevronRight size={14} />
           </button>
+          <button
+            className={view === "backtests" ? "nav-item active" : "nav-item"}
+            onClick={() => setView("backtests")}
+          >
+            <FlaskConical size={18} />
+            Strategy Lab
+            <ChevronRight size={14} />
+          </button>
         </nav>
         <div className="sidebar-bottom">
           <div className="source-mark">
@@ -300,7 +313,13 @@ export function App() {
         <header className="topbar">
           <div className="breadcrumb">
             Workspace <ChevronRight size={13} />
-            <span>{view === "market" ? "Market overview" : "System health"}</span>
+            <span>
+              {view === "market"
+                ? "Market overview"
+                : view === "system"
+                  ? "System health"
+                  : "Strategy Lab"}
+            </span>
           </div>
           <div className="topbar-right">
             <span className="local-label">LOCAL</span>
@@ -310,8 +329,16 @@ export function App() {
         <div className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">MARKET DATA / PHASE 1.5</div>
-              <h1>{view === "market" ? "Market overview" : "System health"}</h1>
+              <div className="eyebrow">
+                {view === "backtests" ? "BACKTESTS / PHASE 2.4" : "MARKET DATA / PHASE 1.5"}
+              </div>
+              <h1>
+                {view === "market"
+                  ? "Market overview"
+                  : view === "system"
+                    ? "System health"
+                    : "Strategy Lab"}
+              </h1>
             </div>
             <div className="heading-actions">
               <span className={`status-pill ${live ? "healthy" : "warning"}`}>
@@ -339,50 +366,53 @@ export function App() {
               </button>
             </div>
           </div>
-          {query.isError && (
+          {view === "backtests" && <BacktestPreview />}
+          {view !== "backtests" && query.isError && (
             <div className="alert" role="alert">
               <CircleAlert size={17} />
               Dashboard connection lost. Last known values may be outdated.
             </div>
           )}
-          {paused && (
+          {view !== "backtests" && paused && (
             <div className="alert">
               <Pause size={16} />
               Dashboard updates paused. Ingestion continues.
             </div>
           )}
-          <section className="metrics" aria-label="Ingestion metrics">
-            <Metric
-              label="Redis stream entries"
-              value={count(data?.redis.count)}
-              detail={
-                data?.redis.available === false ? "Redis unavailable" : "BTCUSDT · cumulative"
-              }
-              icon={<Layers size={16} />}
-            />
-            <Metric
-              label="Persisted trades"
-              value={count(data?.database.count)}
-              detail={
-                data?.database.available === false
-                  ? "Timescale unavailable"
-                  : "TimescaleDB · checked every 15s"
-              }
-              icon={<Database size={16} />}
-            />
-            <Metric
-              label="Session recording"
-              value={bytes(data?.recording?.bytes)}
-              detail={data?.recording ? "NDJSON · saved to disk" : "Recording not found"}
-              icon={<HardDrive size={16} />}
-            />
-            <Metric
-              label="Redis memory"
-              value={bytes(data?.redis.memoryBytes)}
-              detail="Current Redis allocation"
-              icon={<Activity size={16} />}
-            />
-          </section>
+          {view !== "backtests" && (
+            <section className="metrics" aria-label="Ingestion metrics">
+              <Metric
+                label="Redis stream entries"
+                value={count(data?.redis.count)}
+                detail={
+                  data?.redis.available === false ? "Redis unavailable" : "BTCUSDT · cumulative"
+                }
+                icon={<Layers size={16} />}
+              />
+              <Metric
+                label="Persisted trades"
+                value={count(data?.database.count)}
+                detail={
+                  data?.database.available === false
+                    ? "Timescale unavailable"
+                    : "TimescaleDB · checked every 15s"
+                }
+                icon={<Database size={16} />}
+              />
+              <Metric
+                label="Session recording"
+                value={bytes(data?.recording?.bytes)}
+                detail={data?.recording ? "NDJSON · saved to disk" : "Recording not found"}
+                icon={<HardDrive size={16} />}
+              />
+              <Metric
+                label="Redis memory"
+                value={bytes(data?.redis.memoryBytes)}
+                detail="Current Redis allocation"
+                icon={<Activity size={16} />}
+              />
+            </section>
+          )}
           {view === "market" && (
             <>
               <section className="market-panel" aria-label="BTCUSDT market">
@@ -563,13 +593,17 @@ export function App() {
               <SoakPanel soak={soak} state={soakState} />
             </div>
           )}
-          <footer className="page-footer">
-            <span>
-              <span className="dot" />
-              Binance public market data · BTCUSDT
-            </span>
-            <span>{data ? `Last checked ${time(data.checkedAt)}` : "Awaiting first snapshot"}</span>
-          </footer>
+          {view !== "backtests" && (
+            <footer className="page-footer">
+              <span>
+                <span className="dot" />
+                Binance public market data · BTCUSDT
+              </span>
+              <span>
+                {data ? `Last checked ${time(data.checkedAt)}` : "Awaiting first snapshot"}
+              </span>
+            </footer>
+          )}
         </div>
       </main>
     </div>
