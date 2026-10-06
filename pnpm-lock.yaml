@@ -233,6 +233,9 @@ importers:
       "@meridian/core":
         specifier: workspace:*
         version: link:../core
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
       prom-client:
         specifier: ^15.1.3
         version: 15.1.3

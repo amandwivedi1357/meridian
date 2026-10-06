@@ -18,7 +18,7 @@ This file is the quick resume point for the project. Use it with `docs/implement
 Suggested first message when resuming in a new chat:
 
 ```txt
-Read docs/current-state.md and docs/implementation-plan.md, then continue from Phase 2.1 while monitoring the pending Phase 1.5 soak. I will write implementation code; you guide me and write/update tests.
+Read docs/current-state.md and docs/implementation-plan.md, then finish Phase 3.1 before moving to 3.2. The authenticated client P0 code is locally verified; next implement the shared ExchangeGateway / MarketDataSource contracts and Binance/simulator adapters, then complete live Testnet verification with locally configured credentials. The soak monitor is paused; do not restart it automatically. I will write implementation code unless I explicitly ask you to implement; you guide me and write/update tests.
 ```
 
 Before continuing feature work, verify the baseline:
@@ -46,7 +46,11 @@ The project should be resume-grade, not a toy app. The core engineering story is
 
 ## Current Phase
 
+Phase 3.1 in progress on 2026-10-06: all P0 client code is implemented: HMAC/Ed25519 signing, synchronized server time, Testnet-only authenticated HTTP, validated order endpoints, and user-data WebSocket subscription with account/execution events, heartbeat, reconnect, and rotation. `createTestnetTradingClient` composes these without starting network requests on construction; signed operations require fresh time. `createTestnetTradingClientFromEnv` loads exactly one signing credential, rejects production, and sanitizes key-loading errors. A read-only `smoke:trading <SYMBOL>` command loads repo-root `.env`, reads open orders, and checks user-data subscription without placing/canceling orders. Binance client: 269 tests across 20 files; build and lint pass, including a real loopback WebSocket integration test. No real Testnet authenticated request or order was sent. Phase 3.1 is NOT complete: its P1 shared gateway/market-data contracts and Binance/simulator adapters, plus real Testnet verification, remain open. Work one subphase at a time as requested: finish 3.1 before starting 3.2 lifecycle/reconciliation/executor work. Reconnect gaps require reconciliation and exchange-metadata preflight is required before unattended execution. See `docs/testnet-client.md`. Phase 1 soak monitoring remains paused; its 24h criterion is open.
+
 Phase 1.5: Ingestor close-out and soak verification.
+
+Heartbeat review on 2026-10-06 of the original PID 21124 run: current artifacts show a timeout completion with 262,346 events received/ingested and empty stderr. The recording contains 262,346 valid JSON lines spanning only 8.033 hours (2026-10-04 12:15:59.641Z to 20:17:59.472Z), including a 7,920.465-second event gap. This is not a continuous 24h pass. Redis/Timescale are available with 262,349 entries / 262,348 trade rows; recording size is 59,736,202 bytes. These observed counts differ from the later restart/stop snapshot documented below; retain that history, but reconcile the artifacts before any rerun or completion claim. No restart was performed by this heartbeat.
 Phase 2.0 completed on 2026-10-05. The Timescale candle feed, Decimal EMA crossover, next-open simulated broker with fees/slippage, return/drawdown metrics, historical runner, and executable CLI are verified end to end. Phase 2.1 core helpers, indicators, and fee-aware position/PnL accounting are complete. Phase 2.2 exchange-filter enforcement, market/limit/stop simulated broker fills, conservative intrabar ordering, recorded-session replay feed plus parity-style runtime coverage, and richer metrics are complete. Phase 2.3 reference strategies and buy-and-hold benchmark comparison are complete. Phase 2.4 saved-result flow, HTML report generation, walk-forward reporting, and worker-thread/queue sweep foundation are implemented. Backtest worker baseline: 352 tests across 23 files; typecheck passes. Invalid CLI ranges exit with status 1.
 
 January 2024 BTCUSDT history is available for 15m and 1h, with 2,976 and 744 closed candles respectively in the exclusive-end range; continuity checks found zero gaps. Repeated real-data 15m CLI runs produced identical summaries: 128 fills, total return -0.112751%, maximum drawdown 0.144664%. The hourly run produced 28 fills, return -0.031776%, drawdown 0.049409%. Trade count means executed fills, not completed round trips; no forced final liquidation is applied.
@@ -180,7 +184,8 @@ Latest verified package checks:
 
 - `@meridian/binance-client`
   - Typecheck passed.
-  - Tests passed: 35 tests across 10 test files.
+  - Build and lint passed.
+  - Tests passed: 269 tests across 20 test files (2026-10-06), including loopback WebSocket integration.
 - `@meridian/proto`
   - Typecheck passed.
   - Build passed.
@@ -261,9 +266,9 @@ pnpm --filter @meridian/web dev
 
 Redis/Timescale must be running. `DATABASE_URL` and `REDIS_URL` can override the default local connections. The dashboard currently monitors the fixed Phase 1.5 BTCUSDT soak paths.
 
-Continue Phase 2.1 coding while Phase 1.5 verification runs separately. The Phase 2.0 January backfills do not satisfy the six-month, three-symbol 1m backfill requirement. Remaining Phase 1 work:
+Continue Phase 3.1; soak monitoring is paused. The Phase 2.0 January backfills do not satisfy the six-month, three-symbol 1m backfill requirement. Remaining Phase 1 work:
 
-- monitor the running 24h soak, then summarize Redis/Timescale/session counts when it completes
+- when explicitly resumed, reconcile existing run artifacts and perform a fresh uninterrupted 24h soak; summarize Redis/Timescale/session counts before claiming a pass
 - after soak: spot-check book state against a fresh REST snapshot, run the 60s network-kill recovery test, and complete the longer historical backfill exit criterion
 - later: continuous aggregates/compression and generated protobuf/buf behind the existing `EventCodec` boundary
 

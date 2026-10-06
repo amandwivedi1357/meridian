@@ -25,14 +25,15 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 ---
 
-## Status snapshot (2026-10-05)
+## Status snapshot (2026-10-06)
 
 | Area                       | State                                                                                                                                                                                      |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 0                    | Nearly done. Open: Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                         |
 | Phase 1 (1.1–1.5 P0 items) | Done in code and unit tests except wall-clock verification. Open: continuous aggregates (P1), 24h soak, spot-check vs REST snapshot, 60s network kill, and 6-month backfill exit criterion |
 | Phase 2                    | Phase 2 code items are complete for the local backtester. Remaining proof work: run a full ≥6-month validation once enough local historical data is loaded                                 |
-| Phases 3–7                 | Not started                                                                                                                                                                                |
+| Phase 3                    | 3.1 P0 client code implemented and locally tested; shared P1 gateway adapters and live Testnet verification remain open. Do not start 3.2 until 3.1 is closed.                             |
+| Phases 4–7                 | Not started                                                                                                                                                                                |
 
 **Strategy for the rest of the plan:** get a thin vertical slice working end to end (Phase 2.0) before polishing any single layer. Infrastructure that nothing consumes yet (generated Protobuf, continuous aggregates) is deferred until a real consumer needs it.
 
@@ -129,6 +130,7 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 - [x] **P0** Session recorder: write normalized trade/kline/depth events to disk in a replayable format (needed for the parity test in Phase 3; PRD FR-1.9)
   - Status: recorder writes replayable NDJSON with Decimal values serialized as strings and is wired into the normalized ingest flow behind optional runtime config.
 - [ ] **P0** Start the **24h soak** now and let it run in the background while Phase 2 begins
+  - Heartbeat review 2026-10-06 of the original run: observed timeout completion reports 262,346 events, but recording spans only 8.033 hours with a 7,920.465-second gap. No 24h pass established. Current artifacts/counts differ from the restart snapshot below; reconcile run history before rerunning. Item remains open.
   - Status: restarted on 2026-10-05 with `smoke-live-ingest --symbol BTCUSDT --events 5000000 --timeoutMs 86400000 --environment production` and manually stopped the same day before the 24h exit criterion. Stop snapshot: Redis `market.trade.BTCUSDT` length 1,071,912; Timescale `BTCUSDT` trade rows 536,742; session recording `sessions/soak/phase-1-5-events.ndjson` size 121,784,825 bytes. Mark complete only after a future full 24h run finishes cleanly and counts are summarized.
 
 **Exit criteria**
@@ -236,10 +238,22 @@ One symbol, one strategy, one number. Build the thinnest path that proves the ar
 
 ### 3.1 Authenticated client
 
-- [ ] **P0** Request signing (Ed25519 and HMAC), time-offset sync, `recvWindow`
-- [ ] **P0** Order endpoints: place, cancel, query by `clientOrderId`, open orders
-- [ ] **P0** User data stream: fills, balance updates; keepalive + reconnect
-- [ ] **P0** Environment guard: refuse `production` without explicit override flag
+- Latest status 2026-10-06: P0 client code is implemented, including user-data stream and environment-based HMAC/Ed25519 runtime construction. Binance client: 269 tests across 20 files; build and lint pass. A real loopback WebSocket test verifies subscription, event delivery, server ping replies, and shutdown. All exchange HTTP tests use mocks; no real Testnet authenticated requests or orders were sent. The read-only `smoke:trading <SYMBOL>` command and credential instructions are in `docs/testnet-client.md`. This subphase is still open for the P1 gateway/market-data adapters and live Testnet verification. At the user's request, finish one subphase before starting the next; do not jump to 3.2 yet. Earlier progress entries below are historical snapshots.
+
+- Runtime composition 2026-10-06: exported `createTestnetTradingClient` combines the synchronized clock and order client. `synchronizeTime()` fetches validated unsigned Testnet server time without an API-key header, shares the request-weight limiter, deduplicates refreshes, and measures RTT after limiter waiting. Explicit synchronization is required before signed operations; stale time is not silently refreshed during submission. Nineteen integration-style mocked tests cover all four endpoints, HMAC/Ed25519, expiry/recovery, malformed time responses, limiter errors, production refusal, and timeout cleanup. Binance client: 206 tests across 16 files; build and lint pass. This is a library factory, not an automatically started executor; no real authenticated requests, orders, or credential loading were performed. User-data stream and real Testnet verification remain pending.
+
+- Transport progress 2026-10-06: exported `createAuthenticatedHttp` with Testnet-only origin/environment checks, API-key header, signed GET/DELETE query strings and POST form bodies, blocked redirects/unsafe paths, abort timeout, and no automatic retries. Typed `BinanceSignedRequestError` distinguishes rejection from unknown execution outcomes, preserves status/code/Retry-After without retaining sensitive response messages or signed URLs. Forty-one mocked transport tests pass; Binance client total: 136 tests across 14 files, build and lint pass. No real authenticated requests or orders sent. Endpoint wrappers, response schemas, weight-aware throttling, and runtime composition remain pending; production overrides are intentionally unsupported at this stage.
+
+- [x] **P0** Request signing (Ed25519 and HMAC), time-offset sync, `recvWindow`
+  - Completed foundation 2026-10-06: exported `createServerTimeClock` with injected server-time fetch, RTT-midpoint offset, 60s freshness default, 1s RTT limit default, concurrent-refresh deduplication, and fail-closed refresh/expiry behavior. `createSignedRequestBuilder` signs exact encoded parameters, appends an encoded signature, prevents signing-field overrides, and supplies an explicit integer-millisecond `recvWindow` (default 5000, supported range 1-60000). Forty-two additional clock/builder tests pass; Binance client total: 95 tests across 13 files, build and lint pass. Authenticated HTTP transport, runtime composition, production guard, and order endpoints remain separate work; no authenticated request was sent.
+  - Progress 2026-10-06: `createEd25519Signer` now implements the same `RequestSigner` interface, parses the private key once, validates Ed25519 key type, and returns base64 signatures. Ten additional tests cover public-key verification, determinism, exact payload preservation, unrelated keys, and invalid/blank/public/wrong-type PEM rejection. Binance client: 53 tests across 11 files; build and lint pass. Time-offset sync and signed-request/`recvWindow` construction remain pending. Signers return raw signature strings; the request builder must encode them for transport.
+  - Progress 2026-10-06: added `RequestSigner` and `createHmacSigner` in `packages/binance-client/src/rest/signing.ts`, exported from the package. Eight tests cover both published Binance HMAC vectors, blank-secret rejection, deterministic hex output, and exact payload/secret preservation. Binance client: 43 tests across 11 files; build and lint pass. Ed25519, time-offset sync, and explicit `recvWindow` wiring remain pending; no authenticated requests were sent.
+- [x] **P0** Order endpoints: place, cancel, query by `clientOrderId`, open orders
+  - Implemented Testnet `createBinanceOrderClient` and Zod request/response schemas. Placement supports base-quantity MARKET and LIMIT (GTC/IOC/FOK), requires an explicit client ID, and requests FULL responses preserving decimal strings and commission assets. Query/cancel use `origClientOrderId`; cancellation validates the original ID separately from Binance's generated cancel ID. Open-order lists validate symbol isolation. Weight acquisition precedes signing (place/cancel 1, query 4, open lists 6/80); response shape/identity failures are unknown outcomes, never resubmitted. Binance client: 187 tests across 15 files; build and lint pass. No real orders sent. Exchange-metadata preflight filters, runtime composition, lifecycle reconciliation, and deterministic ID generation remain later work.
+- [x] **P0** User data stream: fills, balance updates; keepalive + reconnect
+  - Implemented signed Spot Testnet WebSocket API subscription, validated account/balance/execution events, commission assets, ACK validation, ping/pong deadlines, reconnect backoff, rotation, and clean shutdown. Authentication failures stop; transient failures reconnect. Consumers receive sanitized gap/reconciliation notices. Local tests pass; live Testnet fill delivery is not yet verified. Reconnect catch-up and fill deduplication remain Phase 3.2 responsibilities.
+- [x] **P0** Environment guard: refuse `production` without explicit override flag
+  - Authenticated transport and order-client factory refuse production and enforce the Testnet origin, with tests. This prototype is stricter than the plan: no production override is exposed. Broader runtime/CLI wiring must preserve this guard.
 - [ ] **P1** `ExchangeGateway` / `MarketDataSource` interfaces in `packages/core`; `binance-client` and the sim broker both implement them (TRD §4.14)
 
 ### 3.2 Order lifecycle
