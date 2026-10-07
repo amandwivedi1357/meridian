@@ -78,5 +78,31 @@ export const marketDataMigrations: readonly SqlMigration[] = [
         PRIMARY KEY (run_id, point_index)
       );
     `
+  },
+  {
+    id: "003_live_order_write_ahead_schema",
+    sql: `
+      CREATE TABLE IF NOT EXISTS orders (
+        client_order_id text PRIMARY KEY,
+        strategy_id text NOT NULL,
+        signal_id text NOT NULL,
+        attempt integer NOT NULL,
+        symbol text NOT NULL,
+        side text NOT NULL,
+        type text NOT NULL,
+        quantity numeric NOT NULL,
+        limit_price numeric,
+        state text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (strategy_id, signal_id, attempt)
+      );
+
+      CREATE INDEX IF NOT EXISTS orders_state_updated_at_idx
+        ON orders (state, updated_at);
+
+      CREATE INDEX IF NOT EXISTS orders_symbol_state_idx
+        ON orders (symbol, state);
+    `
   }
 ];

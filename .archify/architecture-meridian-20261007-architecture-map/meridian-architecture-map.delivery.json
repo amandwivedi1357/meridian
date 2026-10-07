@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "88532b11-3310-4831-bcb9-776bafa06a30",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\candidate.json",
+  "output": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+  "specification": {
+    "sha256": "b7322bce1a3a7fd2804bbf4d3f0a01b2009981a75cd7a11dc2c89385b1dd49b7",
+    "bytes": 25360
+  },
+  "artifact": {
+    "sha256": "7678a07761bab0b83b5dc116ba18c81522b6ccdbb4cb66feae07be23bd151514",
+    "bytes": 817793
+  }
+}

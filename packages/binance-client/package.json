@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke": "tsx src/smoke.ts",
     "smoke:streams": "tsx src/streams-smoke.ts",
-    "smoke:trading": "tsx src/trading-smoke.ts"
+    "smoke:trading": "tsx src/trading-smoke.ts",
+    "smoke:trading-order": "tsx src/trading-order-smoke.ts"
   },
   "dependencies": {
     "@meridian/core": "workspace:*",

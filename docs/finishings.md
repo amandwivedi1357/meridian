@@ -15,6 +15,11 @@ When progress is reported:
 
 ## Open Items
 
+- [ ] **`architecture` / `prototype-gap`: Replace Phase 3.1 adapter placeholders with full exchange-backed capabilities before unattended execution.**
+  - Recorded: 2026-10-07. The Phase 3.1 adapter layer is intentionally narrow and locally tested, but it is not the final execution layer. The Binance `ExchangeGateway` reads balances through an injected callback because an authenticated account endpoint wrapper is not implemented yet. The simulator gateway exposes order submission and fill processing but cancellation is unsupported because the current `SimBroker` has no cancel primitive. The backtest candle-feed `MarketDataSource` supports only the feed's current bounded `15m`/`1h` intervals.
+  - This is acceptable for closing the shared-contract adapter work, but Phase 3.2 must not assume these adapters provide full lifecycle, reconciliation, or exchange-metadata behavior.
+  - Acceptance: add real account/balance retrieval, exchange metadata/filter preflight, simulator cancellation/order-state support, and clear integration tests before unattended paper trading.
+
 - [ ] **`prototype-gap` / `frontend`: Replace the mock Backtests Strategy Lab preview with API-backed data later.**
   - Recorded: 2026-10-05. `apps/web/src/features/backtests/BacktestPreview.tsx` is a temporary visual helper using static mock data to show Phase 2.4 progress before the real frontend/API integration exists.
   - It intentionally does not connect to the backend and should not be treated as the final Phase 4 backtest launcher/results UI.

@@ -1,0 +1,1251 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-07T13:50:42.725Z",
+  "specification": {
+    "path": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\candidate.json",
+    "sha256": "b7322bce1a3a7fd2804bbf4d3f0a01b2009981a75cd7a11dc2c89385b1dd49b7",
+    "bytes": 25360
+  },
+  "artifact": {
+    "path": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+    "sha256": "7678a07761bab0b83b5dc116ba18c81522b6ccdbb4cb66feae07be23bd151514",
+    "bytes": 817793
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "C:\\nvm4w\\nodejs\\node.exe",
+        "C:\\Users\\hp\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "deliver",
+        "architecture",
+        "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\candidate.json",
+        "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "C:\\Users\\hp\\Desktop\\personal\\binance",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "b7322bce1a3a7fd2804bbf4d3f0a01b2009981a75cd7a11dc2c89385b1dd49b7",
+          "bytes": 25360
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 1785,
+      "command": [
+        "C:\\nvm4w\\nodejs\\node.exe",
+        "C:\\Users\\hp\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "deliver",
+        "architecture",
+        "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\candidate.json",
+        "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "C:\\Users\\hp\\Desktop\\personal\\binance",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "88532b11-3310-4831-bcb9-776bafa06a30",
+        "ok": true,
+        "command": "deliver",
+        "type": "architecture",
+        "input": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\candidate.json",
+        "output": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+        "specification": {
+          "sha256": "b7322bce1a3a7fd2804bbf4d3f0a01b2009981a75cd7a11dc2c89385b1dd49b7",
+          "bytes": 25360
+        },
+        "artifact": {
+          "sha256": "7678a07761bab0b83b5dc116ba18c81522b6ccdbb4cb66feae07be23bd151514",
+          "bytes": 817793
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "evidence": {
+          "verified": true,
+          "repository": "git@github.com:amandwivedi1357/meridian",
+          "revision": "511d93977e036dfc8485e53dc1b0e9812239a761",
+          "references": 55,
+          "linkMode": "local-only"
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 288,
+      "command": [
+        "C:\\nvm4w\\nodejs\\node.exe",
+        "C:\\Users\\hp\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "check",
+        "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+        "artifact": {
+          "sha256": "7678a07761bab0b83b5dc116ba18c81522b6ccdbb4cb66feae07be23bd151514",
+          "bytes": 817793
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 7,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 5,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 6.164885496183206,
+            "maxBends": 5,
+            "routesOverSuggestedBends": 8,
+            "maxStretch": 2.789,
+            "routesOverSuggestedStretch": 5,
+            "minSegmentPx": 16,
+            "minInteriorSegmentPx": 16,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [
+              {
+                "left": {
+                  "id": "ingestor-to-publisher",
+                  "from": "ingestor",
+                  "to": "redisPublisher",
+                  "label": "event",
+                  "collectionIndex": 3,
+                  "artifactIndex": 4
+                },
+                "right": {
+                  "id": "ingestor-to-recorder",
+                  "from": "ingestor",
+                  "to": "sessionRecorder",
+                  "label": "record",
+                  "collectionIndex": 5,
+                  "artifactIndex": 6
+                },
+                "point": [
+                  581,
+                  276
+                ],
+                "sharedNode": "ingestor"
+              },
+              {
+                "left": {
+                  "id": "ingestor-to-writer",
+                  "from": "ingestor",
+                  "to": "timescaleWriter",
+                  "label": "rows",
+                  "collectionIndex": 4,
+                  "artifactIndex": 5
+                },
+                "right": {
+                  "id": "ingestor-to-recorder",
+                  "from": "ingestor",
+                  "to": "sessionRecorder",
+                  "label": "record",
+                  "collectionIndex": 5,
+                  "artifactIndex": 6
+                },
+                "point": [
+                  476,
+                  276
+                ],
+                "sharedNode": "ingestor"
+              },
+              {
+                "left": {
+                  "id": "timescale-to-api",
+                  "from": "timescaleDb",
+                  "to": "dashboardApi",
+                  "label": "counts",
+                  "collectionIndex": 10,
+                  "artifactIndex": 11
+                },
+                "right": {
+                  "id": "sim-to-contracts",
+                  "from": "simBroker",
+                  "to": "coreContracts",
+                  "label": "sim adapter",
+                  "collectionIndex": 24,
+                  "artifactIndex": 25
+                },
+                "point": [
+                  954,
+                  344
+                ]
+              },
+              {
+                "left": {
+                  "id": "timescale-to-feed",
+                  "from": "timescaleDb",
+                  "to": "historicalFeed",
+                  "label": "closed candles",
+                  "collectionIndex": 12,
+                  "artifactIndex": 13
+                },
+                "right": {
+                  "id": "sim-to-contracts",
+                  "from": "simBroker",
+                  "to": "coreContracts",
+                  "label": "sim adapter",
+                  "collectionIndex": 24,
+                  "artifactIndex": 25
+                },
+                "point": [
+                  955.4423076923077,
+                  426.75
+                ]
+              },
+              {
+                "left": {
+                  "id": "files-to-recorded-feed",
+                  "from": "ndjsonRecordings",
+                  "to": "recordedFeed",
+                  "label": "replay session",
+                  "collectionIndex": 13,
+                  "artifactIndex": 14
+                },
+                "right": {
+                  "id": "sim-to-contracts",
+                  "from": "simBroker",
+                  "to": "coreContracts",
+                  "label": "sim adapter",
+                  "collectionIndex": 24,
+                  "artifactIndex": 25
+                },
+                "point": [
+                  969,
+                  592
+                ]
+              },
+              {
+                "left": {
+                  "id": "contracts-to-binance-adapter",
+                  "from": "coreContracts",
+                  "to": "binanceAdapter",
+                  "label": "implements",
+                  "collectionIndex": 22,
+                  "artifactIndex": 23
+                },
+                "right": {
+                  "id": "contracts-to-future-executor",
+                  "from": "coreContracts",
+                  "to": "futureExecutor",
+                  "label": "shared surface",
+                  "collectionIndex": 25,
+                  "artifactIndex": 26
+                },
+                "point": [
+                  956.1653846154132,
+                  813
+                ],
+                "sharedNode": "coreContracts"
+              },
+              {
+                "left": {
+                  "id": "auth-to-binance-adapter",
+                  "from": "authClient",
+                  "to": "binanceAdapter",
+                  "label": "wraps client",
+                  "collectionIndex": 23,
+                  "artifactIndex": 24
+                },
+                "right": {
+                  "id": "sim-to-contracts",
+                  "from": "simBroker",
+                  "to": "coreContracts",
+                  "label": "sim adapter",
+                  "collectionIndex": 24,
+                  "artifactIndex": 25
+                },
+                "point": [
+                  969,
+                  736
+                ]
+              }
+            ],
+            "detours": [
+              {
+                "relationship": {
+                  "id": "ingestor-to-recorder",
+                  "from": "ingestor",
+                  "to": "sessionRecorder",
+                  "label": "record",
+                  "collectionIndex": 5,
+                  "artifactIndex": 6
+                },
+                "bends": 4,
+                "stretch": 1.701
+              },
+              {
+                "relationship": {
+                  "id": "timescale-to-api",
+                  "from": "timescaleDb",
+                  "to": "dashboardApi",
+                  "label": "counts",
+                  "collectionIndex": 10,
+                  "artifactIndex": 11
+                },
+                "bends": 3,
+                "stretch": 1
+              },
+              {
+                "relationship": {
+                  "id": "runtime-to-broker",
+                  "from": "strategyRuntime",
+                  "to": "simBroker",
+                  "label": "orders",
+                  "collectionIndex": 16,
+                  "artifactIndex": 17
+                },
+                "bends": 4,
+                "stretch": 2.789
+              },
+              {
+                "relationship": {
+                  "id": "broker-to-runtime",
+                  "from": "simBroker",
+                  "to": "strategyRuntime",
+                  "label": "fills",
+                  "collectionIndex": 17,
+                  "artifactIndex": 18
+                },
+                "bends": 3,
+                "stretch": 1.35
+              },
+              {
+                "relationship": {
+                  "id": "contracts-to-binance-adapter",
+                  "from": "coreContracts",
+                  "to": "binanceAdapter",
+                  "label": "implements",
+                  "collectionIndex": 22,
+                  "artifactIndex": 23
+                },
+                "bends": 3,
+                "stretch": 1.985
+              },
+              {
+                "relationship": {
+                  "id": "auth-to-binance-adapter",
+                  "from": "authClient",
+                  "to": "binanceAdapter",
+                  "label": "wraps client",
+                  "collectionIndex": 23,
+                  "artifactIndex": 24
+                },
+                "bends": 3,
+                "stretch": 1.078
+              },
+              {
+                "relationship": {
+                  "id": "sim-to-contracts",
+                  "from": "simBroker",
+                  "to": "coreContracts",
+                  "label": "sim adapter",
+                  "collectionIndex": 24,
+                  "artifactIndex": 25
+                },
+                "bends": 5,
+                "stretch": 1.441
+              },
+              {
+                "relationship": {
+                  "id": "contracts-to-future-executor",
+                  "from": "coreContracts",
+                  "to": "futureExecutor",
+                  "label": "shared surface",
+                  "collectionIndex": 25,
+                  "artifactIndex": 26
+                },
+                "bends": 3,
+                "stretch": 1.126
+              }
+            ]
+          },
+          "leadingSpace": {
+            "measured": true,
+            "emptyTopPx": 34,
+            "emptyTopRatio": 0.034,
+            "occupiedTop": 34,
+            "viewBoxTop": 0,
+            "canvasHeight": 1006,
+            "typicalNodeHeight": 76,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "recognized-declared-wide",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 1346,
+            "actualBudgetPx": 1346,
+            "actualReaderWidth": 1376,
+            "desiredReaderWidth": 1602,
+            "viewportCap": 1376,
+            "limit": "viewport-cap",
+            "requestedTargetPx": 7.5,
+            "requestedTargetMet": false,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "node",
+              "id": "authClient"
+            },
+            "minimumSourceTextPx": 7.2,
+            "minimumProjectedTextPx": 6.164885496183206,
+            "semanticTextCount": 78
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "88532b11-3310-4831-bcb9-776bafa06a30"
+      }
+    },
+    "browser-check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 1797,
+      "command": [
+        "C:\\nvm4w\\nodejs\\node.exe",
+        "C:\\Users\\hp\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "browser-check",
+        "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+        "--json",
+        "--require-provenance",
+        "--out-dir",
+        "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\review-3"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "pass",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "88532b11-3310-4831-bcb9-776bafa06a30",
+        "artifact": {
+          "path": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\meridian-architecture-map.html",
+          "sha256": "7678a07761bab0b83b5dc116ba18c81522b6ccdbb4cb66feae07be23bd151514",
+          "bytes": 817793
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "available",
+          "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        },
+        "diagnostics": [],
+        "containment": {
+          "status": "pass",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 1030,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 78,
+                "diagramChromePx": 78,
+                "svgPx": 861,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 6.164885496183206,
+              "minimumProjectedNonEdgeTextPx": 6.164885496183206,
+              "minimumProjectedEdgeTextPx": 6.849872773536895,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1198,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 86,
+                "diagramChromePx": 84,
+                "svgPx": 964,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 6.897709923664122,
+              "minimumProjectedNonEdgeTextPx": 6.897709923664122,
+              "minimumProjectedEdgeTextPx": 7.66412213740458,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1240,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1602,
+              "diagramWidth": 1572,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 86,
+                "diagramChromePx": 84,
+                "svgPx": 1006,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 7.2,
+              "minimumProjectedNonEdgeTextPx": 7.2,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1701,
+              "diagramWidth": 1651,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 94,
+                "diagramChromePx": 94,
+                "svgPx": 1057,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 7.2,
+              "minimumProjectedNonEdgeTextPx": 7.2,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "themeStates": {
+          "status": "pass",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1440,
+              "height": 900,
+              "requestedTheme": "dark",
+              "resolvedTheme": "dark",
+              "ok": true
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "requestedTheme": "dark",
+              "resolvedTheme": "dark",
+              "ok": true
+            }
+          ]
+        },
+        "readability": {
+          "status": "pass",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 1030,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 78,
+                "diagramChromePx": 78,
+                "svgPx": 861,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 6.164885496183206,
+              "minimumProjectedNonEdgeTextPx": 6.164885496183206,
+              "minimumProjectedEdgeTextPx": 6.849872773536895,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1198,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 86,
+                "diagramChromePx": 84,
+                "svgPx": 964,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 6.897709923664122,
+              "minimumProjectedNonEdgeTextPx": 6.897709923664122,
+              "minimumProjectedEdgeTextPx": 7.66412213740458,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1240,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1602,
+              "diagramWidth": 1572,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 86,
+                "diagramChromePx": 84,
+                "svgPx": 1006,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 7.2,
+              "minimumProjectedNonEdgeTextPx": 7.2,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1701,
+              "diagramWidth": 1651,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 94,
+                "diagramChromePx": 94,
+                "svgPx": 1057,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 7.2,
+              "minimumProjectedNonEdgeTextPx": 7.2,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "viewerChrome": {
+          "status": "pass",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 1030,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 78,
+                "diagramChromePx": 78,
+                "svgPx": 861,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 6.164885496183206,
+              "minimumProjectedNonEdgeTextPx": 6.164885496183206,
+              "minimumProjectedEdgeTextPx": 6.849872773536895,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1198,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 86,
+                "diagramChromePx": 84,
+                "svgPx": 964,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 6.897709923664122,
+              "minimumProjectedNonEdgeTextPx": 6.897709923664122,
+              "minimumProjectedEdgeTextPx": 7.66412213740458,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1240,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1602,
+              "diagramWidth": 1572,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 86,
+                "diagramChromePx": 84,
+                "svgPx": 1006,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 7.2,
+              "minimumProjectedNonEdgeTextPx": 7.2,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1701,
+              "diagramWidth": 1651,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 94,
+                "diagramChromePx": 94,
+                "svgPx": 1057,
+                "cardsPx": 0,
+                "viewBoxHeight": 1006
+              },
+              "viewBoxWidth": 1572,
+              "minimumProjectedNodeTextPx": 7.2,
+              "minimumProjectedNonEdgeTextPx": 7.2,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "signing + server time + orders + user stream",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "authClient"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "directory": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\review-3",
+          "receipt": "meridian-architecture-map.browser-check.json",
+          "files": []
+        }
+      }
+    }
+  },
+  "diagnostics": [],
+  "evidence": {
+    "receipt": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\review-3\\meridian-architecture-map.finalize.json",
+    "summaryReceipt": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\review-3\\meridian-architecture-map.finalize-summary.json",
+    "browserCheckReceipt": "C:\\Users\\hp\\Desktop\\personal\\binance\\.archify\\architecture-meridian-20261007-architecture-map\\review-3\\meridian-architecture-map.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "finishedAt": "2026-10-07T13:50:47.309Z",
+  "durationMs": 4584,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-07T13:39:31.952Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

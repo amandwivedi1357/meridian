@@ -1,6 +1,9 @@
 import { Decimal } from "decimal.js";
 export * from "./decimal.js";
 export * from "./indicators.js";
+export * from "./exchange.js";
+export * from "./order-lifecycle.js";
+export * from "./client-order-id.js";
 export type SymbolCode = string;
 export type StrategyId = string;
 

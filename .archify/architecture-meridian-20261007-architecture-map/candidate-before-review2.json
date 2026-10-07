@@ -1,0 +1,1102 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Meridian Trading Platform Map",
+    "subtitle": "Architecture + data flow, with completed, pending, future, and mock surfaces marked",
+    "output": ".archify/architecture-meridian-20261007-architecture-map/meridian-architecture-map.html",
+    "quality_profile": "showcase",
+    "visual_preset": "signal-flow",
+    "repository": {
+      "url": "git@github.com:amandwivedi1357/meridian.git",
+      "revision": "511d93977e036dfc8485e53dc1b0e9812239a761",
+      "link_mode": "local-only"
+    },
+    "views": [
+      {
+        "id": "liveData",
+        "label": "Live data path",
+        "focus": [
+          "binancePublic",
+          "wsClient",
+          "ingestor",
+          "redisStreams",
+          "timescaleDb",
+          "dashboardApi",
+          "reactWeb"
+        ],
+        "note": "Public Binance market data is normalized, streamed, persisted, and shown in the dashboard."
+      },
+      {
+        "id": "replayBacktest",
+        "label": "Replay + backtest",
+        "focus": [
+          "sessionRecorder",
+          "ndjsonRecordings",
+          "recordedFeed",
+          "strategyRuntime",
+          "simBroker",
+          "metricsReports"
+        ],
+        "note": "Recorded sessions and Timescale candles feed the same local backtest runtime."
+      },
+      {
+        "id": "testnet",
+        "label": "Testnet execution",
+        "focus": [
+          "envCredentials",
+          "authClient",
+          "coreContracts",
+          "binanceAdapter",
+          "binanceTestnet",
+          "futureExecutor"
+        ],
+        "note": "Phase 3.1 is verified; order lifecycle and risk orchestration come next."
+      }
+    ],
+    "legend": {
+      "mode": "all",
+      "entries": {
+        "external": {
+          "label": "External systems"
+        },
+        "frontend": {
+          "label": "Frontend / preview"
+        },
+        "backend": {
+          "label": "Backend code"
+        },
+        "database": {
+          "label": "Durable storage"
+        },
+        "messagebus": {
+          "label": "Hot stream / bus"
+        },
+        "security": {
+          "label": "Credentials / signing"
+        },
+        "cloud": {
+          "label": "Future runtime"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "binancePublic",
+      "type": "external",
+      "label": "Binance Public Market Data",
+      "sublabel": "production WS + REST klines",
+      "tag": "External",
+      "pos": [
+        40,
+        150
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "docs/PRD.md",
+          "line": 3,
+          "end_line": 16,
+          "label": "Product scope"
+        },
+        {
+          "path": "docs/TRD.md",
+          "line": 18,
+          "end_line": 23,
+          "label": "Market data path"
+        }
+      ]
+    },
+    {
+      "id": "binanceTestnet",
+      "type": "external",
+      "label": "Binance Spot Testnet",
+      "sublabel": "paper execution only",
+      "tag": "Verified 2026-10-07",
+      "pos": [
+        40,
+        760
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "docs/PRD.md",
+          "line": 72,
+          "end_line": 72,
+          "label": "Testnet scope"
+        },
+        {
+          "path": "docs/current-state.md",
+          "line": 51,
+          "end_line": 51,
+          "label": "Live smoke"
+        }
+      ]
+    },
+    {
+      "id": "wsClient",
+      "type": "backend",
+      "label": "WebSocket Stream Client",
+      "sublabel": "trades, klines, depth parsing",
+      "tag": "Done",
+      "pos": [
+        260,
+        170
+      ],
+      "size": [
+        180,
+        78
+      ],
+      "sources": [
+        {
+          "path": "packages/binance-client/src/streams/parsers.ts",
+          "label": "Stream parsers"
+        },
+        {
+          "path": "packages/binance-client/src/streams/connection-manager.ts",
+          "label": "Connection manager"
+        }
+      ]
+    },
+    {
+      "id": "restClient",
+      "type": "backend",
+      "label": "Binance REST Client",
+      "sublabel": "server time, depth, klines",
+      "tag": "Done",
+      "pos": [
+        260,
+        60
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "packages/binance-client/src/rest/client.ts",
+          "label": "REST methods"
+        },
+        {
+          "path": "docs/current-state.md",
+          "line": 75,
+          "end_line": 82,
+          "label": "Completed client"
+        }
+      ]
+    },
+    {
+      "id": "authClient",
+      "type": "security",
+      "label": "Authenticated Testnet Client",
+      "sublabel": "signing + server time + orders + user stream",
+      "tag": "Phase 3.1 done",
+      "pos": [
+        260,
+        720
+      ],
+      "size": [
+        200,
+        86
+      ],
+      "sources": [
+        {
+          "path": "packages/binance-client/src/rest/testnet-trading-client.ts",
+          "line": 28,
+          "end_line": 62,
+          "label": "Runtime factory"
+        },
+        {
+          "path": "packages/binance-client/src/rest/order-client.ts",
+          "line": 24,
+          "end_line": 25,
+          "label": "Order client"
+        },
+        {
+          "path": "docs/implementation-plan.md",
+          "line": 241,
+          "end_line": 258,
+          "label": "Phase 3.1 status"
+        }
+      ]
+    },
+    {
+      "id": "envCredentials",
+      "type": "security",
+      "label": "Local .env Credentials",
+      "sublabel": "one signing credential, Testnet only",
+      "tag": "Guarded",
+      "pos": [
+        260,
+        850
+      ],
+      "size": [
+        170,
+        68
+      ],
+      "sources": [
+        {
+          "path": "packages/binance-client/src/rest/testnet-runtime.ts",
+          "line": 16,
+          "end_line": 48,
+          "label": "Env runtime"
+        },
+        {
+          "path": "docs/current-state.md",
+          "line": 49,
+          "end_line": 51,
+          "label": "Credential smoke"
+        }
+      ]
+    },
+    {
+      "id": "ingestor",
+      "type": "backend",
+      "label": "Market Ingestor",
+      "sublabel": "normalize, record, publish, write batch",
+      "tag": "Phase 1 code done",
+      "pos": [
+        500,
+        170
+      ],
+      "size": [
+        190,
+        82
+      ],
+      "sources": [
+        {
+          "path": "apps/ingestor/src/market/market-ingestor.ts",
+          "line": 20,
+          "end_line": 31,
+          "label": "Ingest path"
+        },
+        {
+          "path": "apps/ingestor/src/market/market-events.ts",
+          "line": 90,
+          "end_line": 138,
+          "label": "Normalization"
+        },
+        {
+          "path": "apps/ingestor/src/runtime/app-bootstrap.ts",
+          "line": 23,
+          "end_line": 28,
+          "label": "Composition"
+        }
+      ]
+    },
+    {
+      "id": "redisPublisher",
+      "type": "backend",
+      "label": "Redis Publisher",
+      "sublabel": "Protobuf payload to market.* streams",
+      "tag": "Done",
+      "pos": [
+        500,
+        310
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "sources": [
+        {
+          "path": "apps/ingestor/src/market/market-publisher.ts",
+          "label": "Stream routing"
+        },
+        {
+          "path": "apps/ingestor/src/adapters/redis-stream-adapter.ts",
+          "line": 13,
+          "end_line": 15,
+          "label": "XADD adapter"
+        }
+      ]
+    },
+    {
+      "id": "timescaleWriter",
+      "type": "backend",
+      "label": "Timescale Writer",
+      "sublabel": "trade/kline upserts",
+      "tag": "Done",
+      "pos": [
+        500,
+        450
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "sources": [
+        {
+          "path": "apps/ingestor/src/market/market-batch-writer.ts",
+          "line": 39,
+          "end_line": 102,
+          "label": "Batch split"
+        },
+        {
+          "path": "apps/ingestor/src/adapters/timescale-market-writer.ts",
+          "line": 43,
+          "end_line": 91,
+          "label": "SQL writes"
+        }
+      ]
+    },
+    {
+      "id": "sessionRecorder",
+      "type": "backend",
+      "label": "Session Recorder",
+      "sublabel": "normalized events as NDJSON",
+      "tag": "Done, soak pending",
+      "pos": [
+        500,
+        590
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "sources": [
+        {
+          "path": "apps/ingestor/src/market/session-recorder.ts",
+          "label": "Recorder"
+        },
+        {
+          "path": "docs/implementation-plan.md",
+          "line": 130,
+          "end_line": 134,
+          "label": "Soak status"
+        }
+      ]
+    },
+    {
+      "id": "redisStreams",
+      "type": "messagebus",
+      "label": "Redis Streams",
+      "sublabel": "hot event bus + dashboard window",
+      "tag": "Needs retention",
+      "pos": [
+        740,
+        310
+      ],
+      "size": [
+        180,
+        76
+      ],
+      "sources": [
+        {
+          "path": "packages/bus/src/index.ts",
+          "label": "Bus API"
+        },
+        {
+          "path": "docs/current-state.md",
+          "line": 173,
+          "end_line": 173,
+          "label": "Bus status"
+        },
+        {
+          "path": "docs/finishings.md",
+          "line": 46,
+          "end_line": 50,
+          "label": "Retention gap"
+        }
+      ]
+    },
+    {
+      "id": "timescaleDb",
+      "type": "database",
+      "label": "TimescaleDB / Postgres",
+      "sublabel": "durable trades, klines, saved runs",
+      "tag": "Running locally",
+      "pos": [
+        740,
+        450
+      ],
+      "size": [
+        190,
+        78
+      ],
+      "sources": [
+        {
+          "path": "packages/db/src/market-data-migrations.ts",
+          "label": "Market schema"
+        },
+        {
+          "path": "docs/current-state.md",
+          "line": 220,
+          "end_line": 226,
+          "label": "Local smoke"
+        }
+      ]
+    },
+    {
+      "id": "ndjsonRecordings",
+      "type": "database",
+      "label": "NDJSON Session Files",
+      "sublabel": "replayable market evidence",
+      "tag": "Replay source",
+      "pos": [
+        740,
+        590
+      ],
+      "size": [
+        180,
+        72
+      ],
+      "sources": [
+        {
+          "path": "apps/backtest-worker/src/feeds/recorded-session-feed.ts",
+          "line": 5,
+          "end_line": 28,
+          "label": "Replay feed"
+        },
+        {
+          "path": "docs/current-state.md",
+          "line": 57,
+          "end_line": 57,
+          "label": "Soak artifact"
+        }
+      ]
+    },
+    {
+      "id": "historicalFeed",
+      "type": "backend",
+      "label": "Historical Candle Feed",
+      "sublabel": "closed candles from Timescale",
+      "tag": "Phase 2 done",
+      "pos": [
+        980,
+        385
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/backtest-worker/src/feeds/timescale-candle-feed.ts",
+          "line": 39,
+          "end_line": 39,
+          "label": "Candle feed"
+        },
+        {
+          "path": "docs/implementation-plan.md",
+          "line": 185,
+          "end_line": 186,
+          "label": "Feed status"
+        }
+      ]
+    },
+    {
+      "id": "recordedFeed",
+      "type": "backend",
+      "label": "Recorded Session Feed",
+      "sublabel": "NDJSON replay into backtests",
+      "tag": "Parity helper",
+      "pos": [
+        980,
+        555
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/backtest-worker/src/feeds/recorded-session-feed.ts",
+          "line": 5,
+          "end_line": 28,
+          "label": "Recorded feed"
+        },
+        {
+          "path": "docs/TRD.md",
+          "line": 268,
+          "end_line": 268,
+          "label": "Parity rule"
+        }
+      ]
+    },
+    {
+      "id": "strategyRuntime",
+      "type": "backend",
+      "label": "Strategy Runtime",
+      "sublabel": "EMA, grid, simulated clock",
+      "tag": "Phase 2 done",
+      "pos": [
+        1100,
+        470
+      ],
+      "size": [
+        190,
+        76
+      ],
+      "sources": [
+        {
+          "path": "apps/backtest-worker/src/runtime/run-backtest.ts",
+          "line": 16,
+          "end_line": 16,
+          "label": "Runtime"
+        },
+        {
+          "path": "docs/current-state.md",
+          "line": 58,
+          "end_line": 58,
+          "label": "Phase 2 status"
+        }
+      ]
+    },
+    {
+      "id": "simBroker",
+      "type": "backend",
+      "label": "Sim Broker",
+      "sublabel": "market, limit, fees, filters",
+      "tag": "Phase 2 done",
+      "pos": [
+        1320,
+        470
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/backtest-worker/src/broker/create-sim-broker.ts",
+          "line": 81,
+          "end_line": 81,
+          "label": "Broker factory"
+        },
+        {
+          "path": "docs/implementation-plan.md",
+          "line": 257,
+          "end_line": 258,
+          "label": "Sim adapter status"
+        }
+      ]
+    },
+    {
+      "id": "metricsReports",
+      "type": "backend",
+      "label": "Results + Reports",
+      "sublabel": "metrics, saved runs, HTML reports",
+      "tag": "6-month proof pending",
+      "pos": [
+        1168,
+        655
+      ],
+      "size": [
+        190,
+        78
+      ],
+      "sources": [
+        {
+          "path": "apps/backtest-worker/src/results/backtest-result-writer.ts",
+          "line": 31,
+          "end_line": 31,
+          "label": "Result writer"
+        },
+        {
+          "path": "apps/backtest-worker/src/reports/backtest-html-report.ts",
+          "line": 8,
+          "end_line": 8,
+          "label": "HTML report"
+        },
+        {
+          "path": "docs/implementation-plan.md",
+          "line": 226,
+          "end_line": 226,
+          "label": "Validation pending"
+        }
+      ]
+    },
+    {
+      "id": "coreContracts",
+      "type": "backend",
+      "label": "Core Contracts",
+      "sublabel": "ExchangeGateway + MarketDataSource",
+      "tag": "Phase 3.1 done",
+      "pos": [
+        740,
+        760
+      ],
+      "size": [
+        205,
+        78
+      ],
+      "sources": [
+        {
+          "path": "docs/TRD.md",
+          "line": 364,
+          "end_line": 380,
+          "label": "Abstraction"
+        },
+        {
+          "path": "docs/implementation-plan.md",
+          "line": 257,
+          "end_line": 258,
+          "label": "Contract status"
+        }
+      ]
+    },
+    {
+      "id": "binanceAdapter",
+      "type": "backend",
+      "label": "Binance Adapters",
+      "sublabel": "gateway + REST kline source",
+      "tag": "Phase 3.1 done",
+      "pos": [
+        980,
+        760
+      ],
+      "size": [
+        190,
+        78
+      ],
+      "sources": [
+        {
+          "path": "packages/binance-client/src/rest/testnet-trading-client.ts",
+          "line": 28,
+          "end_line": 62,
+          "label": "Testnet client"
+        },
+        {
+          "path": "packages/binance-client/src/rest/client.ts",
+          "label": "REST kline client"
+        },
+        {
+          "path": "docs/implementation-plan.md",
+          "line": 257,
+          "end_line": 258,
+          "label": "Adapter status"
+        }
+      ]
+    },
+    {
+      "id": "dashboardApi",
+      "type": "backend",
+      "label": "Fastify Dashboard API",
+      "sublabel": "/api/dashboard + health",
+      "tag": "Prototype",
+      "pos": [
+        980,
+        170
+      ],
+      "size": [
+        185,
+        76
+      ],
+      "sources": [
+        {
+          "path": "apps/api/src/dashboard.ts",
+          "line": 112,
+          "end_line": 179,
+          "label": "Dashboard route"
+        },
+        {
+          "path": "apps/api/src/main.ts",
+          "line": 27,
+          "end_line": 34,
+          "label": "Server routes"
+        }
+      ]
+    },
+    {
+      "id": "reactWeb",
+      "type": "frontend",
+      "label": "React / Vite Web",
+      "sublabel": "market overview + system health",
+      "tag": "Prototype UI",
+      "pos": [
+        1190,
+        170
+      ],
+      "size": [
+        190,
+        76
+      ],
+      "sources": [
+        {
+          "path": "apps/web/src/app/App.tsx",
+          "line": 179,
+          "end_line": 182,
+          "label": "Dashboard fetch"
+        },
+        {
+          "path": "apps/web/src/app/App.tsx",
+          "line": 279,
+          "end_line": 295,
+          "label": "Navigation"
+        }
+      ]
+    },
+    {
+      "id": "strategyLab",
+      "type": "frontend",
+      "label": "Strategy Lab Preview",
+      "sublabel": "static mock Backtests surface",
+      "tag": "Mock, replace later",
+      "pos": [
+        1320,
+        555
+      ],
+      "size": [
+        190,
+        76
+      ],
+      "sources": [
+        {
+          "path": "apps/web/src/features/backtests/mock-backtest-data.ts",
+          "line": 1,
+          "end_line": 1,
+          "label": "Mock marker"
+        },
+        {
+          "path": "apps/web/src/features/backtests/BacktestPreview.tsx",
+          "line": 21,
+          "end_line": 42,
+          "label": "Preview UI"
+        },
+        {
+          "path": "docs/finishings.md",
+          "line": 18,
+          "end_line": 21,
+          "label": "Replace later"
+        }
+      ]
+    },
+    {
+      "id": "futureExecutor",
+      "type": "cloud",
+      "label": "Phase 3.2 Executor",
+      "sublabel": "order lifecycle, risk, reconciliation",
+      "tag": "Future",
+      "pos": [
+        1198,
+        760
+      ],
+      "size": [
+        200,
+        82
+      ],
+      "sources": [
+        {
+          "path": "docs/current-state.md",
+          "line": 273,
+          "end_line": 275,
+          "label": "Next work"
+        },
+        {
+          "path": "docs/TRD.md",
+          "line": 300,
+          "end_line": 319,
+          "label": "Risk + recon"
+        },
+        {
+          "path": "docs/implementation-plan.md",
+          "line": 292,
+          "end_line": 299,
+          "label": "Exit criteria"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "External systems",
+      "wraps": [
+        "binancePublic",
+        "binanceTestnet"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "Client packages",
+      "wraps": [
+        "restClient",
+        "wsClient",
+        "authClient",
+        "envCredentials"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "Ingestion layer",
+      "wraps": [
+        "ingestor",
+        "redisPublisher",
+        "timescaleWriter",
+        "sessionRecorder"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "Storage and messaging",
+      "wraps": [
+        "redisStreams",
+        "timescaleDb",
+        "ndjsonRecordings"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "Backtesting layer",
+      "wraps": [
+        "historicalFeed",
+        "recordedFeed",
+        "strategyRuntime",
+        "simBroker",
+        "metricsReports"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "API + frontend",
+      "wraps": [
+        "dashboardApi",
+        "reactWeb",
+        "strategyLab"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "Execution abstraction and future runtime",
+      "wraps": [
+        "coreContracts",
+        "binanceAdapter",
+        "futureExecutor"
+      ],
+      "pad": 22
+    }
+  ],
+  "connections": [
+    {
+      "id": "public-to-ws",
+      "from": "binancePublic",
+      "to": "wsClient",
+      "variant": "emphasis"
+    },
+    {
+      "id": "public-to-rest",
+      "from": "binancePublic",
+      "to": "restClient",
+      "label": "REST klines/depth",
+      "variant": "dashed"
+    },
+    {
+      "id": "ws-to-ingestor",
+      "from": "wsClient",
+      "to": "ingestor",
+      "label": "raw events",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ingestor-to-publisher",
+      "from": "ingestor",
+      "to": "redisPublisher",
+      "label": "event"
+    },
+    {
+      "id": "ingestor-to-writer",
+      "from": "ingestor",
+      "to": "timescaleWriter",
+      "label": "rows"
+    },
+    {
+      "id": "ingestor-to-recorder",
+      "from": "ingestor",
+      "to": "sessionRecorder",
+      "label": "record"
+    },
+    {
+      "id": "publisher-to-redis",
+      "from": "redisPublisher",
+      "to": "redisStreams",
+      "label": "XADD",
+      "variant": "emphasis"
+    },
+    {
+      "id": "writer-to-timescale",
+      "from": "timescaleWriter",
+      "to": "timescaleDb",
+      "label": "upsert",
+      "variant": "emphasis"
+    },
+    {
+      "id": "recorder-to-files",
+      "from": "sessionRecorder",
+      "to": "ndjsonRecordings",
+      "label": "append",
+      "variant": "emphasis"
+    },
+    {
+      "id": "redis-to-api",
+      "from": "redisStreams",
+      "to": "dashboardApi",
+      "label": "latest 500 trades",
+      "variant": "emphasis"
+    },
+    {
+      "id": "timescale-to-api",
+      "from": "timescaleDb",
+      "to": "dashboardApi",
+      "label": "counts",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-to-web",
+      "from": "dashboardApi",
+      "to": "reactWeb",
+      "variant": "emphasis"
+    },
+    {
+      "id": "timescale-to-feed",
+      "from": "timescaleDb",
+      "to": "historicalFeed",
+      "label": "closed candles",
+      "variant": "emphasis"
+    },
+    {
+      "id": "files-to-recorded-feed",
+      "from": "ndjsonRecordings",
+      "to": "recordedFeed",
+      "label": "replay session"
+    },
+    {
+      "id": "historical-to-runtime",
+      "from": "historicalFeed",
+      "to": "strategyRuntime",
+      "label": "candles"
+    },
+    {
+      "id": "recorded-to-runtime",
+      "from": "recordedFeed",
+      "to": "strategyRuntime",
+      "label": "parity replay",
+      "variant": "dashed"
+    },
+    {
+      "id": "runtime-to-broker",
+      "from": "strategyRuntime",
+      "to": "simBroker",
+      "label": "orders"
+    },
+    {
+      "id": "broker-to-runtime",
+      "from": "simBroker",
+      "to": "strategyRuntime",
+      "label": "fills",
+      "variant": "dashed"
+    },
+    {
+      "id": "runtime-to-reports",
+      "from": "strategyRuntime",
+      "to": "metricsReports",
+      "label": "metrics",
+      "variant": "emphasis"
+    },
+    {
+      "id": "reports-to-strategy-lab",
+      "from": "metricsReports",
+      "to": "strategyLab",
+      "variant": "dashed"
+    },
+    {
+      "id": "env-to-auth",
+      "from": "envCredentials",
+      "to": "authClient",
+      "label": "load key",
+      "variant": "security"
+    },
+    {
+      "id": "auth-to-testnet",
+      "from": "authClient",
+      "to": "binanceTestnet",
+      "label": "signed HTTP + user stream",
+      "variant": "security"
+    },
+    {
+      "id": "contracts-to-binance-adapter",
+      "from": "coreContracts",
+      "to": "binanceAdapter",
+      "label": "implements",
+      "variant": "emphasis"
+    },
+    {
+      "id": "auth-to-binance-adapter",
+      "from": "authClient",
+      "to": "binanceAdapter",
+      "label": "wraps client",
+      "variant": "security"
+    },
+    {
+      "id": "sim-to-contracts",
+      "from": "simBroker",
+      "to": "coreContracts",
+      "label": "sim adapter",
+      "variant": "dashed"
+    },
+    {
+      "id": "contracts-to-future-executor",
+      "from": "coreContracts",
+      "to": "futureExecutor",
+      "label": "shared surface",
+      "variant": "dashed"
+    },
+    {
+      "id": "adapter-to-future-executor",
+      "from": "binanceAdapter",
+      "to": "futureExecutor",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Completed / Mostly Implemented",
+      "items": [
+        "Phase 0 foundation and monorepo scaffolding are in place.",
+        "Phase 1 ingestion code normalizes market events, publishes Redis Streams, writes Timescale, and records sessions.",
+        "Phase 2 local backtester has feeds, strategies, simulated broker, metrics, saved runs, reports, and walk-forward support.",
+        "Phase 3.1 Testnet client and gateway/source adapters are verified in local tests and live Testnet smoke commands."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Pending Verification",
+      "items": [
+        "Phase 1.5 still needs a fresh uninterrupted 24-hour soak before it can be closed.",
+        "Phase 2 still needs a full six-month validation report before claiming strategy performance.",
+        "Future live trading work must add reconciliation, risk gates, write-ahead safety, and 48h paper-trading proof."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Temporary / Mock Surface",
+      "items": [
+        "The Strategy Lab page is static mock data only, useful for learning and visual progress.",
+        "It must be replaced by API-backed saved-run list/show/report data during the real frontend phase."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "How to Read This",
+      "items": [
+        "Green/emphasis edges are current main paths.",
+        "Dashed edges are replay, optional, mock, or future-facing paths.",
+        "Redis is hot stream state; Timescale is durable market history; NDJSON is replayable evidence."
+      ]
+    }
+  ]
+}

@@ -5,3 +5,4 @@ export interface DatabaseConfig {
 export * from "./market-data-migrations.js";
 export * from "./migration-runner.js";
 export * from "./postgres-adapter.js";
+export * from "./order-write-ahead-repository.js";

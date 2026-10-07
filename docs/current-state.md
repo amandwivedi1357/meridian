@@ -18,7 +18,7 @@ This file is the quick resume point for the project. Use it with `docs/implement
 Suggested first message when resuming in a new chat:
 
 ```txt
-Read docs/current-state.md and docs/implementation-plan.md, then finish Phase 3.1 before moving to 3.2. The authenticated client P0 code is locally verified; next implement the shared ExchangeGateway / MarketDataSource contracts and Binance/simulator adapters, then complete live Testnet verification with locally configured credentials. The soak monitor is paused; do not restart it automatically. I will write implementation code unless I explicitly ask you to implement; you guide me and write/update tests.
+Read docs/current-state.md and docs/implementation-plan.md, then continue from Phase 3.2 order lifecycle. Phase 3.1 is complete: authenticated Testnet client code, shared ExchangeGateway / MarketDataSource contracts, Binance/simulator adapters, read-only Testnet auth smoke, and live Testnet place/query/cancel smoke are verified. The soak monitor is paused; do not restart it automatically. I will write implementation code unless I explicitly ask you to implement; you guide me and write/update tests.
 ```
 
 Before continuing feature work, verify the baseline:
@@ -47,6 +47,10 @@ The project should be resume-grade, not a toy app. The core engineering story is
 ## Current Phase
 
 Phase 3.1 in progress on 2026-10-06: all P0 client code is implemented: HMAC/Ed25519 signing, synchronized server time, Testnet-only authenticated HTTP, validated order endpoints, and user-data WebSocket subscription with account/execution events, heartbeat, reconnect, and rotation. `createTestnetTradingClient` composes these without starting network requests on construction; signed operations require fresh time. `createTestnetTradingClientFromEnv` loads exactly one signing credential, rejects production, and sanitizes key-loading errors. A read-only `smoke:trading <SYMBOL>` command loads repo-root `.env`, reads open orders, and checks user-data subscription without placing/canceling orders. Binance client: 269 tests across 20 files; build and lint pass, including a real loopback WebSocket integration test. No real Testnet authenticated request or order was sent. Phase 3.1 is NOT complete: its P1 shared gateway/market-data contracts and Binance/simulator adapters, plus real Testnet verification, remain open. Work one subphase at a time as requested: finish 3.1 before starting 3.2 lifecycle/reconciliation/executor work. Reconnect gaps require reconciliation and exchange-metadata preflight is required before unattended execution. See `docs/testnet-client.md`. Phase 1 soak monitoring remains paused; its 24h criterion is open.
+
+Phase 3.1 completed on 2026-10-07: shared `ExchangeGateway` and `MarketDataSource` contracts are exported from `packages/core`. `packages/binance-client` now has a Binance gateway adapter around the authenticated order client and a REST-kline `MarketDataSource`; `apps/backtest-worker` now has a simulator gateway adapter around `SimBroker` and a candle-feed `MarketDataSource` adapter. Verified locally: `@meridian/core` typecheck and 36 tests across 4 files; `@meridian/binance-client` typecheck and 277 tests across 22 files; `@meridian/backtest-worker` typecheck and 361 tests across 25 files. Read-only live Testnet authentication is verified: `pnpm --filter @meridian/binance-client smoke:trading BTCUSDT` returned `openOrderCount: 0`, `userDataState: "OPEN"`, `eventsReceived: 0`, and `ordersPlaced: 0`. Live Testnet order placement/query/cancellation is verified: `pnpm --filter @meridian/binance-client smoke:trading-order -- --symbol BTCUSDT --quantity 0.0002 --confirm-testnet-order` placed a passive LIMIT BUY at `83000.91`, queried it as `NEW`, canceled it as `CANCELED`, and confirmed `stillOpen: false`.
+
+Phase 3.2 started on 2026-10-07: the core order lifecycle state machine is implemented with `PENDING_NEW`, `UNKNOWN`, `PENDING_CANCEL`, terminal states, guarded transition helpers, and exhaustive focused tests. Deterministic Binance-safe `clientOrderId` generation is implemented with prefix validation, SHA-256 base64url hashing, attempt isolation, and focused tests. Write-ahead persistence foundation is implemented in `packages/db`: `orders` schema migration, `PENDING_NEW` insert repository, idempotency uniqueness, and reconciliation indexes. Timeout handling now uses query-before-retry through `createQueryBeforeRetryOrderSubmitter`, which queries by `clientOrderId` after unknown placement outcomes and never blind-resends. Verified: `@meridian/core` typecheck and 80 tests across 6 files; `@meridian/db` typecheck and 16 tests across 4 files; `@meridian/binance-client` typecheck and 281 tests across 23 files. Next Phase 3.2 item is reconciliation on startup/after reconnect.
 
 Phase 1.5: Ingestor close-out and soak verification.
 
@@ -185,7 +189,7 @@ Latest verified package checks:
 - `@meridian/binance-client`
   - Typecheck passed.
   - Build and lint passed.
-  - Tests passed: 269 tests across 20 test files (2026-10-06), including loopback WebSocket integration.
+  - Tests passed: 281 tests across 23 test files (2026-10-07), including loopback WebSocket integration, Binance gateway/market-data adapter tests, and query-before-retry order submission tests.
 - `@meridian/proto`
   - Typecheck passed.
   - Build passed.
@@ -199,17 +203,17 @@ Latest verified package checks:
   - Tests passed: 1 test across 1 test file.
 - `@meridian/db`
   - Typecheck passed.
-  - Tests passed after backtest result schema migration: 11 tests across 3 test files.
+  - Tests passed after live order write-ahead schema/repository: 16 tests across 4 test files.
 - `@meridian/bus`
   - Typecheck passed.
   - Tests passed: 15 tests across 1 test file.
 - `@meridian/core`
   - Typecheck passed.
   - Build passed.
-  - Tests passed: 34 tests across 3 test files.
+  - Tests passed: 80 tests across 6 test files.
 - `@meridian/backtest-worker`
-  - Typecheck passed after walk-forward reporting and worker-thread/queue sweep foundation.
-  - Tests passed: 352 tests across 23 test files.
+  - Typecheck passed after simulator gateway and candle-feed market-data adapters.
+  - Tests passed: 361 tests across 25 test files.
 
 Latest local infrastructure smoke checks:
 
@@ -266,7 +270,7 @@ pnpm --filter @meridian/web dev
 
 Redis/Timescale must be running. `DATABASE_URL` and `REDIS_URL` can override the default local connections. The dashboard currently monitors the fixed Phase 1.5 BTCUSDT soak paths.
 
-Continue Phase 3.1; soak monitoring is paused. The Phase 2.0 January backfills do not satisfy the six-month, three-symbol 1m backfill requirement. Remaining Phase 1 work:
+Continue Phase 3.2 order lifecycle next. Soak monitoring is paused. The Phase 2.0 January backfills do not satisfy the six-month, three-symbol 1m backfill requirement. Remaining Phase 1 work:
 
 - when explicitly resumed, reconcile existing run artifacts and perform a fresh uninterrupted 24h soak; summarize Redis/Timescale/session counts before claiming a pass
 - after soak: spot-check book state against a fresh REST snapshot, run the 60s network-kill recovery test, and complete the longer historical backfill exit criterion
