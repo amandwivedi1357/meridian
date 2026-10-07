@@ -7,7 +7,7 @@ export const ORDER_STATES = [
   "CANCELED",
   "REJECTED",
   "EXPIRED",
-  "UNKNOWN",
+  "UNKNOWN"
 ] as const;
 
 export type OrderState = (typeof ORDER_STATES)[number];
@@ -30,7 +30,7 @@ const transitions: Record<OrderState, Partial<Record<OrderLifecycleEvent, OrderS
     filled: "FILLED",
     rejected: "REJECTED",
     expired: "EXPIRED",
-    sendOutcomeUnknown: "UNKNOWN",
+    sendOutcomeUnknown: "UNKNOWN"
   },
   UNKNOWN: {
     acknowledged: "NEW",
@@ -38,44 +38,38 @@ const transitions: Record<OrderState, Partial<Record<OrderLifecycleEvent, OrderS
     filled: "FILLED",
     canceled: "CANCELED",
     rejected: "REJECTED",
-    expired: "EXPIRED",
+    expired: "EXPIRED"
   },
   NEW: {
     partiallyFilled: "PARTIALLY_FILLED",
     filled: "FILLED",
     cancelRequested: "PENDING_CANCEL",
-    expired: "EXPIRED",
+    expired: "EXPIRED"
   },
   PARTIALLY_FILLED: {
     partiallyFilled: "PARTIALLY_FILLED",
     filled: "FILLED",
     cancelRequested: "PENDING_CANCEL",
-    expired: "EXPIRED",
+    expired: "EXPIRED"
   },
   PENDING_CANCEL: {
     canceled: "CANCELED",
     cancelOutcomeUnknown: "UNKNOWN",
-    partiallyFilled: "PARTIALLY_FILLED",
+    partiallyFilled: "PENDING_CANCEL",
     filled: "FILLED",
-    expired: "EXPIRED",
+    expired: "EXPIRED"
   },
   FILLED: {},
   CANCELED: {},
   REJECTED: {},
-  EXPIRED: {},
+  EXPIRED: {}
 };
 
-export function canTransitionOrderState(
-  from: OrderState,
-  event: OrderLifecycleEvent
-): boolean {
+export function canTransitionOrderState(from: OrderState, event: OrderLifecycleEvent): boolean {
   return transitions[from][event] !== undefined;
 }
 
-export function transitionOrderState(
-  from: OrderState,
-  event: OrderLifecycleEvent
-): OrderState {
+export function transitionOrderState(from: OrderState, event: OrderLifecycleEvent): OrderState {
   const next = transitions[from][event];
 
   if (next === undefined) {

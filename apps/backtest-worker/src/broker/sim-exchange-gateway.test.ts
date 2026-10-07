@@ -1,8 +1,9 @@
-import { Decimal, type Candle, type Fill, type OrderIntent, type Position } from "@meridian/core";
+import { Decimal, type Candle, type OrderIntent, type Position } from "@meridian/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { createSimExchangeGateway } from "./sim-exchange-gateway.js";
-import type { SimBroker } from "./sim-broker.js";
+import type { SimBroker, SimulatedFill } from "./sim-broker.js";
+import { createSimBroker } from "./create-sim-broker.js";
 
 function candle(openTimeMs: number): Candle {
   return {
@@ -19,8 +20,9 @@ function candle(openTimeMs: number): Candle {
   };
 }
 
-function fill(side: "BUY" | "SELL" = "BUY"): Fill {
+function fill(side: "BUY" | "SELL" = "BUY"): SimulatedFill {
   return {
+    clientOrderId: "sim-4",
     symbol: "BTCUSDT",
     side,
     quantity: new Decimal("0.5"),
@@ -58,6 +60,89 @@ function createBroker(overrides: Partial<SimBroker> = {}) {
 }
 
 describe("createSimExchangeGateway", () => {
+  it("keeps the untouched same-side limit open and records the actual filled order", async () => {
+    const broker = createSimBroker({
+      symbol: "BTCUSDT",
+      baseAsset: "BTC",
+      quoteAsset: "USDT",
+      initialQuoteBalance: new Decimal(1000),
+      slippageBps: new Decimal(0),
+      takerFeeRate: new Decimal(0)
+    });
+    const gateway = createSimExchangeGateway({
+      broker,
+      symbol: "BTCUSDT",
+      baseAsset: "BTC",
+      quoteAsset: "USDT",
+      nowMs: () => 0
+    });
+    for (const [clientOrderId, price] of [
+      ["untouched", "50"],
+      ["touched", "100"]
+    ] as const) {
+      await gateway.placeOrder({
+        clientOrderId,
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        quantity: new Decimal("0.5"),
+        price: new Decimal(price)
+      });
+    }
+    expect(gateway.processCandle(candle(1000))[0]).toMatchObject({
+      clientOrderId: "touched",
+      price: new Decimal(100)
+    });
+    expect((await gateway.getOpenOrders()).map((order) => order.clientOrderId)).toEqual([
+      "untouched"
+    ]);
+    expect(await gateway.getOrder({ symbol: "BTCUSDT", clientOrderId: "touched" })).toMatchObject({
+      status: "FILLED",
+      executedQuantity: new Decimal("0.5"),
+      cumulativeQuoteQuantity: new Decimal(50)
+    });
+    expect(gateway.processCandle({ ...candle(2000), low: new Decimal(40) })[0]).toMatchObject({
+      clientOrderId: "untouched"
+    });
+    expect(await gateway.getOpenOrders()).toEqual([]);
+  });
+
+  it("rejects duplicate ids before queuing another simulated order", async () => {
+    const broker = createBroker();
+    const gateway = createSimExchangeGateway({
+      broker,
+      symbol: "BTCUSDT",
+      baseAsset: "BTC",
+      quoteAsset: "USDT"
+    });
+    const request = {
+      clientOrderId: "duplicate",
+      symbol: "BTCUSDT",
+      side: "BUY" as const,
+      type: "MARKET" as const,
+      quantity: new Decimal(1)
+    };
+    await gateway.placeOrder(request);
+    await expect(gateway.placeOrder(request)).rejects.toThrow(
+      "Duplicate simulated client order id"
+    );
+    expect(broker.submit).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed instead of guessing the identity of an untagged fill", async () => {
+    const { clientOrderId: removedId, ...untagged } = fill();
+    expect(removedId).toBe("sim-4");
+    const broker = createBroker({ processCandle: () => [untagged] });
+    const gateway = createSimExchangeGateway({
+      broker,
+      symbol: "BTCUSDT",
+      baseAsset: "BTC",
+      quoteAsset: "USDT"
+    });
+    expect(() => gateway.processCandle(candle(1000))).toThrow(
+      "Simulated fill order identity mismatch"
+    );
+  });
   it("submits market orders to the simulated broker and tracks them as open", async () => {
     const broker = createBroker();
     const gateway = createSimExchangeGateway({
@@ -84,7 +169,7 @@ describe("createSimExchangeGateway", () => {
       reason: "sim-1"
     };
 
-    expect(broker.submit).toHaveBeenCalledWith(expectedIntent, 123);
+    expect(broker.submit).toHaveBeenCalledWith(expectedIntent, 123, "sim-1");
     expect(result).toMatchObject({
       clientOrderId: "sim-1",
       exchangeOrderId: "sim:sim-1",
@@ -128,7 +213,8 @@ describe("createSimExchangeGateway", () => {
         limitPrice: new Decimal("101"),
         reason: "sim-2"
       },
-      123
+      123,
+      "sim-2"
     );
   });
 

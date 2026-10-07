@@ -36,7 +36,15 @@ describe("createIngestorApp", () => {
       M: true
     });
 
-    expect(startResult.applied).toEqual(["001_market_data_schema", "002_backtest_results_schema"]);
+    expect(startResult.applied).toEqual([
+      "001_market_data_schema",
+      "002_backtest_results_schema",
+      "003_live_order_write_ahead_schema"
+    ]);
+    expect(postgres.query).toHaveBeenCalledWith(
+      expect.stringContaining("CREATE TABLE IF NOT EXISTS orders"),
+      []
+    );
     expect(postgres.query).toHaveBeenCalledWith(
       expect.stringContaining("CREATE TABLE IF NOT EXISTS backtest_runs"),
       []

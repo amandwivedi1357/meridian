@@ -6,14 +6,14 @@ import {
   type GatewayOrderResult,
   type GatewayOrderSnapshot,
   type GatewayOrderStatus,
-  type GatewayOrderType,
+  type GatewayOrderType
 } from "@meridian/core";
 
 import type {
   BinanceOrderResponse,
   OpenOrdersParams,
   OrderLookupParams,
-  PlaceOrderParams,
+  PlaceOrderParams
 } from "./order-schemas.js";
 
 export interface BinanceExchangeGatewayClient {
@@ -61,7 +61,7 @@ export function createBinanceExchangeGateway(
       }
 
       return options.getBalances();
-    },
+    }
   };
 }
 
@@ -72,7 +72,7 @@ function toPlaceOrderParams(request: GatewayOrderRequest): PlaceOrderParams {
       symbol: request.symbol,
       side: request.side,
       type: "MARKET",
-      quantity: request.quantity.toString(),
+      quantity: request.quantity.toFixed()
     };
   }
 
@@ -85,9 +85,9 @@ function toPlaceOrderParams(request: GatewayOrderRequest): PlaceOrderParams {
     symbol: request.symbol,
     side: request.side,
     type: "LIMIT",
-    quantity: request.quantity.toString(),
-    price: request.price.toString(),
-    timeInForce: request.timeInForce ?? "GTC",
+    quantity: request.quantity.toFixed(),
+    price: request.price.toFixed(),
+    timeInForce: request.timeInForce ?? "GTC"
   };
 }
 
@@ -115,8 +115,8 @@ function toGatewayOrderResult(
       price: new Decimal(fill.price),
       fee: new Decimal(fill.commission),
       feeAsset: fill.commissionAsset,
-      tsMs: eventTimeMs,
-    })),
+      tsMs: eventTimeMs
+    }))
   };
 }
 
@@ -135,7 +135,7 @@ function toGatewayOrderSnapshot(
     executedQuantity: new Decimal(order.executedQty),
     cumulativeQuoteQuantity: new Decimal(order.cummulativeQuoteQty),
     price: new Decimal(order.price),
-    eventTimeMs: getOrderEventTimeMs(order, nowMs),
+    eventTimeMs: getOrderEventTimeMs(order, nowMs)
   };
 }
 

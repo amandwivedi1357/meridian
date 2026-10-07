@@ -46,6 +46,8 @@ The project should be resume-grade, not a toy app. The core engineering story is
 
 ## Current Phase
 
+Review fixes verified on 2026-10-07: simulator submissions carry explicit client order IDs through pending orders into fills; gateway snapshots update by identity and completed orders remain queryable. Duplicate IDs and untagged/mismatched fills fail closed. Partial fills preserve `PENDING_CANCEL` until the cancellation outcome arrives. Binance order serialization uses fixed-point decimal strings. Write-ahead persistence now checks immutable order details atomically on client-ID conflict and requires the database adapter's `rowCount` result; mismatches throw instead of silently succeeding, while identical retries preserve state/timestamps. PostgreSQL verification used a temporary table and rollback: insert, identical retry, and nine conflicting retries passed. The downstream third-migration expectation and three lint errors are fixed. Affected-package regression baseline: 823 tests across 85 files; build/typecheck and lint pass. No live Testnet orders were placed or canceled for these fixes. Phase 3.2 reconciliation, out-of-order handling, and other remaining checklist items are still open.
+
 Phase 3.1 in progress on 2026-10-06: all P0 client code is implemented: HMAC/Ed25519 signing, synchronized server time, Testnet-only authenticated HTTP, validated order endpoints, and user-data WebSocket subscription with account/execution events, heartbeat, reconnect, and rotation. `createTestnetTradingClient` composes these without starting network requests on construction; signed operations require fresh time. `createTestnetTradingClientFromEnv` loads exactly one signing credential, rejects production, and sanitizes key-loading errors. A read-only `smoke:trading <SYMBOL>` command loads repo-root `.env`, reads open orders, and checks user-data subscription without placing/canceling orders. Binance client: 269 tests across 20 files; build and lint pass, including a real loopback WebSocket integration test. No real Testnet authenticated request or order was sent. Phase 3.1 is NOT complete: its P1 shared gateway/market-data contracts and Binance/simulator adapters, plus real Testnet verification, remain open. Work one subphase at a time as requested: finish 3.1 before starting 3.2 lifecycle/reconciliation/executor work. Reconnect gaps require reconciliation and exchange-metadata preflight is required before unattended execution. See `docs/testnet-client.md`. Phase 1 soak monitoring remains paused; its 24h criterion is open.
 
 Phase 3.1 completed on 2026-10-07: shared `ExchangeGateway` and `MarketDataSource` contracts are exported from `packages/core`. `packages/binance-client` now has a Binance gateway adapter around the authenticated order client and a REST-kline `MarketDataSource`; `apps/backtest-worker` now has a simulator gateway adapter around `SimBroker` and a candle-feed `MarketDataSource` adapter. Verified locally: `@meridian/core` typecheck and 36 tests across 4 files; `@meridian/binance-client` typecheck and 277 tests across 22 files; `@meridian/backtest-worker` typecheck and 361 tests across 25 files. Read-only live Testnet authentication is verified: `pnpm --filter @meridian/binance-client smoke:trading BTCUSDT` returned `openOrderCount: 0`, `userDataState: "OPEN"`, `eventsReceived: 0`, and `ordersPlaced: 0`. Live Testnet order placement/query/cancellation is verified: `pnpm --filter @meridian/binance-client smoke:trading-order -- --symbol BTCUSDT --quantity 0.0002 --confirm-testnet-order` placed a passive LIMIT BUY at `83000.91`, queried it as `NEW`, canceled it as `CANCELED`, and confirmed `stillOpen: false`.
@@ -189,7 +191,7 @@ Latest verified package checks:
 - `@meridian/binance-client`
   - Typecheck passed.
   - Build and lint passed.
-  - Tests passed: 281 tests across 23 test files (2026-10-07), including loopback WebSocket integration, Binance gateway/market-data adapter tests, and query-before-retry order submission tests.
+  - Tests passed: 283 tests across 23 test files (2026-10-07), including fixed-point gateway serialization regressions.
 - `@meridian/proto`
   - Typecheck passed.
   - Build passed.
@@ -203,17 +205,17 @@ Latest verified package checks:
   - Tests passed: 1 test across 1 test file.
 - `@meridian/db`
   - Typecheck passed.
-  - Tests passed after live order write-ahead schema/repository: 16 tests across 4 test files.
+  - Tests passed after write-ahead conflict regression fixes: 20 tests across 4 test files. Temporary-table PostgreSQL retry/conflict verification also passed.
 - `@meridian/bus`
   - Typecheck passed.
   - Tests passed: 15 tests across 1 test file.
 - `@meridian/core`
   - Typecheck passed.
   - Build passed.
-  - Tests passed: 80 tests across 6 test files.
+  - Tests passed: 84 tests across 6 test files, including partial-fill/cancellation race regressions.
 - `@meridian/backtest-worker`
   - Typecheck passed after simulator gateway and candle-feed market-data adapters.
-  - Tests passed: 361 tests across 25 test files.
+  - Tests passed: 364 tests across 25 test files, including explicit simulator fill identity regressions.
 
 Latest local infrastructure smoke checks:
 

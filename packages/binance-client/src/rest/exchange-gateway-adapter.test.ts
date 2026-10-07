@@ -39,6 +39,27 @@ function createClient(response: BinanceOrderResponse = filledMarketOrder) {
 }
 
 describe("createBinanceExchangeGateway", () => {
+  it.each(["MARKET", "LIMIT"] as const)(
+    "serializes small decimals in %s orders without exponents",
+    async (type) => {
+      const client = createClient();
+      const gateway = createBinanceExchangeGateway({ client });
+      await gateway.placeOrder({
+        clientOrderId: "small",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type,
+        quantity: new Decimal("0.00000001"),
+        ...(type === "LIMIT" ? { price: new Decimal("0.00000002") } : {})
+      });
+      expect(client.placeOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          quantity: "0.00000001",
+          ...(type === "LIMIT" ? { price: "0.00000002" } : {})
+        })
+      );
+    }
+  );
   it("places a market order through the Binance order client and maps the response", async () => {
     const client = createClient();
     const balances: readonly BalanceSnapshot[] = [

@@ -57,9 +57,10 @@ describe("createCandleFeedMarketDataSource", () => {
     });
 
     await expect(async () => {
-      for await (const _ of source.getCandles({ symbol: "BTCUSDT", interval: "15m" })) {
-        // Consume the generator to trigger validation.
-      }
+      await source
+        .getCandles({ symbol: "BTCUSDT", interval: "15m" })
+        [Symbol.asyncIterator]()
+        .next();
     }).rejects.toThrow("Candle feed market data requests require fromMs and toMs");
   });
 
@@ -71,14 +72,15 @@ describe("createCandleFeedMarketDataSource", () => {
     });
 
     await expect(async () => {
-      for await (const _ of source.getCandles({
-        symbol: "BTCUSDT",
-        interval: "1m",
-        fromMs: 1_000,
-        toMs: 3_000
-      })) {
-        // Consume the generator to trigger validation.
-      }
+      await source
+        .getCandles({
+          symbol: "BTCUSDT",
+          interval: "1m",
+          fromMs: 1_000,
+          toMs: 3_000
+        })
+        [Symbol.asyncIterator]()
+        .next();
     }).rejects.toThrow("Unsupported candle feed interval");
   });
 });

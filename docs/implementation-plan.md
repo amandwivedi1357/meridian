@@ -27,13 +27,13 @@ Legend: `[ ]` todo · **P0** must-have · **P1** should-have · **P2** nice-to-h
 
 ## Status snapshot (2026-10-06)
 
-| Area                       | State                                                                                                                                                                                      |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Phase 0                    | Nearly done. Open: Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                         |
-| Phase 1 (1.1–1.5 P0 items) | Done in code and unit tests except wall-clock verification. Open: continuous aggregates (P1), 24h soak, spot-check vs REST snapshot, 60s network kill, and 6-month backfill exit criterion |
-| Phase 2                    | Phase 2 code items are complete for the local backtester. Remaining proof work: run a full ≥6-month validation once enough local historical data is loaded                                 |
+| Area                       | State                                                                                                                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 0                    | Nearly done. Open: Testnet API keys, `packages/proto` buf setup, final secret scan                                                                                                                          |
+| Phase 1 (1.1–1.5 P0 items) | Done in code and unit tests except wall-clock verification. Open: continuous aggregates (P1), 24h soak, spot-check vs REST snapshot, 60s network kill, and 6-month backfill exit criterion                  |
+| Phase 2                    | Phase 2 code items are complete for the local backtester. Remaining proof work: run a full ≥6-month validation once enough local historical data is loaded                                                  |
 | Phase 3                    | Phase 3.1 is complete: authenticated Testnet client, shared gateway/market-data contracts, adapters, read-only auth smoke, and live place/query/cancel smoke are verified. Next: Phase 3.2 order lifecycle. |
-| Phases 4–7                 | Not started                                                                                                                                                                                |
+| Phases 4–7                 | Not started                                                                                                                                                                                                 |
 
 **Strategy for the rest of the plan:** get a thin vertical slice working end to end (Phase 2.0) before polishing any single layer. Infrastructure that nothing consumes yet (generated Protobuf, continuous aggregates) is deferred until a real consumer needs it.
 
@@ -258,6 +258,8 @@ One symbol, one strategy, one number. Build the thinnest path that proves the ar
   - Status: added shared gateway and market-data contracts in `packages/core`, a Binance gateway adapter around the authenticated order client, a Binance REST-kline `MarketDataSource`, a simulator gateway adapter around the backtest `SimBroker`, and a backtest candle-feed `MarketDataSource` adapter. Focused tests cover order mapping, cancellation limitations, balance reads, kline pagination, and feed adaptation. Verified 2026-10-07 with `pnpm --filter @meridian/core typecheck/test`, `pnpm --filter @meridian/binance-client typecheck/test`, and `pnpm --filter @meridian/backtest-worker typecheck/test`. Live Testnet verification remains separate.
 
 ### 3.2 Order lifecycle
+
+- Review fixes 2026-10-07: partial fills now preserve pending-cancel intent. Write-ahead client-ID conflicts atomically compare immutable order details and reject mismatches; the repository adapter must return `rowCount`, and identical retries do not reset state or timestamps. Temporary-table PostgreSQL verification passed for insert, identical retry, and nine conflicts, with rollback. Simulator gateway fill identity and fixed-point Binance serialization regressions are also fixed. Affected suites: 823 tests across 85 files; build/typecheck/lint pass. These fixes do not close the remaining reconciliation, out-of-order, fee-aware accounting, or execution-service items.
 
 - [x] **P0** Order state machine in `packages/core` with exhaustive transition tests
   - Status: added `ORDER_STATES`, `OrderState`, `OrderLifecycleEvent`, `canTransitionOrderState`, and `transitionOrderState` in `packages/core`. Tests cover valid transitions, illegal nonterminal transitions, terminal-state immutability, and exported state-list exhaustiveness. Verified 2026-10-07 with `pnpm --filter @meridian/core typecheck` and `pnpm --filter @meridian/core test` passing 69 tests across 5 files.

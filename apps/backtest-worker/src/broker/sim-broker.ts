@@ -12,13 +12,17 @@ export interface SimBrokerOptions {
 }
 
 export interface SimBroker {
-  readonly submit: (intent: OrderIntent, submittedAtMs: number) => void;
+  readonly submit: (intent: OrderIntent, submittedAtMs: number, clientOrderId?: string) => void;
 
-  readonly processCandle: (candle: Candle) => readonly Fill[];
+  readonly processCandle: (candle: Candle) => readonly SimulatedFill[];
 
   readonly position: () => Position;
 
   readonly balance: (asset: string) => Decimal;
 
   readonly equity: (markPrice: Decimal) => Decimal;
+}
+
+export interface SimulatedFill extends Fill {
+  readonly clientOrderId?: string;
 }

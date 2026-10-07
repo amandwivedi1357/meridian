@@ -14,7 +14,7 @@ export interface PendingOrderRecord {
 }
 
 export interface OrderWriteAheadRepositoryDeps {
-  readonly execute: (query: SqlQuery) => Promise<void>;
+  readonly execute: (query: SqlQuery) => Promise<{ readonly rowCount: number | null }>;
 }
 
 export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryDeps) {
@@ -22,7 +22,7 @@ export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryD
     async recordPendingOrder(record: PendingOrderRecord): Promise<void> {
       validateRecord(record);
 
-      await deps.execute({
+      const result = await deps.execute({
         text: `
           INSERT INTO orders (
             client_order_id,
@@ -39,7 +39,16 @@ export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryD
             updated_at
           )
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
-          ON CONFLICT (client_order_id) DO NOTHING
+          ON CONFLICT (client_order_id) DO UPDATE
+          SET client_order_id = EXCLUDED.client_order_id
+          WHERE orders.strategy_id = EXCLUDED.strategy_id
+            AND orders.signal_id = EXCLUDED.signal_id
+            AND orders.attempt = EXCLUDED.attempt
+            AND orders.symbol = EXCLUDED.symbol
+            AND orders.side = EXCLUDED.side
+            AND orders.type = EXCLUDED.type
+            AND orders.quantity = EXCLUDED.quantity
+            AND orders.limit_price IS NOT DISTINCT FROM EXCLUDED.limit_price
         `,
         values: [
           record.clientOrderId,
@@ -52,10 +61,13 @@ export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryD
           record.quantity,
           record.limitPrice ?? null,
           "PENDING_NEW",
-          new Date(record.createdAtMs),
-        ],
+          new Date(record.createdAtMs)
+        ]
       });
-    },
+      if (result.rowCount !== 1) {
+        throw new Error("Write-ahead order identity conflict");
+      }
+    }
   };
 }
 

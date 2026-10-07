@@ -1,26 +1,35 @@
 import { Decimal, type Fill } from "@meridian/core";
-import type { SimBroker, SimBrokerOptions } from "./sim-broker.js";
+import type { SimBroker, SimBrokerOptions, SimulatedFill } from "./sim-broker.js";
 import { validateSimBrokerOptions } from "./broker-options.js";
 import { applyFill, type SimBrokerState } from "./fill-accounting.js";
 import { createMarketFill } from "./market-fill.js";
 import { createPendingOrders, type PendingOrder } from "./pending-orders.js";
 import { calculateMarketFillPrice } from "./fill-price.js";
 
-function isLimitTouched(order: PendingOrder, candle: Parameters<SimBroker["processCandle"]>[0]): boolean {
+function isLimitTouched(
+  order: PendingOrder,
+  candle: Parameters<SimBroker["processCandle"]>[0]
+): boolean {
   const limitPrice = order.intent.limitPrice;
   if (order.intent.type !== "LIMIT" || limitPrice === undefined) return false;
 
   return order.intent.side === "BUY" ? candle.low.lt(limitPrice) : candle.high.gt(limitPrice);
 }
 
-function isStopTouched(order: PendingOrder, candle: Parameters<SimBroker["processCandle"]>[0]): boolean {
+function isStopTouched(
+  order: PendingOrder,
+  candle: Parameters<SimBroker["processCandle"]>[0]
+): boolean {
   const stopPrice = order.intent.stopPrice;
   if (order.intent.type !== "STOP_MARKET" || stopPrice === undefined) return false;
 
   return order.intent.side === "BUY" ? candle.high.gte(stopPrice) : candle.low.lte(stopPrice);
 }
 
-function isOrderTriggered(order: PendingOrder, candle: Parameters<SimBroker["processCandle"]>[0]): boolean {
+function isOrderTriggered(
+  order: PendingOrder,
+  candle: Parameters<SimBroker["processCandle"]>[0]
+): boolean {
   if (order.intent.type === "MARKET") return true;
   if (order.intent.type === "LIMIT") return isLimitTouched(order, candle);
   return isStopTouched(order, candle);
@@ -96,12 +105,12 @@ export function createSimBroker(input: SimBrokerOptions): SimBroker {
   };
 
   return {
-    submit(intent, submittedAtMs) {
+    submit(intent, submittedAtMs, clientOrderId) {
       if (halted) throw new Error("Sim broker halted");
       if (submittedAtMs < lastOpenMs) {
         throw new Error("Cannot submit an order in the past");
       }
-      queue.enqueue(intent, submittedAtMs);
+      queue.enqueue(intent, submittedAtMs, clientOrderId);
     },
     processCandle(candle) {
       if (halted) throw new Error("Sim broker halted");
@@ -115,7 +124,7 @@ export function createSimBroker(input: SimBrokerOptions): SimBroker {
       }
       calculateMarketFillPrice(candle.open, "BUY", options.slippageBps);
       let nextState = state;
-      const fills: Fill[] = [];
+      const fills: SimulatedFill[] = [];
       const unfilled: PendingOrder[] = [];
       try {
         const triggered: PendingOrder[] = [];
@@ -149,7 +158,11 @@ export function createSimBroker(input: SimBrokerOptions): SimBroker {
           }
 
           nextState = applyFill(nextState, fill, options.quoteAsset, options.baseAsset);
-          fills.push(fill);
+          fills.push(
+            order.clientOrderId === undefined
+              ? fill
+              : { ...fill, clientOrderId: order.clientOrderId }
+          );
         }
       } catch (error) {
         halted = true;

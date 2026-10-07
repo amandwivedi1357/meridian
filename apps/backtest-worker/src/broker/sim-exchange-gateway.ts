@@ -1,17 +1,15 @@
 import {
   Decimal,
   type BalanceSnapshot,
-  type Candle,
-  type Fill,
   type GatewayOrderRequest,
   type GatewayOrderResult,
   type GatewayOrderSnapshot,
   type OrderIntent,
   type SimulatedExchangeGateway,
-  type SymbolCode,
+  type SymbolCode
 } from "@meridian/core";
 
-import type { SimBroker } from "./sim-broker.js";
+import type { SimBroker, SimulatedFill } from "./sim-broker.js";
 
 export interface SimExchangeGatewayOptions {
   readonly broker: SimBroker;
@@ -26,14 +24,15 @@ export function createSimExchangeGateway(
   options: SimExchangeGatewayOptions
 ): SimulatedExchangeGateway {
   const nowMs = options.nowMs ?? Date.now;
-  const openOrders = new Map<string, GatewayOrderSnapshot>();
+  const orders = new Map<string, GatewayOrderSnapshot>();
 
   return {
     async placeOrder(request) {
+      if (orders.has(request.clientOrderId)) throw new Error("Duplicate simulated client order id");
       const submittedAtMs = nowMs();
       const intent = toOrderIntent(request);
 
-      options.broker.submit(intent, submittedAtMs);
+      options.broker.submit(intent, submittedAtMs, request.clientOrderId);
 
       const result: GatewayOrderResult = {
         clientOrderId: request.clientOrderId,
@@ -45,13 +44,13 @@ export function createSimExchangeGateway(
         executedQuantity: new Decimal("0"),
         cumulativeQuoteQuantity: new Decimal("0"),
         fills: [],
-        eventTimeMs: submittedAtMs,
+        eventTimeMs: submittedAtMs
       };
 
-      openOrders.set(request.clientOrderId, {
-  ...result,
-  ...(request.price === undefined ? {} : { price: request.price }),
-});
+      orders.set(request.clientOrderId, {
+        ...result,
+        ...(request.price === undefined ? {} : { price: request.price })
+      });
 
       return result;
     },
@@ -61,7 +60,7 @@ export function createSimExchangeGateway(
     },
 
     async getOrder(request) {
-      const order = openOrders.get(request.clientOrderId);
+      const order = orders.get(request.clientOrderId);
       if (order === undefined || order.symbol !== request.symbol) {
         throw new Error("Simulated order not found");
       }
@@ -70,22 +69,24 @@ export function createSimExchangeGateway(
     },
 
     async getOpenOrders(request) {
-      const orders = [...openOrders.values()];
-      if (request?.symbol === undefined) return orders;
-      return orders.filter((order) => order.symbol === request.symbol);
+      const openOrders = [...orders.values()].filter(
+        (order) => order.status === "NEW" || order.status === "PARTIALLY_FILLED"
+      );
+      if (request?.symbol === undefined) return openOrders;
+      return openOrders.filter((order) => order.symbol === request.symbol);
     },
 
     async getBalances() {
       const assets = uniqueAssets([
         options.quoteAsset,
         options.baseAsset,
-        ...(options.balanceAssets ?? []),
+        ...(options.balanceAssets ?? [])
       ]);
 
       return assets.map((asset): BalanceSnapshot => ({
         asset,
         free: options.broker.balance(asset),
-        locked: new Decimal("0"),
+        locked: new Decimal("0")
       }));
     },
 
@@ -93,7 +94,7 @@ export function createSimExchangeGateway(
       const fills = options.broker.processCandle(candle);
 
       for (const fill of fills) {
-        removeFirstMatchingOpenOrder(openOrders, fill);
+        applySimulatedFill(orders, fill);
       }
 
       return fills;
@@ -107,12 +108,12 @@ export function createSimExchangeGateway(
           symbol,
           quantity: new Decimal("0"),
           avgEntry: new Decimal("0"),
-          realizedPnl: new Decimal("0"),
+          realizedPnl: new Decimal("0")
         };
       }
 
       return position;
-    },
+    }
   };
 }
 
@@ -123,7 +124,7 @@ function toOrderIntent(request: GatewayOrderRequest): OrderIntent {
       side: request.side,
       type: "MARKET",
       quantity: request.quantity,
-      reason: request.clientOrderId,
+      reason: request.clientOrderId
     };
   }
 
@@ -137,24 +138,22 @@ function toOrderIntent(request: GatewayOrderRequest): OrderIntent {
     type: "LIMIT",
     quantity: request.quantity,
     limitPrice: request.price,
-    reason: request.clientOrderId,
+    reason: request.clientOrderId
   };
 }
 
-function removeFirstMatchingOpenOrder(
-  openOrders: Map<string, GatewayOrderSnapshot>,
-  fill: Fill
-): void {
-  for (const [clientOrderId, order] of openOrders) {
-    if (
-      order.symbol === fill.symbol &&
-      order.side === fill.side &&
-      order.executedQuantity.isZero()
-    ) {
-      openOrders.delete(clientOrderId);
-      return;
-    }
+function applySimulatedFill(orders: Map<string, GatewayOrderSnapshot>, fill: SimulatedFill): void {
+  const order = fill.clientOrderId === undefined ? undefined : orders.get(fill.clientOrderId);
+  if (order === undefined || order.symbol !== fill.symbol || order.side !== fill.side) {
+    throw new Error("Simulated fill order identity mismatch");
   }
+  orders.set(order.clientOrderId, {
+    ...order,
+    status: "FILLED",
+    executedQuantity: order.executedQuantity.plus(fill.quantity),
+    cumulativeQuoteQuantity: order.cumulativeQuoteQuantity.plus(fill.price.times(fill.quantity)),
+    eventTimeMs: fill.tsMs
+  });
 }
 
 function uniqueAssets(assets: readonly string[]): readonly string[] {

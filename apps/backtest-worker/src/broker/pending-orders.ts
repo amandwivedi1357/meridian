@@ -3,13 +3,14 @@ import type { OrderIntent } from "@meridian/core";
 export interface PendingOrder {
   readonly intent: OrderIntent;
   readonly submittedAtMs: number;
+  readonly clientOrderId?: string;
 }
 
 export function createPendingOrders(symbol: string) {
   let pending: PendingOrder[] = [];
 
   return {
-    enqueue(intent: OrderIntent, submittedAtMs: number): void {
+    enqueue(intent: OrderIntent, submittedAtMs: number, clientOrderId?: string): void {
       if (
         intent.symbol !== symbol ||
         (intent.type !== "MARKET" && intent.type !== "LIMIT" && intent.type !== "STOP_MARKET")
@@ -42,7 +43,8 @@ export function createPendingOrders(symbol: string) {
 
       pending.push({
         intent: { ...intent },
-        submittedAtMs
+        submittedAtMs,
+        ...(clientOrderId === undefined ? {} : { clientOrderId })
       });
     },
 

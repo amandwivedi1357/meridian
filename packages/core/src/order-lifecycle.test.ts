@@ -11,6 +11,23 @@ import {
 const terminalStates: readonly OrderState[] = ["FILLED", "CANCELED", "REJECTED", "EXPIRED"];
 
 describe("order lifecycle state machine", () => {
+  it.each(["canceled", "filled", "expired", "cancelOutcomeUnknown"] as const)(
+    "preserves cancellation through repeated partial fills before %s",
+    (outcome) => {
+      let state = transitionOrderState("NEW", "cancelRequested");
+      state = transitionOrderState(state, "partiallyFilled");
+      state = transitionOrderState(state, "partiallyFilled");
+      expect(state).toBe("PENDING_CANCEL");
+      expect(transitionOrderState(state, outcome)).toBe(
+        {
+          canceled: "CANCELED",
+          filled: "FILLED",
+          expired: "EXPIRED",
+          cancelOutcomeUnknown: "UNKNOWN"
+        }[outcome]
+      );
+    }
+  );
   it.each([
     ["PENDING_NEW", "acknowledged", "NEW"],
     ["PENDING_NEW", "partiallyFilled", "PARTIALLY_FILLED"],
@@ -34,7 +51,7 @@ describe("order lifecycle state machine", () => {
     ["PARTIALLY_FILLED", "expired", "EXPIRED"],
     ["PENDING_CANCEL", "canceled", "CANCELED"],
     ["PENDING_CANCEL", "cancelOutcomeUnknown", "UNKNOWN"],
-    ["PENDING_CANCEL", "partiallyFilled", "PARTIALLY_FILLED"],
+    ["PENDING_CANCEL", "partiallyFilled", "PENDING_CANCEL"],
     ["PENDING_CANCEL", "filled", "FILLED"],
     ["PENDING_CANCEL", "expired", "EXPIRED"]
   ] as const)("transitions %s + %s -> %s", (from, event, to) => {

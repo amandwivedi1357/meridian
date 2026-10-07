@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createOrderWriteAheadRepository } from "./order-write-ahead-repository.js";
+import {
+  createOrderWriteAheadRepository,
+  type PendingOrderRecord
+} from "./order-write-ahead-repository.js";
 import type { SqlQuery } from "./migration-runner.js";
 
 function createQueryRecorder() {
@@ -9,11 +12,51 @@ function createQueryRecorder() {
     queries,
     execute: vi.fn(async (query: SqlQuery) => {
       queries.push(query);
+      return { rowCount: 1 as number | null };
     })
   };
 }
 
 describe("createOrderWriteAheadRepository", () => {
+  const record: PendingOrderRecord = {
+    clientOrderId: "same-id",
+    strategyId: "ema",
+    signalId: "signal",
+    attempt: 0,
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    quantity: "0.001",
+    limitPrice: "100",
+    createdAtMs: 1_000
+  };
+
+  it("accepts an identical retry when the database confirms the identity", async () => {
+    const db = createQueryRecorder();
+    const repo = createOrderWriteAheadRepository(db);
+    await repo.recordPendingOrder(record);
+    await repo.recordPendingOrder({ ...record, createdAtMs: 2_000 });
+    expect(db.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([0, null])(
+    "fails closed when the database reports %s matching rows",
+    async (rowCount) => {
+      const db = createQueryRecorder();
+      db.execute.mockResolvedValue({ rowCount });
+      await expect(createOrderWriteAheadRepository(db).recordPendingOrder(record)).rejects.toThrow(
+        "Write-ahead order identity conflict"
+      );
+    }
+  );
+
+  it("propagates database failures instead of permitting submission", async () => {
+    const db = createQueryRecorder();
+    db.execute.mockRejectedValue(new Error("database unavailable"));
+    await expect(createOrderWriteAheadRepository(db).recordPendingOrder(record)).rejects.toThrow(
+      "database unavailable"
+    );
+  });
   it("inserts a pending order before exchange submission", async () => {
     const db = createQueryRecorder();
     const repo = createOrderWriteAheadRepository(db);
@@ -33,7 +76,23 @@ describe("createOrderWriteAheadRepository", () => {
 
     expect(db.execute).toHaveBeenCalledTimes(1);
     expect(normalizeSql(db.queries[0]?.text ?? "")).toContain("insert into orders");
-    expect(normalizeSql(db.queries[0]?.text ?? "")).toContain("on conflict (client_order_id) do nothing");
+    const sql = normalizeSql(db.queries[0]?.text ?? "");
+    expect(sql).toContain(
+      "on conflict (client_order_id) do update set client_order_id = excluded.client_order_id"
+    );
+    for (const field of [
+      "strategy_id",
+      "signal_id",
+      "attempt",
+      "symbol",
+      "side",
+      "type",
+      "quantity"
+    ]) {
+      expect(sql).toContain(`orders.${field} = excluded.${field}`);
+    }
+    expect(sql).toContain("orders.limit_price is not distinct from excluded.limit_price");
+    expect(sql).not.toContain("set state");
     expect(db.queries[0]?.values).toEqual([
       "mrd_order_1",
       "ema",
