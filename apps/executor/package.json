@@ -15,6 +15,7 @@
     "@meridian/bus": "workspace:*",
     "@meridian/config": "workspace:*",
     "@meridian/core": "workspace:*",
+    "@meridian/db": "workspace:*",
     "@meridian/observability": "workspace:*"
   },
   "devDependencies": {

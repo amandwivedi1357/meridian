@@ -52,7 +52,7 @@ Phase 3.1 in progress on 2026-10-06: all P0 client code is implemented: HMAC/Ed2
 
 Phase 3.1 completed on 2026-10-07: shared `ExchangeGateway` and `MarketDataSource` contracts are exported from `packages/core`. `packages/binance-client` now has a Binance gateway adapter around the authenticated order client and a REST-kline `MarketDataSource`; `apps/backtest-worker` now has a simulator gateway adapter around `SimBroker` and a candle-feed `MarketDataSource` adapter. Verified locally: `@meridian/core` typecheck and 36 tests across 4 files; `@meridian/binance-client` typecheck and 277 tests across 22 files; `@meridian/backtest-worker` typecheck and 361 tests across 25 files. Read-only live Testnet authentication is verified: `pnpm --filter @meridian/binance-client smoke:trading BTCUSDT` returned `openOrderCount: 0`, `userDataState: "OPEN"`, `eventsReceived: 0`, and `ordersPlaced: 0`. Live Testnet order placement/query/cancellation is verified: `pnpm --filter @meridian/binance-client smoke:trading-order -- --symbol BTCUSDT --quantity 0.0002 --confirm-testnet-order` placed a passive LIMIT BUY at `83000.91`, queried it as `NEW`, canceled it as `CANCELED`, and confirmed `stillOpen: false`.
 
-Phase 3.2 started on 2026-10-07: the core order lifecycle state machine is implemented with `PENDING_NEW`, `UNKNOWN`, `PENDING_CANCEL`, terminal states, guarded transition helpers, and exhaustive focused tests. Deterministic Binance-safe `clientOrderId` generation is implemented with prefix validation, SHA-256 base64url hashing, attempt isolation, and focused tests. Write-ahead persistence foundation is implemented in `packages/db`: `orders` schema migration, `PENDING_NEW` insert repository, idempotency uniqueness, and reconciliation indexes. Timeout handling now uses query-before-retry through `createQueryBeforeRetryOrderSubmitter`, which queries by `clientOrderId` after unknown placement outcomes and never blind-resends. Verified: `@meridian/core` typecheck and 80 tests across 6 files; `@meridian/db` typecheck and 16 tests across 4 files; `@meridian/binance-client` typecheck and 281 tests across 23 files. Next Phase 3.2 item is reconciliation on startup/after reconnect.
+Phase 3.2 completed in the prototype on 2026-10-08. The core order lifecycle state machine is implemented with `PENDING_NEW`, `UNKNOWN`, `PENDING_CANCEL`, terminal states, guarded transition helpers, and exhaustive focused tests. Deterministic Binance-safe `clientOrderId` generation is implemented with prefix validation, SHA-256 base64url hashing, attempt isolation, and focused tests. Write-ahead persistence foundation is implemented in `packages/db`: `orders` schema migration, `PENDING_NEW` insert repository, idempotency uniqueness, reconciliation indexes, non-terminal order scan for reconciliation, execution metadata, `order_fills`, idempotent terminal-state reconciliation update, and monotonic event-time guard for out-of-order execution reports. Timeout handling uses query-before-retry through `createQueryBeforeRetryOrderSubmitter`, which queries by `clientOrderId` after unknown placement outcomes and never blind-resends. Reconciliation has core report types plus `reconcileOpenOrders` / `runOrderReconciliation`, covering matched, missing-on-exchange, terminal-on-exchange, query-failed, terminal-local skip, and store-failure cases. Binance reconciliation exchange maps not-found signed errors to `null` while preserving transient failures. `apps/executor` has reconciliation/runtime helpers that run startup and reconnect reconciliation, apply terminal repairs, warn on unresolved missing/query-failed cases, detect possible Testnet resets, rethrow storage/repair failures so startup fails closed, and persist fee-aware user-data execution reports. The dependency factory wires DB execute + Binance query client into that runtime without creating credentials or placing orders. Verified on 2026-10-08: `@meridian/core` typecheck/build/tests passed with 91 tests across 7 files; `@meridian/db` build passed, typecheck and tests passed with 28 tests across 4 files; `@meridian/binance-client` build passed, typecheck and tests passed with 288 tests across 24 files; `@meridian/executor` typecheck and tests passed with 16 tests across 4 files; `@meridian/backtest-worker` typecheck and 364 tests across 25 files. Production-grade REST account-trade catch-up for fills missed during executor downtime is recorded in `docs/finishings.md`; continue to Phase 3.3 next.
 
 Phase 1.5: Ingestor close-out and soak verification.
 
@@ -191,7 +191,7 @@ Latest verified package checks:
 - `@meridian/binance-client`
   - Typecheck passed.
   - Build and lint passed.
-  - Tests passed: 283 tests across 23 test files (2026-10-07), including fixed-point gateway serialization regressions.
+  - Tests passed: 288 tests across 24 test files, including fixed-point gateway serialization regressions, Binance reconciliation exchange behavior, and cumulative quote quantity parsing from user-data execution reports.
 - `@meridian/proto`
   - Typecheck passed.
   - Build passed.
@@ -205,14 +205,18 @@ Latest verified package checks:
   - Tests passed: 1 test across 1 test file.
 - `@meridian/db`
   - Typecheck passed.
-  - Tests passed after write-ahead conflict regression fixes: 20 tests across 4 test files. Temporary-table PostgreSQL retry/conflict verification also passed.
+  - Build passed.
+  - Tests passed after write-ahead conflict regression fixes, reconciliation local-order scan, terminal-state reconciliation update, live execution metadata, and fee-aware fill persistence: 28 tests across 4 test files. Temporary-table PostgreSQL retry/conflict verification also passed.
 - `@meridian/bus`
   - Typecheck passed.
   - Tests passed: 15 tests across 1 test file.
 - `@meridian/core`
   - Typecheck passed.
   - Build passed.
-  - Tests passed: 84 tests across 6 test files, including partial-fill/cancellation race regressions.
+  - Tests passed: 91 tests across 7 test files, including partial-fill/cancellation race regressions and report-only order reconciliation.
+- `@meridian/executor`
+  - Typecheck passed.
+  - Tests passed: 16 tests across 4 test files for startup/reconnect reconciliation composition, terminal repairs, fail-closed storage/repair errors, executor runtime startup gating, dependency factory wiring, user-data order update handling, partial fills, and fee-aware fill persistence.
 - `@meridian/backtest-worker`
   - Typecheck passed after simulator gateway and candle-feed market-data adapters.
   - Tests passed: 364 tests across 25 test files, including explicit simulator fill identity regressions.

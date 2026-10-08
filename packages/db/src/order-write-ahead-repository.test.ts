@@ -147,6 +147,221 @@ describe("createOrderWriteAheadRepository", () => {
 
     expect(db.execute).not.toHaveBeenCalled();
   });
+
+  it("selects non-terminal local orders for reconciliation", async () => {
+    const queries: SqlQuery[] = [];
+    const repo = createOrderWriteAheadRepository({
+      execute: vi.fn(async (query: SqlQuery) => {
+        queries.push(query);
+        return {
+          rowCount: 2,
+          rows: [
+            {
+              client_order_id: "pending",
+              symbol: "BTCUSDT",
+              state: "PENDING_NEW",
+              updated_at_ms: "1704067200000"
+            },
+            {
+              client_order_id: "unknown",
+              symbol: "ETHUSDT",
+              state: "UNKNOWN",
+              updated_at_ms: "1704067205000"
+            }
+          ]
+        };
+      })
+    });
+
+    await expect(repo.listOrdersForReconciliation()).resolves.toEqual([
+      {
+        clientOrderId: "pending",
+        symbol: "BTCUSDT",
+        state: "PENDING_NEW",
+        updatedAtMs: 1_704_067_200_000
+      },
+      {
+        clientOrderId: "unknown",
+        symbol: "ETHUSDT",
+        state: "UNKNOWN",
+        updatedAtMs: 1_704_067_205_000
+      }
+    ]);
+
+    const sql = normalizeSql(queries[0]?.text ?? "");
+    expect(sql).toContain("select client_order_id");
+    expect(sql).toContain("from orders");
+    expect(sql).toContain("where state in");
+    expect(sql).toContain("pending_new");
+    expect(sql).toContain("pending_cancel");
+    expect(sql).toContain("unknown");
+    expect(sql).toContain("partially_filled");
+    expect(sql).not.toContain("'filled'");
+    expect(sql).not.toContain("'canceled'");
+    expect(sql).toContain("order by updated_at asc");
+  });
+
+  it("rejects malformed reconciliation rows from storage", async () => {
+    const repo = createOrderWriteAheadRepository({
+      execute: vi.fn(async () => ({
+        rowCount: 1,
+        rows: [
+          {
+            client_order_id: "bad",
+            symbol: "btcusdt",
+            state: "NEW",
+            updated_at_ms: "1704067200000"
+          }
+        ]
+      }))
+    });
+
+    await expect(repo.listOrdersForReconciliation()).rejects.toThrow(
+      "Invalid order reconciliation row"
+    );
+  });
+
+  it("marks non-terminal local orders terminal after exchange reconciliation", async () => {
+    const db = createQueryRecorder();
+    const repo = createOrderWriteAheadRepository(db);
+
+    await repo.markOrderReconciledTerminal({
+      clientOrderId: "mrd_order_1",
+      terminalState: "FILLED",
+      reconciledAtMs: 1_704_067_210_000
+    });
+
+    const sql = normalizeSql(db.queries[0]?.text ?? "");
+    expect(sql).toContain("update orders");
+    expect(sql).toContain("set state = $2");
+    expect(sql).toContain("updated_at = $3");
+    expect(sql).toContain("where client_order_id = $1");
+    expect(sql).toContain("state in");
+    expect(sql).toContain("pending_new");
+    expect(sql).toContain("new");
+    expect(sql).toContain("partially_filled");
+    expect(sql).toContain("pending_cancel");
+    expect(sql).toContain("unknown");
+    expect(sql).not.toContain("'filled'");
+    expect(sql).not.toContain("'canceled'");
+    expect(db.queries[0]?.values).toEqual([
+      "mrd_order_1",
+      "FILLED",
+      new Date(1_704_067_210_000)
+    ]);
+  });
+
+  it("rejects non-terminal reconciliation updates before writing", async () => {
+    const db = createQueryRecorder();
+    const repo = createOrderWriteAheadRepository(db);
+
+    await expect(
+      repo.markOrderReconciledTerminal({
+        clientOrderId: "mrd_order_1",
+        terminalState: "NEW" as never,
+        reconciledAtMs: 1_704_067_210_000
+      })
+    ).rejects.toThrow("terminalState must be a terminal order state");
+
+    expect(db.execute).not.toHaveBeenCalled();
+  });
+
+  it("records order execution updates with an out-of-order event guard", async () => {
+    const db = createQueryRecorder();
+    const repo = createOrderWriteAheadRepository(db);
+
+    await repo.recordOrderExecutionUpdate({
+      clientOrderId: "mrd_order_1",
+      exchangeOrderId: "123",
+      state: "PARTIALLY_FILLED",
+      executedQuantity: "0.0001",
+      cumulativeQuoteQuantity: "8.3",
+      exchangeEventTimeMs: 1_704_067_230_000,
+      executionId: "456"
+    });
+
+    const sql = normalizeSql(db.queries[0]?.text ?? "");
+    expect(sql).toContain("update orders");
+    expect(sql).toContain("set exchange_order_id = $2");
+    expect(sql).toContain("state = $3");
+    expect(sql).toContain("executed_quantity = $4");
+    expect(sql).toContain("cumulative_quote_quantity = $5");
+    expect(sql).toContain("last_exchange_event_time_ms = $6");
+    expect(sql).toContain("last_execution_id = $7");
+    expect(sql).toContain("where client_order_id = $1");
+    expect(sql).toContain("last_exchange_event_time_ms <= $6");
+    expect(db.queries[0]?.values).toEqual([
+      "mrd_order_1",
+      "123",
+      "PARTIALLY_FILLED",
+      "0.0001",
+      "8.3",
+      1_704_067_230_000,
+      "456",
+      new Date(1_704_067_230_000)
+    ]);
+  });
+
+  it("records fee-aware trade fills idempotently by execution id", async () => {
+    const db = createQueryRecorder();
+    const repo = createOrderWriteAheadRepository(db);
+
+    await repo.recordOrderExecutionUpdate({
+      clientOrderId: "mrd_order_1",
+      exchangeOrderId: "123",
+      state: "FILLED",
+      executedQuantity: "0.0002",
+      cumulativeQuoteQuantity: "16.6",
+      exchangeEventTimeMs: 1_704_067_231_000,
+      executionId: "457",
+      fill: {
+        tradeId: "789",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        quantity: "0.0001",
+        price: "83000.91",
+        fee: "0.000001",
+        feeAsset: "BTC"
+      }
+    });
+
+    expect(db.execute).toHaveBeenCalledTimes(2);
+    const fillQuery = db.queries[1];
+    const sql = normalizeSql(fillQuery?.text ?? "");
+    expect(sql).toContain("insert into order_fills");
+    expect(sql).toContain("on conflict (client_order_id, execution_id) do nothing");
+    expect(fillQuery?.values).toEqual([
+      "mrd_order_1",
+      "457",
+      "789",
+      "BTCUSDT",
+      "BUY",
+      "0.0001",
+      "83000.91",
+      "0.000001",
+      "BTC",
+      1_704_067_231_000
+    ]);
+  });
+
+  it("rejects invalid execution update decimals before writing", async () => {
+    const db = createQueryRecorder();
+    const repo = createOrderWriteAheadRepository(db);
+
+    await expect(
+      repo.recordOrderExecutionUpdate({
+        clientOrderId: "mrd_order_1",
+        exchangeOrderId: "123",
+        state: "FILLED",
+        executedQuantity: "NaN",
+        cumulativeQuoteQuantity: "16.6",
+        exchangeEventTimeMs: 1_704_067_231_000,
+        executionId: "457"
+      })
+    ).rejects.toThrow("executedQuantity must be a non-negative decimal string");
+
+    expect(db.execute).not.toHaveBeenCalled();
+  });
 });
 
 function normalizeSql(sql: string): string {

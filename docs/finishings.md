@@ -15,6 +15,10 @@ When progress is reported:
 
 ## Open Items
 
+- [ ] **`reliability` / `prototype-gap`: Add REST account-trade catch-up after executor downtime.**
+  - Recorded: 2026-10-08. Phase 3.2 now persists live user-data execution reports into `order_fills` with fee/fee_asset and reconciles local order state on startup/reconnect by querying orders. This is enough for the current prototype lifecycle foundation, but it does not yet call Binance account trade history to backfill fills that were missed while the executor was offline.
+  - Acceptance: after reconnect/startup, query recent account trades for affected symbols/orders, dedupe by trade/execution identity, persist fee-aware fills, and prove a missed-fill downtime scenario in tests.
+
 - [ ] **`architecture` / `prototype-gap`: Replace Phase 3.1 adapter placeholders with full exchange-backed capabilities before unattended execution.**
   - Recorded: 2026-10-07. The Phase 3.1 adapter layer is intentionally narrow and locally tested, but it is not the final execution layer. The Binance `ExchangeGateway` reads balances through an injected callback because an authenticated account endpoint wrapper is not implemented yet. The simulator gateway exposes order submission and fill processing but cancellation is unsupported because the current `SimBroker` has no cancel primitive. The backtest candle-feed `MarketDataSource` supports only the feed's current bounded `15m`/`1h` intervals.
   - This is acceptable for closing the shared-contract adapter work, but Phase 3.2 must not assume these adapters provide full lifecycle, reconciliation, or exchange-metadata behavior.
@@ -29,10 +33,6 @@ When progress is reported:
   - Recorded: 2026-10-05. `runBacktestJobInWorker` resolves on `message`, `error`, and non-zero `exit`, but a worker that exits with code `0` before posting a result can leave the returned promise pending forever.
   - This is acceptable for the current queue/worker foundation, but sweep execution should not be able to hang silently.
   - Acceptance: add a focused test for exit code `0` without a message and decide the behavior, for example return `{ ok: false, error: "Worker exited before sending a result" }`.
-
-- [ ] **`docs`: Refresh the next-chat prompt in `docs/current-state.md` before handing off again.**
-  - Recorded: 2026-10-05. The top handoff prompt still says to continue from Phase 2.1, while the state summary says Phase 2.4 is implemented and next coding can move toward Phase 3.
-  - Acceptance: the handoff prompt, current phase, and implementation-plan status all point to the same next step.
 
 - [ ] **`architecture` / `prototype-gap`: Generalize prototype symbol configuration.**
   - Recorded: 2026-10-04. Phase 2.0 deliberately targets one symbol; keep the BTCUSDT prototype moving and revisit this after the vertical slice works end to end.
@@ -61,6 +61,10 @@ When progress is reported:
 - [x] **`correctness` / `prototype-gap`: Dashboard API package must typecheck from a clean install/build.**
   - Recorded: 2026-10-05. `@meridian/api` had previously failed with missing dependency/type and strict TypeScript errors.
   - Resolved: after `pnpm install`, `pnpm --filter @meridian/api typecheck` passed without code changes.
+
+- [x] **`docs`: Refresh the next-chat prompt in `docs/current-state.md` before handing off again.**
+  - Recorded: 2026-10-05. The top handoff prompt still said to continue from Phase 2.1, while the state summary had already moved beyond that.
+  - Resolved: verified on 2026-10-08 that the top handoff prompt now points to Phase 3.2 order lifecycle, matches the implementation-plan phase status, and keeps the soak monitor paused unless explicitly restarted.
 
 ## Categories
 

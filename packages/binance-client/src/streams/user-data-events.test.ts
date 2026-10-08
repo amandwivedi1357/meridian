@@ -21,6 +21,7 @@ export const executionFixture = {
     l: "0.00100000",
     L: "85000.00000000",
     z: "0.00100000",
+    Z: "85.00000000",
     n: "0.00000100",
     N: "BTC",
     t: 789,
@@ -35,6 +36,7 @@ describe("parseUserDataEvent", () => {
     if (result?.kind !== "order-update") throw new Error("Expected order update");
     expect(result.lastQuantity.toString()).toBe("0.001");
     expect(result.lastPrice.toString()).toBe("85000");
+    expect(result.cumulativeQuoteQuantity.toString()).toBe("85");
     expect(result.commission.toString()).toBe("0.000001");
     expect(result.commissionAsset).toBe("BTC");
     expect(result.orderId).toBe("123");

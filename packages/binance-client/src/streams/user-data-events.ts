@@ -44,6 +44,7 @@ const execution = z.object({
   l: amount,
   L: amount,
   z: amount,
+  Z: amount,
   n: amount,
   N: asset.nullable(),
   t: z.number().int().safe().min(-1),
@@ -91,6 +92,7 @@ export interface UserDataOrderUpdate {
   readonly lastQuantity: Decimal;
   readonly lastPrice: Decimal;
   readonly executedQuantity: Decimal;
+  readonly cumulativeQuoteQuantity: Decimal;
   readonly commission: Decimal;
   readonly commissionAsset: string | null;
   readonly maker: boolean;
@@ -169,6 +171,7 @@ export function parseUserDataEvent(value: unknown): UserDataEvent | undefined {
         lastQuantity,
         lastPrice,
         executedQuantity: new Decimal(event.z),
+        cumulativeQuoteQuantity: new Decimal(event.Z),
         commission,
         commissionAsset: event.N,
         maker: event.m

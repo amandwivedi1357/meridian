@@ -30,3 +30,4 @@ export * from "./order-book/depth-sync-orchestrator.js";
 export * from "./order-book/metrics.js";
 export * from "./rest/exchange-gateway-adapter.js";
 export * from "./rest/market-data-source-adapter.js";
+export * from "./rest/reconciliation-exchange.js";

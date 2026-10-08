@@ -7,7 +7,7 @@ function normalizeSql(sql: string): string {
 
 describe("market data migrations", () => {
   it("creates Timescale extension and trades/klines hypertables", () => {
-    expect(marketDataMigrations).toHaveLength(3);
+    expect(marketDataMigrations).toHaveLength(4);
 
     const migration = marketDataMigrations[0];
     expect(migration?.id).toBe("001_market_data_schema");
@@ -94,5 +94,27 @@ describe("market data migrations", () => {
     expect(sql).toContain("on orders (state, updated_at)");
     expect(sql).toContain("orders_symbol_state_idx");
     expect(sql).toContain("on orders (symbol, state)");
+  });
+
+  it("adds live execution metadata and fee-aware order fills", () => {
+    const migration = marketDataMigrations[3];
+    expect(migration?.id).toBe("004_live_order_execution_schema");
+
+    const sql = normalizeSql(migration?.sql ?? "");
+
+    expect(sql).toContain("alter table orders");
+    expect(sql).toContain("add column if not exists exchange_order_id text");
+    expect(sql).toContain("add column if not exists executed_quantity numeric not null default 0");
+    expect(sql).toContain(
+      "add column if not exists cumulative_quote_quantity numeric not null default 0"
+    );
+    expect(sql).toContain("add column if not exists last_exchange_event_time_ms bigint");
+    expect(sql).toContain("create table if not exists order_fills");
+    expect(sql).toContain("client_order_id text not null references orders(client_order_id)");
+    expect(sql).toContain("execution_id text not null");
+    expect(sql).toContain("trade_id text not null");
+    expect(sql).toContain("fee numeric not null");
+    expect(sql).toContain("fee_asset text not null");
+    expect(sql).toContain("primary key (client_order_id, execution_id)");
   });
 });

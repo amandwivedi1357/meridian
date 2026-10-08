@@ -1,3 +1,5 @@
+import type { LocalOrderForReconciliation, OrderState } from "@meridian/core";
+
 import type { SqlQuery } from "./migration-runner.js";
 
 export interface PendingOrderRecord {
@@ -13,12 +15,150 @@ export interface PendingOrderRecord {
   readonly createdAtMs: number;
 }
 
+export interface ReconciledTerminalOrderRecord {
+  readonly clientOrderId: string;
+  readonly terminalState: Extract<OrderState, "FILLED" | "CANCELED" | "REJECTED" | "EXPIRED">;
+  readonly reconciledAtMs: number;
+}
+
+export interface OrderExecutionUpdateRecord {
+  readonly clientOrderId: string;
+  readonly exchangeOrderId: string;
+  readonly state: Extract<
+    OrderState,
+    "NEW" | "PARTIALLY_FILLED" | "FILLED" | "CANCELED" | "REJECTED" | "EXPIRED" | "UNKNOWN"
+  >;
+  readonly executedQuantity: string;
+  readonly cumulativeQuoteQuantity: string;
+  readonly exchangeEventTimeMs: number;
+  readonly executionId: string;
+  readonly fill?: {
+    readonly tradeId: string;
+    readonly symbol: string;
+    readonly side: "BUY" | "SELL";
+    readonly quantity: string;
+    readonly price: string;
+    readonly fee: string;
+    readonly feeAsset: string;
+  };
+}
+
 export interface OrderWriteAheadRepositoryDeps {
-  readonly execute: (query: SqlQuery) => Promise<{ readonly rowCount: number | null }>;
+  readonly execute: (query: SqlQuery) => Promise<{
+    readonly rowCount: number | null;
+    readonly rows?: readonly unknown[];
+  }>;
 }
 
 export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryDeps) {
   return {
+    async recordOrderExecutionUpdate(record: OrderExecutionUpdateRecord): Promise<void> {
+      validateOrderExecutionUpdate(record);
+
+      await deps.execute({
+        text: `
+          UPDATE orders
+          SET exchange_order_id = $2,
+              state = $3,
+              executed_quantity = $4,
+              cumulative_quote_quantity = $5,
+              last_exchange_event_time_ms = $6,
+              last_execution_id = $7,
+              updated_at = $8
+          WHERE client_order_id = $1
+            AND last_exchange_event_time_ms <= $6
+        `,
+        values: [
+          record.clientOrderId,
+          record.exchangeOrderId,
+          record.state,
+          record.executedQuantity,
+          record.cumulativeQuoteQuantity,
+          record.exchangeEventTimeMs,
+          record.executionId,
+          new Date(record.exchangeEventTimeMs)
+        ]
+      });
+
+      if (record.fill !== undefined) {
+        await deps.execute({
+          text: `
+            INSERT INTO order_fills (
+              client_order_id,
+              execution_id,
+              trade_id,
+              symbol,
+              side,
+              quantity,
+              price,
+              fee,
+              fee_asset,
+              event_time_ms
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (client_order_id, execution_id) DO NOTHING
+          `,
+          values: [
+            record.clientOrderId,
+            record.executionId,
+            record.fill.tradeId,
+            record.fill.symbol,
+            record.fill.side,
+            record.fill.quantity,
+            record.fill.price,
+            record.fill.fee,
+            record.fill.feeAsset,
+            record.exchangeEventTimeMs
+          ]
+        });
+      }
+    },
+
+    async markOrderReconciledTerminal(record: ReconciledTerminalOrderRecord): Promise<void> {
+      validateTerminalReconciliation(record);
+
+      await deps.execute({
+        text: `
+          UPDATE orders
+          SET state = $2,
+              updated_at = $3
+          WHERE client_order_id = $1
+            AND state IN (
+              'PENDING_NEW',
+              'NEW',
+              'PARTIALLY_FILLED',
+              'PENDING_CANCEL',
+              'UNKNOWN'
+            )
+        `,
+        values: [record.clientOrderId, record.terminalState, new Date(record.reconciledAtMs)]
+      });
+    },
+
+    async listOrdersForReconciliation(): Promise<readonly LocalOrderForReconciliation[]> {
+      const result = await deps.execute({
+        text: `
+          SELECT
+            client_order_id,
+            symbol,
+            state,
+            (EXTRACT(EPOCH FROM updated_at) * 1000)::bigint::text AS updated_at_ms
+          FROM orders
+          WHERE state IN (
+            'PENDING_NEW',
+            'NEW',
+            'PARTIALLY_FILLED',
+            'PENDING_CANCEL',
+            'UNKNOWN'
+          )
+          ORDER BY updated_at ASC
+        `,
+        values: []
+      });
+
+      return (result.rows ?? []).map(readReconciliationRow);
+    },
+
     async recordPendingOrder(record: PendingOrderRecord): Promise<void> {
       validateRecord(record);
 
@@ -69,6 +209,130 @@ export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryD
       }
     }
   };
+}
+
+function validateOrderExecutionUpdate(record: OrderExecutionUpdateRecord): void {
+  if (record.clientOrderId.trim() === "") throw new Error("clientOrderId is required");
+  if (record.exchangeOrderId.trim() === "") throw new Error("exchangeOrderId is required");
+  if (!isExecutionOrderState(record.state)) throw new Error("state must be an execution order state");
+  if (!isNonNegativeDecimalString(record.executedQuantity)) {
+    throw new Error("executedQuantity must be a non-negative decimal string");
+  }
+  if (!isNonNegativeDecimalString(record.cumulativeQuoteQuantity)) {
+    throw new Error("cumulativeQuoteQuantity must be a non-negative decimal string");
+  }
+  if (!Number.isSafeInteger(record.exchangeEventTimeMs) || record.exchangeEventTimeMs < 0) {
+    throw new Error("exchangeEventTimeMs must be a non-negative safe integer");
+  }
+  if (record.executionId.trim() === "") throw new Error("executionId is required");
+
+  if (record.fill !== undefined) {
+    if (record.fill.tradeId.trim() === "") throw new Error("tradeId is required");
+    if (!/^[A-Z0-9]{2,30}$/.test(record.fill.symbol)) {
+      throw new Error("fill symbol must be an uppercase exchange symbol");
+    }
+    if (!isPositiveDecimalString(record.fill.quantity)) {
+      throw new Error("fill quantity must be a positive decimal string");
+    }
+    if (!isPositiveDecimalString(record.fill.price)) {
+      throw new Error("fill price must be a positive decimal string");
+    }
+    if (!isNonNegativeDecimalString(record.fill.fee)) {
+      throw new Error("fill fee must be a non-negative decimal string");
+    }
+    if (record.fill.feeAsset.trim() === "") throw new Error("fill feeAsset is required");
+  }
+}
+
+function validateTerminalReconciliation(record: ReconciledTerminalOrderRecord): void {
+  if (record.clientOrderId.trim() === "") {
+    throw new Error("clientOrderId is required");
+  }
+
+  if (!isTerminalOrderState(record.terminalState)) {
+    throw new Error("terminalState must be a terminal order state");
+  }
+
+  if (!Number.isSafeInteger(record.reconciledAtMs) || record.reconciledAtMs < 0) {
+    throw new Error("reconciledAtMs must be a non-negative safe integer");
+  }
+}
+
+function readReconciliationRow(value: unknown): LocalOrderForReconciliation {
+  if (value === null || typeof value !== "object") {
+    throw new Error("Invalid order reconciliation row");
+  }
+
+  const row = value as Record<string, unknown>;
+  const clientOrderId = row.client_order_id;
+  const symbol = row.symbol;
+  const state = row.state;
+  const updatedAtMs = row.updated_at_ms;
+
+  if (
+    typeof clientOrderId !== "string" ||
+    clientOrderId.trim() === "" ||
+    typeof symbol !== "string" ||
+    !/^[A-Z0-9]{2,30}$/.test(symbol) ||
+    !isOrderState(state) ||
+    typeof updatedAtMs !== "string" ||
+    !/^\d+$/.test(updatedAtMs)
+  ) {
+    throw new Error("Invalid order reconciliation row");
+  }
+
+  const parsedUpdatedAtMs = Number(updatedAtMs);
+
+  if (!Number.isSafeInteger(parsedUpdatedAtMs)) {
+    throw new Error("Invalid order reconciliation row");
+  }
+
+  return {
+    clientOrderId,
+    symbol,
+    state,
+    updatedAtMs: parsedUpdatedAtMs
+  };
+}
+
+function isOrderState(value: unknown): value is OrderState {
+  return (
+    value === "PENDING_NEW" ||
+    value === "NEW" ||
+    value === "PARTIALLY_FILLED" ||
+    value === "FILLED" ||
+    value === "PENDING_CANCEL" ||
+    value === "CANCELED" ||
+    value === "REJECTED" ||
+    value === "EXPIRED" ||
+    value === "UNKNOWN"
+  );
+}
+
+function isTerminalOrderState(
+  value: unknown
+): value is ReconciledTerminalOrderRecord["terminalState"] {
+  return value === "FILLED" || value === "CANCELED" || value === "REJECTED" || value === "EXPIRED";
+}
+
+function isExecutionOrderState(value: unknown): value is OrderExecutionUpdateRecord["state"] {
+  return (
+    value === "NEW" ||
+    value === "PARTIALLY_FILLED" ||
+    value === "FILLED" ||
+    value === "CANCELED" ||
+    value === "REJECTED" ||
+    value === "EXPIRED" ||
+    value === "UNKNOWN"
+  );
+}
+
+function isNonNegativeDecimalString(value: string): boolean {
+  return /^\d+(?:\.\d+)?$/.test(value);
+}
+
+function isPositiveDecimalString(value: string): boolean {
+  return isNonNegativeDecimalString(value) && /[1-9]/.test(value);
 }
 
 function validateRecord(record: PendingOrderRecord): void {

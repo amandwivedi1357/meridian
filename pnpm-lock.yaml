@@ -108,6 +108,9 @@ importers:
       "@meridian/core":
         specifier: workspace:*
         version: link:../../packages/core
+      "@meridian/db":
+        specifier: workspace:*
+        version: link:../../packages/db
       "@meridian/observability":
         specifier: workspace:*
         version: link:../../packages/observability
@@ -273,7 +276,11 @@ importers:
         specifier: ^10.4.3
         version: 10.6.0
 
-  packages/db: {}
+  packages/db:
+    dependencies:
+      "@meridian/core":
+        specifier: workspace:*
+        version: link:../core
 
   packages/observability:
     dependencies:

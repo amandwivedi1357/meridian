@@ -104,5 +104,33 @@ export const marketDataMigrations: readonly SqlMigration[] = [
       CREATE INDEX IF NOT EXISTS orders_symbol_state_idx
         ON orders (symbol, state);
     `
+  },
+  {
+    id: "004_live_order_execution_schema",
+    sql: `
+      ALTER TABLE orders
+        ADD COLUMN IF NOT EXISTS exchange_order_id text,
+        ADD COLUMN IF NOT EXISTS executed_quantity numeric NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS cumulative_quote_quantity numeric NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS last_exchange_event_time_ms bigint NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS last_execution_id text;
+
+      CREATE TABLE IF NOT EXISTS order_fills (
+        client_order_id text NOT NULL REFERENCES orders(client_order_id) ON DELETE CASCADE,
+        execution_id text NOT NULL,
+        trade_id text NOT NULL,
+        symbol text NOT NULL,
+        side text NOT NULL,
+        quantity numeric NOT NULL,
+        price numeric NOT NULL,
+        fee numeric NOT NULL,
+        fee_asset text NOT NULL,
+        event_time_ms bigint NOT NULL,
+        PRIMARY KEY (client_order_id, execution_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS order_fills_client_event_time_idx
+        ON order_fills (client_order_id, event_time_ms);
+    `
   }
 ];
