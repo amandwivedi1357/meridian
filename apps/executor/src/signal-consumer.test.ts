@@ -1,13 +1,18 @@
-import {
-  Decimal,
-  serializeSignal,
-  type GatewayOrderResult,
-  type Signal
-} from "@meridian/core";
+import { Decimal, serializeSignal, type GatewayOrderResult, type Signal } from "@meridian/core";
 import type { RedisStreamClient } from "@meridian/bus";
 import { describe, expect, it, vi } from "vitest";
 
-import { createSignalConsumer, type SignalConsumerLogger } from "./signal-consumer.js";
+import {
+  createSignalConsumer as createWithoutDefaults,
+  type SignalConsumerLogger
+} from "./signal-consumer.js";
+
+function createSignalConsumer(options: Parameters<typeof createWithoutDefaults>[0]) {
+  return createWithoutDefaults({
+    riskGate: { evaluate: async () => ({ approved: true }) },
+    ...options
+  });
+}
 
 function signal(override: Partial<Signal> = {}): Signal {
   return {
@@ -85,7 +90,7 @@ describe("createSignalConsumer", () => {
       group: "executor",
       consumer: "executor-1",
       logger: logger(),
-      store: { recordPendingOrder: vi.fn() },
+      store: { claimOrderSubmission: vi.fn(async () => true), recordPendingOrder: vi.fn() },
       exchange: { placeOrder: vi.fn() },
       clientOrderIdPrefix: "mrd",
       nowMs: () => 1_500
@@ -109,6 +114,7 @@ describe("createSignalConsumer", () => {
     });
     const log = logger();
     const store = {
+      claimOrderSubmission: vi.fn(async () => true),
       recordPendingOrder: vi.fn(async () => undefined)
     };
     const exchange = {
@@ -165,7 +171,10 @@ describe("createSignalConsumer", () => {
       group: "executor",
       consumer: "executor-1",
       logger: logger(),
-      store: { recordPendingOrder: vi.fn(async () => undefined) },
+      store: {
+        claimOrderSubmission: vi.fn(async () => true),
+        recordPendingOrder: vi.fn(async () => undefined)
+      },
       exchange,
       clientOrderIdPrefix: "mrd",
       nowMs: () => 1_500,
@@ -208,7 +217,10 @@ describe("createSignalConsumer", () => {
       group: "executor",
       consumer: "executor-1",
       logger: log,
-      store: { recordPendingOrder: vi.fn(async () => undefined) },
+      store: {
+        claimOrderSubmission: vi.fn(async () => true),
+        recordPendingOrder: vi.fn(async () => undefined)
+      },
       exchange: {
         placeOrder: vi.fn(async () => {
           throw error;

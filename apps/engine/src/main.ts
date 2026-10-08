@@ -20,7 +20,7 @@ export async function runCliMain(): Promise<EngineMainResult> {
     postgresUrl: config.DATABASE_URL,
     redisUrl: config.REDIS_URL
   });
-  const tradingClient = await createTestnetTradingClientFromEnv();
+  const tradingClient = await createTestnetTradingClientFromEnv({ autoSynchronizeTime: true });
   const symbol = process.env.ENGINE_SYMBOL ?? "BTCUSDT";
   const interval = readInterval(process.env.ENGINE_INTERVAL ?? "15m");
   const strategy = createEngineEmaCrossoverStrategy({
@@ -59,7 +59,10 @@ export async function runCliMain(): Promise<EngineMainResult> {
       group: "engine",
       consumer: `engine-${process.pid}`,
       accountState,
-      signalTtlMs: readPositiveInteger(process.env.ENGINE_SIGNAL_TTL_MS ?? "5000", "ENGINE_SIGNAL_TTL_MS"),
+      signalTtlMs: readPositiveInteger(
+        process.env.ENGINE_SIGNAL_TTL_MS ?? "5000",
+        "ENGINE_SIGNAL_TTL_MS"
+      ),
       maxMarketDataAgeMs: readPositiveInteger(
         process.env.ENGINE_MAX_MARKET_DATA_AGE_MS ?? "30000",
         "ENGINE_MAX_MARKET_DATA_AGE_MS"

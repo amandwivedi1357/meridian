@@ -3,6 +3,38 @@ import { describe, expect, it, vi } from "vitest";
 import { createExecutorRuntimeClients } from "./runtime-clients.js";
 
 describe("createExecutorRuntimeClients", () => {
+  it("pins transactions, rolls back failures and always releases the connection", async () => {
+    const connection = { query: vi.fn(async () => ({ rowCount: 1, rows: [] })), release: vi.fn() };
+    const pool = {
+      query: vi.fn(async () => ({ rowCount: 1, rows: [] })),
+      connect: vi.fn(async () => connection),
+      end: vi.fn(async () => undefined)
+    };
+    const clients = createExecutorRuntimeClients(
+      { postgresUrl: "postgres://localhost/test", redisUrl: "redis://localhost" },
+      {
+        createPostgresPool: () => pool,
+        createRedisCommandClient: () => ({
+          connect: async () => {},
+          quit: async () => {},
+          sendCommand: async () => "OK"
+        })
+      }
+    );
+    await clients.postgres.transaction(async (db) => {
+      await db.execute({ text: "SELECT 1", values: [] });
+    });
+    expect(connection.query).toHaveBeenCalledWith("COMMIT");
+    expect(pool.query).not.toHaveBeenCalled();
+    await expect(
+      clients.postgres.transaction(async () => {
+        throw new Error("failure");
+      })
+    ).rejects.toThrow("failure");
+    expect(connection.query).toHaveBeenCalledWith("ROLLBACK");
+    expect(connection.release).toHaveBeenCalledTimes(2);
+    await clients.close();
+  });
   it("wraps postgres and redis clients behind executor runtime interfaces", async () => {
     const postgresPool = {
       query: vi.fn(async () => ({

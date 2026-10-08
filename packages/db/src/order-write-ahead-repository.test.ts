@@ -18,6 +18,21 @@ function createQueryRecorder() {
 }
 
 describe("createOrderWriteAheadRepository", () => {
+  it.each([0, 1])(
+    "allows submission only when an atomic claim updates one row (%s)",
+    async (rowCount) => {
+      const execute = vi.fn(async (query: SqlQuery) => {
+        void query;
+        return { rowCount };
+      });
+      expect(
+        await createOrderWriteAheadRepository({ execute }).claimOrderSubmission("order-1")
+      ).toBe(rowCount === 1);
+      expect(normalizeSql(execute.mock.calls[0]![0]?.text ?? "")).toContain(
+        "where client_order_id = $1 and state = 'pending_new'"
+      );
+    }
+  );
   const record: PendingOrderRecord = {
     clientOrderId: "same-id",
     strategyId: "ema",
@@ -244,11 +259,7 @@ describe("createOrderWriteAheadRepository", () => {
     expect(sql).toContain("unknown");
     expect(sql).not.toContain("'filled'");
     expect(sql).not.toContain("'canceled'");
-    expect(db.queries[0]?.values).toEqual([
-      "mrd_order_1",
-      "FILLED",
-      new Date(1_704_067_210_000)
-    ]);
+    expect(db.queries[0]?.values).toEqual(["mrd_order_1", "FILLED", new Date(1_704_067_210_000)]);
   });
 
   it("rejects non-terminal reconciliation updates before writing", async () => {

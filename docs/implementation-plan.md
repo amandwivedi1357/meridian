@@ -282,6 +282,8 @@ One symbol, one strategy, one number. Build the thinnest path that proves the ar
 
 ### 3.3 Engine + executor services
 
+Review fixes verified 2026-10-08: executable executor wiring now includes a fail-closed runtime risk gate and authenticated user-data persistence, with startup/reconnect reconciliation readiness. Engine/executor signed calls refresh stale server clocks automatically. Atomic PostgreSQL submission claims prevent blind resend on Redis redelivery; ambiguous claims remain blocked for reconciliation, including crashes before the network send. Expiry is rechecked after asynchronous risk, persistence, and claim work. Local regression suite: 600 passing tests across 90 files; changed-package builds pass. No live orders were sent for this verification. Phase 3.4 comprehensive risk controls and Phase 3.5 live integration/crash criteria remain open.
+
 - [x] **P0** Swap the JSON-bytes codec for generated Protobuf behind `EventCodec` now that the engine is the first real consumer (keep a JSON debug mode)
   - Status: added `packages/proto/proto/market_events.proto` plus generated-style protobuf wire output in `packages/proto/src/generated/market-events.ts`. `encodeMarketEvent` / `decodeMarketEvent` and `marketEventProtobufCodec` now use protobuf binary bytes by default, while `marketEventJsonCodec` remains available for explicit debug/legacy use. The ingestor and engine default codec wiring now uses protobuf; the engine still accepts legacy JSON payloads as a fallback. Verified 2026-10-08 with `@meridian/proto` typecheck/build/tests passing 5 tests, `@meridian/ingestor` typecheck/build/tests passing 72 tests across 27 files, and `@meridian/engine` typecheck/build/tests passing 37 tests across 11 files.
 - [x] **P0** `engine`: consume `market.*`, run strategies via the same interface, publish `Signal` (with `signal_id` and `valid_until_ms`)
@@ -297,18 +299,29 @@ One symbol, one strategy, one number. Build the thinnest path that proves the ar
 
 ### 3.4 Risk engine
 
-- [ ] **P0** Checks from TRD §4.10 (notional, position, open orders, orders/min, daily loss, drawdown, price sanity)
-  - Status: first fail-closed `createBasicRiskGate` covers quantity, min/max notional, max absolute position, max open orders, and unavailable/invalid market-price state for market-order notional checks. Keep open for orders/min, daily loss, drawdown, price sanity bands, durable state wiring, and persisted rejection events.
-- [ ] **P0** Kill switch (Redis flag + cancel-all + audit entry + alert), **failing closed**: an unreadable flag counts as engaged; state also recorded in DB so it survives a Redis wipe
-- [ ] **P0** Every rejection persisted to `risk_events` with a reason
-- [ ] **P1** Auto-trip breakers (drawdown/daily loss) engage the kill switch
+- [x] **P0** Checks from TRD §4.10 (notional, position, open orders, orders/min, daily loss, drawdown, price sanity)
+  - Status 2026-10-08: executable `createRiskEngine` adds configurable symbol/strategy limits, global exposure/open-order checks, atomically reserved sliding-minute budgets, UTC realized-loss checks, durable equity peaks, book-mid price bands, and fail-closed snapshot freshness. Risk is refreshed again before submission. Monetary calculations use Decimal; unsupported valuation/cost-basis inputs block trading.
+- [x] **P0** Kill switch (Redis flag + cancel-all + audit entry + alert), **failing closed**: an unreadable flag counts as engaged; state also recorded in DB so it survives a Redis wipe
+  - Status: migration 005 starts engaged. Both stores must explicitly authorize execution. Idle/outage safety ticks retry cancellation and emit structured/DB/Redis alerts. Manual control uses an authenticated, explicitly confirmed Testnet-only CLI with atomic DB audit/state changes; reset is never automatic.
+- [x] **P0** Every rejection persisted to `risk_events` with a reason
+  - Status: invalid/unsupported/expired/risk-rejected signal messages are audited before ACK; failed audit writes leave messages pending. Final pre-submit rejection is also persisted.
+- [x] **P1** Auto-trip breakers (drawdown/daily loss) engage the kill switch
+  - Status: global and per-strategy daily realized loss plus global peak drawdown latch durable engagement and trigger cancellation. Periodic checks run without a signal. Existing losses/peaks are not cleared by switch reset.
+
+Phase 3.4 implementation/local verification is complete. Verification: 1,052 tests across 124 files, including five isolated PostgreSQL integration tests; DB/executor/engine/ingestor builds and affected lint pass. No live orders were placed or canceled. Full live integration, chaos, kill-switch timing, and 48h trading remain Phase 3.5. Configuration, operator commands and conservative limitations: `docs/risk-engine.md`.
 
 ### 3.5 Verification
 
-- [ ] **P0** Integration tests with Testcontainers (Redis + Timescale) for the full signal → order → fill loop
+- [x] **P0** Integration tests with Testcontainers (Redis + Timescale) for the full signal → order → fill loop
+  - Verified 2026-10-08: disposable Timescale/Redis, real consumer-group reads/ACK and SQL migrations/write-ahead persistence, mocked exchange placement and simulated user-data fill through the production handler; duplicate fill reports preserve one fee-aware fill. This is integration verification, not a real exchange fill or a test of the entire executable risk/account runtime.
 - [ ] **P0** **Parity test**: replay a recorded live session through the backtester; signals must match
+  - Partial verification 2026-10-08: deterministic recorded-format candles match, and a contiguous 14-bar segment derived from the real BTCUSDT trade recording produces three identical nonempty live-runner/backtester signals. Uses the same next-open simulated accounting on both sides, fast/slow periods 2/3, zero fees/slippage. The recording contains trades only and a gap; clean recorded exchange-kline/live-signal replay remains open. No claim of real fill/account parity.
 - [ ] **P0** Crash test: kill executor between "persist" and "send" and between "send" and "ack"; verify no duplicate/lost orders after restart
-- [ ] **P0** Fail-closed test: kill Redis ⇒ zero new orders sent and an alert fired; force the write-ahead insert to fail ⇒ nothing sent
+  - Actual worker process-kill/restart tests pass before the submission claim and after send/before ACK: exactly one simulated placement and no pending message after recovery. Crash after the durable claim/before network send remains UNKNOWN with one pending message, zero placements and no blind resend. At-most-once safety is verified; automatic no-loss/liveness recovery is NOT complete, so this item stays open.
+- [x] **P0** Fail-closed test: kill Redis ⇒ zero new orders sent and an alert fired; force the write-ahead insert to fail ⇒ nothing sent
+  - Verified 2026-10-08 with actual disposable Redis shutdown and an actual PostgreSQL insert-rejection trigger. Zero new placements, durable kill-switch latch, cancellation/alert calls within seconds, and unacknowledged write failure. Cancellation/alert exchange adapters are mocked; only verification containers are stopped.
+
+Verification 2026-10-08: 1,068 tests across 127 files passed, including six disposable infrastructure tests, eight bounded-order-check tests and two parity tests. Authorized short real Testnet check: BTCUSDT LIMIT BUY 0.0002 at 81136.28 (16.227256 USDT), client ID `meridian-smoke-1791485112044`, placed/query NEW, canceled CANCELED, no remaining own open order. Read-only user-data subscription remained OPEN. This order smoke does not prove real fill delivery or end-to-end strategy trading. Full Phase 3.5 is NOT complete; 48h unattended run and screen recording have not been performed. User authorized bounded Testnet orders but requested a shorter check instead of 48h.
 
 **Exit criteria**
 

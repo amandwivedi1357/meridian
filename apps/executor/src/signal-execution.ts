@@ -16,6 +16,7 @@ import type { PendingOrderRecord } from "@meridian/db";
 
 export interface SignalOrderStore {
   readonly recordPendingOrder: (record: PendingOrderRecord) => Promise<void>;
+  readonly claimOrderSubmission: (clientOrderId: string) => Promise<boolean>;
 }
 
 export type RiskDecision =
@@ -37,16 +38,27 @@ export interface SignalExecutionMetrics {
 
 export interface SignalExecutionDeps {
   readonly store: SignalOrderStore;
-  readonly exchange: Pick<ExchangeGateway, "placeOrder">;
+  readonly exchange: Pick<ExchangeGateway, "placeOrder"> & {
+    readonly getOrder?: (request: {
+      symbol: string;
+      clientOrderId: string;
+    }) => Promise<{ clientOrderId: string; symbol: string } | null>;
+  };
   readonly clientOrderIdPrefix: string;
   readonly nowMs: () => number;
   readonly riskGate?: SignalRiskGate;
   readonly metrics?: SignalExecutionMetrics;
+  readonly beforeSubmit?: (signal: Signal) => Promise<void>;
 }
 
 export interface SignalMessageDeps extends SignalExecutionDeps {
   readonly bus: Pick<RedisStreamClient, "xAck">;
   readonly group: string;
+  readonly recordRejection?: (details: {
+    messageId: string;
+    signalId?: string;
+    reason: string;
+  }) => Promise<void>;
 }
 
 export type SignalProcessingResult =
@@ -69,35 +81,40 @@ export async function processSignalMessage(
   message: StreamMessage,
   deps: SignalMessageDeps
 ): Promise<SignalProcessingResult> {
-  if (readField(message.fields.kind) !== "signal") {
+  async function finish(result: SignalProcessingResult) {
+    if (result.outcome !== "submitted") {
+      await deps.recordRejection?.({
+        messageId: message.id,
+        ...(result.signalId === undefined ? {} : { signalId: result.signalId }),
+        reason: result.outcome === "expired" ? "signal-expired" : result.reason
+      });
+    }
     await ackSignalMessage(message, deps);
-    return { outcome: "rejected", reason: "unexpected-message-kind" };
+    return result;
+  }
+  if (readField(message.fields.kind) !== "signal") {
+    return finish({ outcome: "rejected", reason: "unexpected-message-kind" });
   }
 
   const payload = message.fields.payload;
   if (payload === undefined) {
-    await ackSignalMessage(message, deps);
-    return { outcome: "rejected", reason: "missing-payload" };
+    return finish({ outcome: "rejected", reason: "missing-payload" });
   }
 
   let signal: Signal;
   try {
     signal = parseSignalPayload(payload);
   } catch {
-    await ackSignalMessage(message, deps);
-    return { outcome: "rejected", reason: "invalid-payload" };
+    return finish({ outcome: "rejected", reason: "invalid-payload" });
   }
 
   if (isSignalExpired(signal, deps.nowMs())) {
     deps.metrics?.recordExpiredSignal(signal);
-    await ackSignalMessage(message, deps);
-    return { outcome: "expired", signalId: signal.signalId };
+    return finish({ outcome: "expired", signalId: signal.signalId });
   }
 
   const result = await executeSignal(signal, deps);
-  await ackSignalMessage(message, deps);
-
-  return result;
+  return finish(result);
 }
 
 export async function executeSignal(
@@ -131,7 +148,38 @@ export async function executeSignal(
   });
   const request = toGatewayOrderRequest(signal, clientOrderId);
 
+  if (isSignalExpired(signal, deps.nowMs())) {
+    deps.metrics?.recordExpiredSignal(signal);
+    return { outcome: "expired", signalId: signal.signalId };
+  }
   await deps.store.recordPendingOrder(toPendingOrderRecord(signal, request, attempt, deps.nowMs()));
+  if (isSignalExpired(signal, deps.nowMs())) {
+    deps.metrics?.recordExpiredSignal(signal);
+    return { outcome: "expired", signalId: signal.signalId };
+  }
+
+  if (!(await deps.store.claimOrderSubmission(clientOrderId))) {
+    if (deps.exchange.getOrder === undefined)
+      throw new Error("Order recovery query is not configured");
+    const existing = await deps.exchange.getOrder({ symbol: request.symbol, clientOrderId });
+    if (
+      existing === null ||
+      existing.clientOrderId !== clientOrderId ||
+      existing.symbol !== request.symbol
+    ) {
+      throw new Error("Order submission is ambiguous; reconciliation required");
+    }
+    return { outcome: "submitted", signalId: signal.signalId, clientOrderId };
+  }
+  if (isSignalExpired(signal, deps.nowMs())) {
+    deps.metrics?.recordExpiredSignal(signal);
+    return { outcome: "expired", signalId: signal.signalId };
+  }
+  await deps.beforeSubmit?.(signal);
+  if (isSignalExpired(signal, deps.nowMs())) {
+    deps.metrics?.recordExpiredSignal(signal);
+    return { outcome: "expired", signalId: signal.signalId };
+  }
   await deps.exchange.placeOrder(request);
 
   return {
@@ -163,7 +211,7 @@ function validateExecutableSignal(signal: Signal): string | undefined {
 }
 
 async function evaluateRisk(signal: Signal, deps: SignalExecutionDeps): Promise<RiskDecision> {
-  if (deps.riskGate === undefined) return { approved: true };
+  if (deps.riskGate === undefined) return { approved: false, reason: "risk-gate-unavailable" };
   return deps.riskGate.evaluate(signal);
 }
 

@@ -1,4 +1,4 @@
-import { Decimal, type Signal } from "@meridian/core";
+import type { Decimal, Signal } from "@meridian/core";
 
 import type { RiskDecision, SignalRiskGate } from "./signal-execution.js";
 
@@ -66,10 +66,7 @@ function checkQuantity(signal: Signal, limits: BasicRiskGateLimits): RiskDecisio
   return { approved: true };
 }
 
-async function checkNotional(
-  signal: Signal,
-  options: BasicRiskGateOptions
-): Promise<RiskDecision> {
+async function checkNotional(signal: Signal, options: BasicRiskGateOptions): Promise<RiskDecision> {
   if (options.limits.minNotional === undefined && options.limits.maxNotional === undefined) {
     return { approved: true };
   }
@@ -94,10 +91,7 @@ async function checkNotional(
   return { approved: true };
 }
 
-async function checkPosition(
-  signal: Signal,
-  options: BasicRiskGateOptions
-): Promise<RiskDecision> {
+async function checkPosition(signal: Signal, options: BasicRiskGateOptions): Promise<RiskDecision> {
   if (options.limits.maxAbsolutePosition === undefined) {
     return { approved: true };
   }

@@ -1,13 +1,14 @@
 import { createRedisStreamClient, type RedisStreamClient } from "@meridian/bus";
-import type { OrderWriteAheadRepositoryDeps, SqlQuery } from "@meridian/db";
+import type { OrderWriteAheadRepositoryDeps, RiskSqlDatabase, SqlQuery } from "@meridian/db";
 import { Pool } from "pg";
 import { createClient } from "redis";
 
-export interface ExecutorRuntimePostgresClient extends OrderWriteAheadRepositoryDeps {
+export interface ExecutorRuntimePostgresClient extends RiskSqlDatabase {
   readonly close: () => Promise<void>;
 }
 
 export interface ExecutorRuntimeRedisClient extends RedisStreamClient {
+  readonly command: (args: readonly (string | Buffer)[]) => Promise<unknown>;
   readonly connect: () => Promise<void>;
   readonly close: () => Promise<void>;
 }
@@ -19,6 +20,10 @@ export interface ExecutorRuntimeClients {
 }
 
 export interface PostgresPoolLike {
+  readonly connect?: () => Promise<{
+    query: PostgresPoolLike["query"];
+    release: () => void;
+  }>;
   readonly query: (
     text: string,
     values?: readonly unknown[]
@@ -30,6 +35,8 @@ export interface PostgresPoolLike {
 }
 
 export interface RedisCommandClientLike {
+  readonly isReady?: () => boolean;
+  readonly disconnect?: () => void;
   readonly connect: () => Promise<unknown>;
   readonly quit: () => Promise<unknown>;
   readonly sendCommand: (args: readonly (string | Buffer)[]) => Promise<unknown>;
@@ -51,6 +58,28 @@ export function createExecutorRuntimeClients(
 ): ExecutorRuntimeClients {
   const postgresPool = deps.createPostgresPool(config.postgresUrl);
   const postgres: ExecutorRuntimePostgresClient = {
+    async transaction<T>(work: (db: OrderWriteAheadRepositoryDeps) => Promise<T>): Promise<T> {
+      if (postgresPool.connect === undefined) throw new Error("Transaction connection unavailable");
+      const client = await postgresPool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SET LOCAL lock_timeout = '2s'");
+        await client.query("SET LOCAL statement_timeout = '5s'");
+        const result = await work({
+          async execute(query) {
+            const response = await client.query(query.text, query.values);
+            return { rowCount: response.rowCount ?? null, rows: response.rows };
+          }
+        });
+        await client.query("COMMIT");
+        return result;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     async execute(query: SqlQuery) {
       const result = await postgresPool.query(query.text, query.values);
 
@@ -70,13 +99,20 @@ export function createExecutorRuntimeClients(
 
   const redis: ExecutorRuntimeRedisClient = {
     ...streamClient,
+    command: (args) => redisCommandClient.sendCommand(args),
 
     async connect() {
+      if (redisConnected && (redisCommandClient.isReady?.() ?? true)) return;
       await redisCommandClient.connect();
       redisConnected = true;
     },
 
     async close() {
+      if (redisCommandClient.disconnect !== undefined) {
+        redisConnected = false;
+        redisCommandClient.disconnect();
+        return;
+      }
       if (!redisConnected) return;
 
       redisConnected = false;
@@ -95,13 +131,22 @@ export function createExecutorRuntimeClients(
 
 const defaultExecutorRuntimeClientFactoryDeps: ExecutorRuntimeClientFactoryDeps = {
   createPostgresPool(connectionString) {
-    return new Pool({ connectionString });
+    return new Pool({ connectionString, connectionTimeoutMillis: 2_000, query_timeout: 5_000 });
   },
 
   createRedisCommandClient(url) {
-    const client = createClient({ url });
+    const client = createClient({
+      url,
+      socket: { connectTimeout: 1_000, reconnectStrategy: false }
+    });
+    // Operations report errors to their callers; an EventEmitter error must not crash cancellation retries.
+    client.on("error", () => {});
 
     return {
+      isReady: () => client.isReady,
+      disconnect() {
+        if (client.isOpen) client.destroy();
+      },
       connect() {
         return client.connect();
       },

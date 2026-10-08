@@ -1,7 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import { Registry } from "@meridian/observability";
 
-import { createExecutorRuntimeFromDeps } from "./executor-runtime-factory.js";
+import { createExecutorRuntimeFromDeps as createWithoutDefaults } from "./executor-runtime-factory.js";
+
+function createExecutorRuntimeFromDeps(options: Parameters<typeof createWithoutDefaults>[0]) {
+  return createWithoutDefaults({
+    ...options,
+    ...(options.signalConsumer === undefined
+      ? {}
+      : {
+          signalConsumer: {
+            riskGate: { evaluate: async () => ({ approved: true as const }) },
+            ...options.signalConsumer
+          }
+        })
+  });
+}
 import { Decimal, serializeSignal, type GatewayOrderResult, type Signal } from "@meridian/core";
 import type { RedisStreamClient } from "@meridian/bus";
 import type { SqlQuery } from "@meridian/db";
@@ -190,11 +204,7 @@ describe("createExecutorRuntimeFromDeps", () => {
     expect(result.reconciliationReport.terminalOnExchange).toHaveLength(1);
     expect(repairQuery).toBeDefined();
     expect(normalizeSql(repairQuery?.text ?? "")).toContain("update orders");
-    expect(repairQuery?.values).toEqual([
-      "mrd_order_1",
-      "CANCELED",
-      new Date(1_704_067_220_000)
-    ]);
+    expect(repairQuery?.values).toEqual(["mrd_order_1", "CANCELED", new Date(1_704_067_220_000)]);
   });
 
   it("wires reconnect-triggered reconciliation through the same dependencies", async () => {
@@ -383,9 +393,7 @@ describe("createExecutorRuntimeFromDeps", () => {
         signalId: "sig_expired"
       }
     ]);
-    expect(output).toContain(
-      'signals_expired_total{strategyId="ema",symbol="BTCUSDT"} 1'
-    );
+    expect(output).toContain('signals_expired_total{strategyId="ema",symbol="BTCUSDT"} 1');
     expect(bus.xAck).toHaveBeenCalledWith("signals", "executor", "4-0");
   });
 });

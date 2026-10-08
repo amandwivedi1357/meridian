@@ -53,6 +53,24 @@ function setup(overrides: Partial<TestnetTradingClientOptions> = {}) {
 }
 
 describe("createTestnetTradingClient", () => {
+  it("refreshes stale time on opt-in signed operations without resending mutations", async () => {
+    const { client, fetch, setNow } = setup({ autoSynchronizeTime: true });
+    await client.queryOrder(lookup);
+    setNow(61_201);
+    await client.placeOrder({ ...lookup, side: "BUY", type: "MARKET", quantity: "0.001" });
+    const urls = fetch.mock.calls.map((call) => String(call[0]));
+    expect(urls.filter((url) => url.endsWith("/time"))).toHaveLength(2);
+    expect(fetch.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
+    client.close();
+  });
+
+  it("does not send signed requests when automatic clock refresh fails", async () => {
+    const { client, fetch } = setup({ autoSynchronizeTime: true });
+    fetch.mockRejectedValueOnce(new Error("offline"));
+    await expect(client.queryOrder(lookup)).rejects.toThrow("synchronization failed");
+    expect(fetch).toHaveBeenCalledOnce();
+    client.close();
+  });
   it("starts the composed user-data stream with fresh time and shared weights", async () => {
     vi.useFakeTimers();
     class FakeSocket extends EventEmitter {

@@ -19,8 +19,7 @@ export interface SignalConsumerLogger {
   readonly error: (data: Record<string, unknown>, message: string) => void;
 }
 
-export interface SignalConsumerOptions
-  extends Omit<SignalMessageDeps, "group" | "bus"> {
+export interface SignalConsumerOptions extends Omit<SignalMessageDeps, "group" | "bus"> {
   readonly bus: RedisStreamClient;
   readonly group: string;
   readonly consumer: string;
@@ -41,7 +40,9 @@ export function createSignalConsumer(options: SignalConsumerOptions): SignalCons
   const blockMs = options.blockMs ?? 1_000;
   const staleMinIdleMs = options.staleMinIdleMs ?? 30_000;
 
-  async function handleMessage(message: StreamMessage): Promise<SignalProcessingResult | undefined> {
+  async function handleMessage(
+    message: StreamMessage
+  ): Promise<SignalProcessingResult | undefined> {
     try {
       const result = await processSignalMessage(message, {
         bus: options.bus,
@@ -51,7 +52,11 @@ export function createSignalConsumer(options: SignalConsumerOptions): SignalCons
         clientOrderIdPrefix: options.clientOrderIdPrefix,
         nowMs: options.nowMs,
         ...(options.riskGate === undefined ? {} : { riskGate: options.riskGate }),
-        ...(options.metrics === undefined ? {} : { metrics: options.metrics })
+        ...(options.beforeSubmit === undefined ? {} : { beforeSubmit: options.beforeSubmit }),
+        ...(options.metrics === undefined ? {} : { metrics: options.metrics }),
+        ...(options.recordRejection === undefined
+          ? {}
+          : { recordRejection: options.recordRejection })
       });
 
       logResult(result, options.logger);
@@ -88,7 +93,10 @@ export function createSignalConsumer(options: SignalConsumerOptions): SignalCons
 
       if (results === null) return [];
 
-      return processMessages(results.flatMap((result) => result.messages), handleMessage);
+      return processMessages(
+        results.flatMap((result) => result.messages),
+        handleMessage
+      );
     },
 
     async claimStaleOnce() {

@@ -52,6 +52,17 @@ export interface OrderWriteAheadRepositoryDeps {
 
 export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryDeps) {
   return {
+    async claimOrderSubmission(clientOrderId: string): Promise<boolean> {
+      if (clientOrderId.trim() === "") throw new Error("clientOrderId is required");
+      // Persist ambiguity before network I/O: a crash must never authorize a second sender.
+      const result = await deps.execute({
+        text: `UPDATE orders SET state = 'UNKNOWN', updated_at = now()
+               WHERE client_order_id = $1 AND state = 'PENDING_NEW'`,
+        values: [clientOrderId]
+      });
+      if (result.rowCount === null) throw new Error("Submission claim result is unavailable");
+      return result.rowCount === 1;
+    },
     async recordOrderExecutionUpdate(record: OrderExecutionUpdateRecord): Promise<void> {
       validateOrderExecutionUpdate(record);
 
@@ -214,7 +225,8 @@ export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryD
 function validateOrderExecutionUpdate(record: OrderExecutionUpdateRecord): void {
   if (record.clientOrderId.trim() === "") throw new Error("clientOrderId is required");
   if (record.exchangeOrderId.trim() === "") throw new Error("exchangeOrderId is required");
-  if (!isExecutionOrderState(record.state)) throw new Error("state must be an execution order state");
+  if (!isExecutionOrderState(record.state))
+    throw new Error("state must be an execution order state");
   if (!isNonNegativeDecimalString(record.executedQuantity)) {
     throw new Error("executedQuantity must be a non-negative decimal string");
   }

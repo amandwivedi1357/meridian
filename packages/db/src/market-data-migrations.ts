@@ -132,5 +132,51 @@ export const marketDataMigrations: readonly SqlMigration[] = [
       CREATE INDEX IF NOT EXISTS order_fills_client_event_time_idx
         ON order_fills (client_order_id, event_time_ms);
     `
+  },
+  {
+    id: "005_risk_controls_schema",
+    sql: `
+      CREATE TABLE IF NOT EXISTS risk_events (
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        ts timestamptz NOT NULL DEFAULT now(),
+        type text NOT NULL,
+        details jsonb NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        ts timestamptz NOT NULL DEFAULT now(),
+        actor text NOT NULL,
+        action text NOT NULL,
+        details jsonb NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS risk_control_state (
+        scope text PRIMARY KEY,
+        engaged boolean NOT NULL DEFAULT true,
+        reason text NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO risk_control_state (scope, engaged, reason)
+        VALUES ('global', true, 'awaiting-explicit-activation') ON CONFLICT DO NOTHING;
+      CREATE TABLE IF NOT EXISTS risk_equity_state (
+        scope text PRIMARY KEY,
+        quote_asset text NOT NULL,
+        peak numeric NOT NULL CHECK (peak > 0),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS risk_reservations (
+        signal_id text PRIMARY KEY,
+        strategy_id text NOT NULL,
+        symbol text NOT NULL,
+        side text NOT NULL CHECK (side IN ('BUY', 'SELL')),
+        quantity numeric NOT NULL CHECK (quantity > 0),
+        notional numeric NOT NULL CHECK (notional > 0),
+        reserved_at_ms bigint NOT NULL,
+        valid_until_ms bigint NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS risk_reservations_strategy_time_idx
+        ON risk_reservations (strategy_id, reserved_at_ms);
+      CREATE INDEX IF NOT EXISTS risk_events_ts_idx ON risk_events (ts DESC);
+      CREATE INDEX IF NOT EXISTS orders_strategy_created_idx ON orders (strategy_id, created_at);
+    `
   }
 ];

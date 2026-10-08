@@ -14,16 +14,21 @@ export interface ExecutorMainRunnerDeps {
   readonly errorDelayMs: number;
   readonly staleClaimIntervalMs: number;
   readonly nowMs: () => number;
+  readonly safetyTick?: () => Promise<void>;
+  readonly onStartupFailure?: (error: unknown) => Promise<void>;
 }
 
 export interface ExecutorMainResult extends ExecutorServiceLoopResult {
   readonly kind: "executor-stopped";
 }
 
-export async function runExecutorMain(
-  deps: ExecutorMainRunnerDeps
-): Promise<ExecutorMainResult> {
-  await deps.runtime.start();
+export async function runExecutorMain(deps: ExecutorMainRunnerDeps): Promise<ExecutorMainResult> {
+  try {
+    await deps.runtime.start();
+  } catch (error) {
+    if (deps.onStartupFailure === undefined) throw error;
+    await deps.onStartupFailure(error);
+  }
 
   const result = await runExecutorServiceLoop({
     runtime: deps.runtime,
@@ -33,7 +38,8 @@ export async function runExecutorMain(
     idleDelayMs: deps.idleDelayMs,
     errorDelayMs: deps.errorDelayMs,
     staleClaimIntervalMs: deps.staleClaimIntervalMs,
-    nowMs: deps.nowMs
+    nowMs: deps.nowMs,
+    ...(deps.safetyTick === undefined ? {} : { safetyTick: deps.safetyTick })
   });
 
   return {

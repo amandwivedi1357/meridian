@@ -6,8 +6,23 @@ function normalizeSql(sql: string): string {
 }
 
 describe("market data migrations", () => {
+  it("creates durable risk controls, audit events, equity peaks and reservations", () => {
+    const migration = marketDataMigrations[4];
+    expect(migration?.id).toBe("005_risk_controls_schema");
+    const sql = normalizeSql(migration?.sql ?? "");
+    for (const table of [
+      "risk_events",
+      "audit_log",
+      "risk_control_state",
+      "risk_equity_state",
+      "risk_reservations"
+    ]) {
+      expect(sql).toContain(`create table if not exists ${table}`);
+    }
+    expect(sql).toContain("values ('global', true, 'awaiting-explicit-activation')");
+  });
   it("creates Timescale extension and trades/klines hypertables", () => {
-    expect(marketDataMigrations).toHaveLength(4);
+    expect(marketDataMigrations).toHaveLength(5);
 
     const migration = marketDataMigrations[0];
     expect(migration?.id).toBe("001_market_data_schema");

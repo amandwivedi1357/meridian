@@ -10,7 +10,8 @@ import {
   type Signal,
   type Strategy,
   type StrategyContext,
-  type SymbolCode
+  type SymbolCode,
+  type Trade
 } from "@meridian/core";
 
 export type LiveMarketEvent =
@@ -20,7 +21,7 @@ export type LiveMarketEvent =
     }
   | {
       readonly kind: "trade";
-      readonly trade: import("@meridian/core").Trade;
+      readonly trade: Trade;
     }
   | {
       readonly kind: "book";
@@ -78,10 +79,7 @@ export function createLiveStrategyRunner(deps: LiveStrategyRunnerDeps): LiveStra
       const nowMs = deps.nowMs();
       const ageMs = nowMs - eventTimeMs(event);
 
-      if (
-        deps.maxMarketDataAgeMs !== undefined &&
-        (ageMs < 0 || ageMs > deps.maxMarketDataAgeMs)
-      ) {
+      if (deps.maxMarketDataAgeMs !== undefined && (ageMs < 0 || ageMs > deps.maxMarketDataAgeMs)) {
         deps.logger?.warn?.(
           {
             strategyId: deps.strategy.id,

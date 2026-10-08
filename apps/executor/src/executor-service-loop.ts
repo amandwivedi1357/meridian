@@ -20,6 +20,7 @@ export interface ExecutorServiceLoopOptions {
   readonly errorDelayMs: number;
   readonly staleClaimIntervalMs: number;
   readonly nowMs: () => number;
+  readonly safetyTick?: () => Promise<void>;
 }
 
 export interface ExecutorServiceLoopResult {
@@ -40,6 +41,7 @@ export async function runExecutorServiceLoop(
     const nowMs = options.nowMs();
 
     try {
+      await options.safetyTick?.();
       if (nowMs >= nextStaleClaimAtMs) {
         const staleResults = await options.runtime.claimStaleSignalsOnce();
         staleClaimIterations += 1;

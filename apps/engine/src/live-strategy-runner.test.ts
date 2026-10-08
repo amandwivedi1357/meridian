@@ -1,4 +1,4 @@
-import { Decimal, type Candle, type Position, type Strategy } from "@meridian/core";
+import { Decimal, type Candle, type Strategy } from "@meridian/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { createLiveStrategyRunner } from "./live-strategy-runner.js";
@@ -16,15 +16,6 @@ function candle(overrides: Partial<Candle> = {}): Candle {
     volume: new Decimal("10"),
     closed: true,
     ...overrides
-  };
-}
-
-function flatPosition(symbol = "BTCUSDT"): Position {
-  return {
-    symbol,
-    quantity: new Decimal(0),
-    avgEntry: new Decimal(0),
-    realizedPnl: new Decimal(0)
   };
 }
 

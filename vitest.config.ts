@@ -7,6 +7,6 @@ export default defineConfig({
       reporter: ["text", "lcov"]
     },
     globals: false,
-    include: ["**/*.test.ts"]
+    include: ["**/*.test.ts", "tests/phase-3-5/*.test.mjs"]
   }
 });

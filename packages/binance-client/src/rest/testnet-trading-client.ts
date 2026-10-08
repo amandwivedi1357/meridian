@@ -3,12 +3,14 @@ import { createBinanceAccountClient } from "./account-client.js";
 import { createBinanceOrderClient, type OrderClientOptions } from "./order-client.js";
 import { TokenBucketRateLimiter } from "./rate-limiter.js";
 import { createServerTimeClock } from "./server-time-clock.js";
+import type { PlaceOrderParams, OrderLookupParams, OpenOrdersParams } from "./order-schemas.js";
 import {
   createTestnetUserDataStream,
   type UserDataStreamOptions
 } from "../streams/user-data-stream.js";
 
 export interface TestnetTradingClientOptions extends Omit<OrderClientOptions, "now"> {
+  readonly autoSynchronizeTime?: boolean;
   readonly nowMs?: () => number;
   readonly maxClockAgeMs?: number;
   readonly maxRoundTripMs?: number;
@@ -66,13 +68,13 @@ export function createTestnetTradingClient(options: TestnetTradingClientOptions)
     rateLimiter,
     now: clock.now
   });
-  
+
   const account = createBinanceAccountClient({
-  ...options,
-  fetch: fetchRequest,
-  rateLimiter,
-  now: clock.now
-});
+    ...options,
+    fetch: fetchRequest,
+    rateLimiter,
+    now: clock.now
+  });
   let synchronization: Promise<void> | undefined;
   function synchronizeTime(): Promise<void> {
     if (synchronization === undefined) {
@@ -97,5 +99,37 @@ export function createTestnetTradingClient(options: TestnetTradingClientOptions)
     ...(options.recvWindowMs === undefined ? {} : { recvWindowMs: options.recvWindowMs }),
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs })
   });
-  return { ...orders, ...account, synchronizeTime, userData, close: () => userData.close() };
+  async function prepareSignedOperation(): Promise<void> {
+    if (!options.autoSynchronizeTime) return;
+    try {
+      clock.now();
+    } catch {
+      await synchronizeTime();
+    }
+  }
+  return {
+    async placeOrder(input: PlaceOrderParams) {
+      await prepareSignedOperation();
+      return orders.placeOrder(input);
+    },
+    async cancelOrder(input: OrderLookupParams) {
+      await prepareSignedOperation();
+      return orders.cancelOrder(input);
+    },
+    async queryOrder(input: OrderLookupParams) {
+      await prepareSignedOperation();
+      return orders.queryOrder(input);
+    },
+    async openOrders(input: OpenOrdersParams = {}) {
+      await prepareSignedOperation();
+      return orders.openOrders(input);
+    },
+    async getBalances() {
+      await prepareSignedOperation();
+      return account.getBalances();
+    },
+    synchronizeTime,
+    userData,
+    close: () => userData.close()
+  };
 }

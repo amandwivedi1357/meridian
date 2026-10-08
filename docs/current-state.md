@@ -18,7 +18,7 @@ This file is the quick resume point for the project. Use it with `docs/implement
 Suggested first message when resuming in a new chat:
 
 ```txt
-Read docs/current-state.md and docs/implementation-plan.md, then continue Phase 3.4 risk engine. Phase 3.3 is complete in local code/tests: engine consumes protobuf-backed market streams -> strategy runs with live account context -> signal published -> executor consumes signal -> validation/risk hook -> write-ahead -> Testnet gateway send path. Live StrategyContext positions/balances are wired from persisted fills plus signed Testnet account snapshots, and market EventCodec now defaults to protobuf binary with JSON debug/legacy fallback. The soak monitor is paused; do not restart it automatically. I will write implementation code unless I explicitly ask you to implement; you guide me and write/update tests.
+Read docs/current-state.md and docs/implementation-plan.md, then continue the remaining Phase 3.5 acceptance work. Phase 3.4 is locally complete. Disposable Redis/Timescale signal/fill, process-kill and fail-closed tests pass; real bounded Testnet placement/query/cancel passed. Claim-before-send ambiguity remains safely pending, not automatically recovered. Trade-derived replay parity passes but clean recorded-kline replay, real end-to-end fills, 48h unattended trading and screen recording remain open. See docs/phase-3-5-verification.md for evidence and commands. New installs start kill-switch engaged. Do not launch unattended trading or expand bounded Testnet authorization without approval. The soak monitor remains paused. Codex owns tests; implementation ownership follows the working agreement unless I explicitly ask Codex to code.
 ```
 
 Before continuing feature work, verify the baseline:
@@ -51,6 +51,8 @@ The project should be resume-grade, not a toy app. The core engineering story is
 - Binance REST/WebSocket client in progress
 
 ## Current Phase
+
+Latest verification 2026-10-08: Phase 3.5 is partially verified, NOT complete. Regression passed 1,068 tests / 127 files including actual disposable-container outages and child-process deaths. Real authorized Testnet smoke placed one BTCUSDT 0.0002 LIMIT BUY at 81136.28 and canceled it; own order is not open. Read-only signed/user-data check passed. Recorded-trade-derived parity passed on 14 contiguous 15m bars with three identical signals; recording gaps and lack of recorded klines remain explicit limitations. UNKNOWN claim-before-send recovery remains manual/fail-closed. No 48h run or screen recording was performed. Details and repeatable verification commands: `docs/phase-3-5-verification.md`.
 
 Review fixes verified on 2026-10-07: simulator submissions carry explicit client order IDs through pending orders into fills; gateway snapshots update by identity and completed orders remain queryable. Duplicate IDs and untagged/mismatched fills fail closed. Partial fills preserve `PENDING_CANCEL` until the cancellation outcome arrives. Binance order serialization uses fixed-point decimal strings. Write-ahead persistence now checks immutable order details atomically on client-ID conflict and requires the database adapter's `rowCount` result; mismatches throw instead of silently succeeding, while identical retries preserve state/timestamps. PostgreSQL verification used a temporary table and rollback: insert, identical retry, and nine conflicting retries passed. The downstream third-migration expectation and three lint errors are fixed. Affected-package regression baseline: 823 tests across 85 files; build/typecheck and lint pass. No live Testnet orders were placed or canceled for these fixes. Phase 3.2 reconciliation, out-of-order handling, and other remaining checklist items are still open.
 
@@ -268,6 +270,21 @@ pnpm --filter @meridian/config test
 ```
 
 ## Next Work
+
+### Phase 3.4 Complete Locally (2026-10-08)
+
+Codex implemented this subphase at the user's explicit request. The executor now wires durable risk reservations, per-symbol/strategy limits, global exposure/open-order limits, sliding-minute rates, UTC daily realized loss, durable equity drawdown, price sanity/freshness, an authenticated-reset fail-closed kill switch, cancellation retries during idle/outage periods, and audit-before-ACK rejection persistence. Migration 005 starts engaged; no automatic activation or peak/loss clearing occurs. See `docs/risk-engine.md` and `.env.example` before operator activation.
+
+Verification: 1,052 tests across 124 files, including five isolated PostgreSQL tests; changed/dependent builds and affected lint pass. No live exchange orders were placed/canceled, no real Redis risk flags were changed, and application DB tables were not migrated during verification. Next: Phase 3.5 integration/parity/crash/fail-closed verification. The 48h Testnet run and live cancellation timing are not passed yet. Soak monitoring remains paused.
+
+### Phase 3.3 Review Fixes (2026-10-08)
+
+- The real executor now requires a configured risk gate, starts authenticated user-data tracking, persists order updates, and waits for reconciliation before startup/reconnect execution. Persistence or unresolved reconciliation failures block execution.
+- Engine and executor signed clients opt into automatic server-clock refresh; refresh failure cannot authorize a signed operation.
+- Submission is claimed atomically in PostgreSQL (`PENDING_NEW` -> `UNKNOWN`) before sending. Redis redelivery queries an already claimed order instead of placing it again. Missing/ambiguous exchange results remain blocked for operator reconciliation; a crash between claim and send may leave an unsent `UNKNOWN` record. Never reset that record and retry blindly.
+- Signal expiry is checked after risk evaluation, persistence, and submission claim. Already persisted records may remain pending/unknown when expiry interrupts processing.
+- Prototype runtime defaults: `EXECUTOR_MIN_NOTIONAL=5`, `EXECUTOR_MAX_NOTIONAL=25`, `EXECUTOR_MAX_QUANTITY=0.0002`, `EXECUTOR_MAX_POSITION=0.001`, `EXECUTOR_MAX_OPEN_ORDERS=1`. These are conservative bootstrap limits, not a completed Phase 3.4 risk engine. Existing Testnet base-asset holdings count toward the position limit and can cause rejection. Limits are configurable through environment variables.
+- Verification: 600 tests across 90 files passed for engine, executor, Binance client, DB, core, protobuf, and ingestor. Changed packages build successfully. No live exchange orders were placed/canceled for these fixes; full live integration/crash testing remains open in Phase 3.5.
 
 ### Live Monitoring Dashboard
 

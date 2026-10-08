@@ -15,6 +15,10 @@ When progress is reported:
 
 ## Open Items
 
+- [ ] **`reliability` / `prototype-gap`: Extend risk valuation and operator rebaselining without weakening fail-closed behavior.**
+  - Recorded: 2026-10-08. Phase 3.4 blocks unpriceable account assets, missing opening cost basis, and third-asset fees without historical conversion. Portfolio snapshots/fill replay are conservative but become expensive with many assets or a long fill history.
+  - Acceptance: support explicit, audited opening inventory and Testnet-reset/cash-flow equity rebaselining; persist exact historical fee conversion and incremental accounting; improve snapshot collection without hiding stale data. Current unsupported inputs must remain blocked until their values are reliable. See `docs/risk-engine.md`.
+
 - [ ] **`reliability` / `prototype-gap`: Add REST account-trade catch-up after executor downtime.**
   - Recorded: 2026-10-08. Phase 3.2 now persists live user-data execution reports into `order_fills` with fee/fee_asset and reconciles local order state on startup/reconnect by querying orders. This is enough for the current prototype lifecycle foundation, but it does not yet call Binance account trade history to backfill fills that were missed while the executor was offline.
   - Acceptance: after reconnect/startup, query recent account trades for affected symbols/orders, dedupe by trade/execution identity, persist fee-aware fills, and prove a missed-fill downtime scenario in tests.

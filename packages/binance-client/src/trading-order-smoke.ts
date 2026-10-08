@@ -4,6 +4,7 @@ import { Decimal } from "@meridian/core";
 import { BinanceRestClient } from "./rest/client.js";
 import { BinanceSignedRequestError } from "./rest/authenticated-http.js";
 import { createTestnetTradingClientFromEnv } from "./rest/testnet-runtime.js";
+import { runBoundedOrderCheck } from "./rest/bounded-order-check.js";
 
 interface Args {
   readonly symbol: string;
@@ -52,6 +53,15 @@ async function main(): Promise<void> {
   config({ path: fileURLToPath(new URL("../../../.env", import.meta.url)) });
 
   const args = parseArgs(process.argv.slice(2));
+  const quantity = new Decimal(args.quantity);
+  if (
+    args.symbol !== "BTCUSDT" ||
+    !quantity.isFinite() ||
+    quantity.lte(0) ||
+    quantity.gt("0.0002")
+  ) {
+    throw new Error("Testnet smoke is bounded to BTCUSDT and at most 0.0002 BTC");
+  }
   const client = await createTestnetTradingClientFromEnv();
   const clientOrderId = `meridian-smoke-${Date.now()}`;
   const price = await choosePassiveBuyPrice(args.symbol);
@@ -59,42 +69,15 @@ async function main(): Promise<void> {
   try {
     await client.synchronizeTime();
 
-    const placed = await client.placeOrder({
-      symbol: args.symbol,
-      side: "BUY",
-      type: "LIMIT",
-      quantity: args.quantity,
-      price,
-      timeInForce: "GTC",
-      clientOrderId,
-    });
-
-    const queried = await client.queryOrder({
-      symbol: args.symbol,
-      clientOrderId,
-    });
-
-    const canceled = await client.cancelOrder({
-      symbol: args.symbol,
-      clientOrderId,
-    });
-
-    const openOrders = await client.openOrders({ symbol: args.symbol });
-
     console.log(
-      JSON.stringify({
-        environment: "testnet",
-        symbol: args.symbol,
-        clientOrderId,
-        price,
-        quantity: args.quantity,
-        placedStatus: placed.status,
-        queriedStatus: queried.status,
-        canceledStatus: canceled.status,
-        stillOpen: openOrders.some((order) => order.clientOrderId === clientOrderId),
-        ordersPlaced: 1,
-        ordersCanceled: 1,
-      })
+      JSON.stringify(
+        await runBoundedOrderCheck(client, {
+          symbol: args.symbol,
+          quantity: args.quantity,
+          price,
+          clientOrderId
+        })
+      )
     );
   } finally {
     client.close();
@@ -109,7 +92,7 @@ void main().catch((error: unknown) => {
         outcome: error.outcome,
         status: error.status,
         code: error.code,
-        retryAfter: error.retryAfter,
+        retryAfter: error.retryAfter
       })
     );
   } else {

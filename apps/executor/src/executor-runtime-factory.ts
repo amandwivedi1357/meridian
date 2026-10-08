@@ -11,6 +11,8 @@ import { registerExecutorMetrics } from "./executor-metrics.js";
 import { createExecutorRuntime, type ExecutorRuntime } from "./executor-runtime.js";
 import { createSignalConsumer, type SignalConsumerLogger } from "./signal-consumer.js";
 import type { StartupReconciliationLogger } from "./startup-reconciliation.js";
+import type { SignalRiskGate } from "./signal-execution.js";
+import type { SignalMessageDeps } from "./signal-execution.js";
 
 export interface ExecutorRuntimeFactoryDeps {
   readonly database: OrderWriteAheadRepositoryDeps;
@@ -21,6 +23,9 @@ export interface ExecutorRuntimeFactoryDeps {
   readonly signalConsumer?: {
     readonly bus: RedisStreamClient;
     readonly exchange: Pick<ExchangeGateway, "placeOrder">;
+    readonly riskGate?: SignalRiskGate;
+    readonly recordRejection?: SignalMessageDeps["recordRejection"];
+    readonly beforeSubmit?: SignalMessageDeps["beforeSubmit"];
     readonly group: string;
     readonly consumer: string;
     readonly clientOrderIdPrefix: string;
@@ -30,9 +35,7 @@ export interface ExecutorRuntimeFactoryDeps {
   };
 }
 
-export function createExecutorRuntimeFromDeps(
-  deps: ExecutorRuntimeFactoryDeps
-): ExecutorRuntime {
+export function createExecutorRuntimeFromDeps(deps: ExecutorRuntimeFactoryDeps): ExecutorRuntime {
   const store = createOrderWriteAheadRepository(deps.database);
   const metrics =
     deps.metricsRegistry === undefined
@@ -52,8 +55,20 @@ export function createExecutorRuntimeFromDeps(
           consumer: deps.signalConsumer.consumer,
           logger: deps.logger,
           store,
-          exchange: deps.signalConsumer.exchange,
+          exchange: {
+            ...deps.signalConsumer.exchange,
+            getOrder: (request) => reconciliationExchange.getOrder(request)
+          },
+          ...(deps.signalConsumer.riskGate === undefined
+            ? {}
+            : { riskGate: deps.signalConsumer.riskGate }),
           clientOrderIdPrefix: deps.signalConsumer.clientOrderIdPrefix,
+          ...(deps.signalConsumer.beforeSubmit === undefined
+            ? {}
+            : { beforeSubmit: deps.signalConsumer.beforeSubmit }),
+          ...(deps.signalConsumer.recordRejection === undefined
+            ? {}
+            : { recordRejection: deps.signalConsumer.recordRejection }),
           nowMs: deps.nowMs ?? Date.now,
           ...(metrics === undefined ? {} : { metrics }),
           ...(deps.signalConsumer.readCount === undefined

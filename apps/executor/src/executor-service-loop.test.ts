@@ -20,6 +20,27 @@ function submitted(signalId: string): SignalProcessingResult {
 }
 
 describe("runExecutorServiceLoop", () => {
+  it("retries the safety tick even when Redis signal consumption fails", async () => {
+    let iterations = 0;
+    const safetyTick = vi.fn(async () => undefined);
+    await runExecutorServiceLoop({
+      runtime: {
+        claimStaleSignalsOnce: vi.fn(async () => {
+          throw new Error("Redis down");
+        }),
+        pollSignalsOnce: vi.fn()
+      },
+      logger: logger(),
+      shouldContinue: () => iterations++ < 2,
+      sleepMs: async () => {},
+      idleDelayMs: 1,
+      errorDelayMs: 1,
+      staleClaimIntervalMs: 1000,
+      nowMs: () => 1000,
+      safetyTick
+    });
+    expect(safetyTick).toHaveBeenCalledTimes(2);
+  });
   it("polls until stopped and sleeps only after idle polls", async () => {
     let iterations = 0;
     const sleepMs = vi.fn(async () => undefined);
@@ -76,10 +97,7 @@ describe("runExecutorServiceLoop", () => {
 
     expect(result.staleClaimIterations).toBe(2);
     expect(runtime.claimStaleSignalsOnce).toHaveBeenCalledTimes(2);
-    expect(log.info).toHaveBeenCalledWith(
-      { processed: 1 },
-      "stale signal messages processed"
-    );
+    expect(log.info).toHaveBeenCalledWith({ processed: 1 }, "stale signal messages processed");
   });
 
   it("backs off and continues when an iteration fails", async () => {
@@ -109,10 +127,7 @@ describe("runExecutorServiceLoop", () => {
     expect(result.pollIterations).toBe(1);
     expect(runtime.pollSignalsOnce).toHaveBeenCalledTimes(2);
     expect(sleepMs).toHaveBeenCalledWith(100);
-    expect(log.error).toHaveBeenCalledWith(
-      { error },
-      "executor service loop iteration failed"
-    );
+    expect(log.error).toHaveBeenCalledWith({ error }, "executor service loop iteration failed");
   });
 
   it("logs lifecycle start and stop with iteration counts", async () => {
