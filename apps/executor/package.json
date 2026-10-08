@@ -16,9 +16,12 @@
     "@meridian/config": "workspace:*",
     "@meridian/core": "workspace:*",
     "@meridian/db": "workspace:*",
-    "@meridian/observability": "workspace:*"
+    "@meridian/observability": "workspace:*",
+    "pg": "^8.23.1",
+    "redis": "^6.3.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.1"
   }
 }

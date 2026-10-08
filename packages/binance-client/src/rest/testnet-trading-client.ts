@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createBinanceAccountClient } from "./account-client.js";
 import { createBinanceOrderClient, type OrderClientOptions } from "./order-client.js";
 import { TokenBucketRateLimiter } from "./rate-limiter.js";
 import { createServerTimeClock } from "./server-time-clock.js";
@@ -65,6 +66,13 @@ export function createTestnetTradingClient(options: TestnetTradingClientOptions)
     rateLimiter,
     now: clock.now
   });
+  
+  const account = createBinanceAccountClient({
+  ...options,
+  fetch: fetchRequest,
+  rateLimiter,
+  now: clock.now
+});
   let synchronization: Promise<void> | undefined;
   function synchronizeTime(): Promise<void> {
     if (synchronization === undefined) {
@@ -89,5 +97,5 @@ export function createTestnetTradingClient(options: TestnetTradingClientOptions)
     ...(options.recvWindowMs === undefined ? {} : { recvWindowMs: options.recvWindowMs }),
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs })
   });
-  return { ...orders, synchronizeTime, userData, close: () => userData.close() };
+  return { ...orders, ...account, synchronizeTime, userData, close: () => userData.close() };
 }

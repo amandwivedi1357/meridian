@@ -139,6 +139,25 @@ describe("createTestnetTradingClient", () => {
     ]);
   });
 
+  it("wires account balance snapshots through the same synchronized clock", async () => {
+    const { client, fetch, acquire } = setup();
+    await client.synchronizeTime();
+    fetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          balances: [{ asset: "USDT", free: "1000.25", locked: "10" }]
+        })
+      )
+    );
+
+    const balances = await client.getBalances();
+
+    expect(balances[0]?.asset).toBe("USDT");
+    expect(balances[0]?.free.toString()).toBe("1000.25");
+    expect(new URL(String(fetch.mock.calls[1]?.[0])).pathname).toBe("/api/v3/account");
+    expect(acquire.mock.calls).toEqual([[1], [20]]);
+  });
+
   it("deduplicates concurrent synchronization and weight acquisition", async () => {
     const { client, fetch, acquire } = setup();
     await Promise.all([

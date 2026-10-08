@@ -1,5 +1,7 @@
 import pino, { type LoggerOptions } from "pino";
-import { Registry, collectDefaultMetrics } from "prom-client";
+import { Registry as PrometheusRegistry, collectDefaultMetrics } from "prom-client";
+
+export { Counter, Gauge, Histogram, Registry } from "prom-client";
 
 const redactPaths = [
   "req.headers.authorization",
@@ -24,7 +26,7 @@ export function createLogger(name: string, options: LoggerOptions = {}) {
 }
 
 export function createMetricsRegistry(serviceName: string) {
-  const registry = new Registry();
+  const registry = new PrometheusRegistry();
   registry.setDefaultLabels({ service: serviceName });
   collectDefaultMetrics({ register: registry });
   return registry;

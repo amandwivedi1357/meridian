@@ -1,4 +1,4 @@
-import { marketEventJsonCodec, type EventCodec, type MarketEventMessage } from "@meridian/proto";
+import { marketEventProtobufCodec, type EventCodec, type MarketEventMessage } from "@meridian/proto";
 import { ingestMarketStreamEvent, type MarketIngestResult } from "./market-ingestor.js";
 import { writeMarketEventBatch } from "./market-batch-writer.js";
 import type { MarketBatchWriterDeps } from "./market-batch-writer.js";
@@ -16,7 +16,7 @@ export interface MarketIngestor {
 }
 
 export function createMarketIngestor(deps: MarketIngestorFactoryDeps): MarketIngestor {
-  const codec = deps.codec ?? marketEventJsonCodec;
+  const codec = deps.codec ?? marketEventProtobufCodec;
 
   return {
     ingest(input) {

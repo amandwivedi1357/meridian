@@ -18,7 +18,7 @@ This file is the quick resume point for the project. Use it with `docs/implement
 Suggested first message when resuming in a new chat:
 
 ```txt
-Read docs/current-state.md and docs/implementation-plan.md, then continue from Phase 3.2 order lifecycle. Phase 3.1 is complete: authenticated Testnet client code, shared ExchangeGateway / MarketDataSource contracts, Binance/simulator adapters, read-only Testnet auth smoke, and live Testnet place/query/cancel smoke are verified. The soak monitor is paused; do not restart it automatically. I will write implementation code unless I explicitly ask you to implement; you guide me and write/update tests.
+Read docs/current-state.md and docs/implementation-plan.md, then continue Phase 3.4 risk engine. Phase 3.3 is complete in local code/tests: engine consumes protobuf-backed market streams -> strategy runs with live account context -> signal published -> executor consumes signal -> validation/risk hook -> write-ahead -> Testnet gateway send path. Live StrategyContext positions/balances are wired from persisted fills plus signed Testnet account snapshots, and market EventCodec now defaults to protobuf binary with JSON debug/legacy fallback. The soak monitor is paused; do not restart it automatically. I will write implementation code unless I explicitly ask you to implement; you guide me and write/update tests.
 ```
 
 Before continuing feature work, verify the baseline:
@@ -26,6 +26,12 @@ Before continuing feature work, verify the baseline:
 ```powershell
 pnpm --filter @meridian/binance-client typecheck
 pnpm --filter @meridian/binance-client test
+pnpm --filter @meridian/proto typecheck
+pnpm --filter @meridian/proto test
+pnpm --filter @meridian/ingestor typecheck
+pnpm --filter @meridian/ingestor test
+pnpm --filter @meridian/engine typecheck
+pnpm --filter @meridian/engine test
 ```
 
 ## Project Goal
@@ -53,6 +59,8 @@ Phase 3.1 in progress on 2026-10-06: all P0 client code is implemented: HMAC/Ed2
 Phase 3.1 completed on 2026-10-07: shared `ExchangeGateway` and `MarketDataSource` contracts are exported from `packages/core`. `packages/binance-client` now has a Binance gateway adapter around the authenticated order client and a REST-kline `MarketDataSource`; `apps/backtest-worker` now has a simulator gateway adapter around `SimBroker` and a candle-feed `MarketDataSource` adapter. Verified locally: `@meridian/core` typecheck and 36 tests across 4 files; `@meridian/binance-client` typecheck and 277 tests across 22 files; `@meridian/backtest-worker` typecheck and 361 tests across 25 files. Read-only live Testnet authentication is verified: `pnpm --filter @meridian/binance-client smoke:trading BTCUSDT` returned `openOrderCount: 0`, `userDataState: "OPEN"`, `eventsReceived: 0`, and `ordersPlaced: 0`. Live Testnet order placement/query/cancellation is verified: `pnpm --filter @meridian/binance-client smoke:trading-order -- --symbol BTCUSDT --quantity 0.0002 --confirm-testnet-order` placed a passive LIMIT BUY at `83000.91`, queried it as `NEW`, canceled it as `CANCELED`, and confirmed `stillOpen: false`.
 
 Phase 3.2 completed in the prototype on 2026-10-08. The core order lifecycle state machine is implemented with `PENDING_NEW`, `UNKNOWN`, `PENDING_CANCEL`, terminal states, guarded transition helpers, and exhaustive focused tests. Deterministic Binance-safe `clientOrderId` generation is implemented with prefix validation, SHA-256 base64url hashing, attempt isolation, and focused tests. Write-ahead persistence foundation is implemented in `packages/db`: `orders` schema migration, `PENDING_NEW` insert repository, idempotency uniqueness, reconciliation indexes, non-terminal order scan for reconciliation, execution metadata, `order_fills`, idempotent terminal-state reconciliation update, and monotonic event-time guard for out-of-order execution reports. Timeout handling uses query-before-retry through `createQueryBeforeRetryOrderSubmitter`, which queries by `clientOrderId` after unknown placement outcomes and never blind-resends. Reconciliation has core report types plus `reconcileOpenOrders` / `runOrderReconciliation`, covering matched, missing-on-exchange, terminal-on-exchange, query-failed, terminal-local skip, and store-failure cases. Binance reconciliation exchange maps not-found signed errors to `null` while preserving transient failures. `apps/executor` has reconciliation/runtime helpers that run startup and reconnect reconciliation, apply terminal repairs, warn on unresolved missing/query-failed cases, detect possible Testnet resets, rethrow storage/repair failures so startup fails closed, and persist fee-aware user-data execution reports. The dependency factory wires DB execute + Binance query client into that runtime without creating credentials or placing orders. Verified on 2026-10-08: `@meridian/core` typecheck/build/tests passed with 91 tests across 7 files; `@meridian/db` build passed, typecheck and tests passed with 28 tests across 4 files; `@meridian/binance-client` build passed, typecheck and tests passed with 288 tests across 24 files; `@meridian/executor` typecheck and tests passed with 16 tests across 4 files; `@meridian/backtest-worker` typecheck and 364 tests across 25 files. Production-grade REST account-trade catch-up for fills missed during executor downtime is recorded in `docs/finishings.md`; continue to Phase 3.3 next.
+
+Phase 3.3 completed in local code/tests on 2026-10-08. `packages/binance-client` exposes `createBinanceAccountClient`, and the Testnet trading client includes signed account balance snapshots behind the same synchronized clock/rate limiter as order requests. `apps/engine` has a Postgres runtime client, reads persisted `order_fills` through `createLiveFillReader`, builds `createLiveAccountState` from persisted fills plus Testnet account balances, refreshes that state before strategy startup/market execution, and injects it into the real engine runtime factory/main path. Market payloads now default to protobuf binary behind `EventCodec`: `packages/proto/proto/market_events.proto` defines the schema, `packages/proto/src/generated/market-events.ts` provides generated-style wire encode/decode, `marketEventProtobufCodec` is the default, and `marketEventJsonCodec` remains available for explicit debug/legacy use. The ingestor publishes protobuf payloads by default; the engine consumes protobuf by default and still accepts legacy JSON payloads as fallback. Next work is Phase 3.4 risk engine: orders/min, daily loss/drawdown breakers, kill switch, and persisted `risk_events`. Verified on 2026-10-08: `@meridian/proto` typecheck/build/tests passed with 5 tests; `@meridian/ingestor` typecheck/build/tests passed with 72 tests across 27 files; `@meridian/binance-client` typecheck/build/tests passed with 291 tests across 25 files; and `@meridian/engine` typecheck/build/tests passed with 37 tests across 11 files.
 
 Phase 1.5: Ingestor close-out and soak verification.
 
@@ -190,12 +198,12 @@ Latest verified package checks:
 
 - `@meridian/binance-client`
   - Typecheck passed.
-  - Build and lint passed.
-  - Tests passed: 288 tests across 24 test files, including fixed-point gateway serialization regressions, Binance reconciliation exchange behavior, and cumulative quote quantity parsing from user-data execution reports.
+  - Build passed.
+  - Tests passed: 291 tests across 25 test files, including fixed-point gateway serialization regressions, Binance reconciliation exchange behavior, cumulative quote quantity parsing from user-data execution reports, and signed account-balance client wiring.
 - `@meridian/proto`
   - Typecheck passed.
   - Build passed.
-  - Tests passed: 4 tests across 1 test file.
+  - Tests passed: 5 tests across 1 test file, including protobuf binary default codec coverage and explicit JSON debug codec coverage.
 - `@meridian/ingestor`
   - Typecheck passed.
   - Build passed with dependent packages via `pnpm --filter @meridian/ingestor... build`.
@@ -216,7 +224,12 @@ Latest verified package checks:
   - Tests passed: 91 tests across 7 test files, including partial-fill/cancellation race regressions and report-only order reconciliation.
 - `@meridian/executor`
   - Typecheck passed.
-  - Tests passed: 16 tests across 4 test files for startup/reconnect reconciliation composition, terminal repairs, fail-closed storage/repair errors, executor runtime startup gating, dependency factory wiring, user-data order update handling, partial fills, and fee-aware fill persistence.
+  - Build passed.
+  - Tests passed: 52 tests across 12 test files for startup/reconnect reconciliation composition, terminal repairs, fail-closed storage/repair errors, executor runtime startup gating, dependency factory wiring, real runtime-client adapters, signal consumption/execution, basic risk-gate coverage, service-loop/main-runner sequencing, Prometheus expiry metrics, user-data order update handling, partial fills, and fee-aware fill persistence.
+- `@meridian/engine`
+  - Typecheck passed.
+  - Build passed.
+  - Tests passed: 37 tests across 11 test files for signal publishing, live strategy running, live account state, persisted fill reading, protobuf/EventCodec-backed market consumption, engine runtime/factory wiring, runtime-client adapters, service-loop/main-runner sequencing, and main-entry delegation.
 - `@meridian/backtest-worker`
   - Typecheck passed after simulator gateway and candle-feed market-data adapters.
   - Tests passed: 364 tests across 25 test files, including explicit simulator fill identity regressions.

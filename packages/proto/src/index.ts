@@ -1,4 +1,10 @@
 import { Decimal, type BookLevel, type Candle, type Trade } from "@meridian/core";
+import {
+  decodeMarketEventMessage,
+  encodeMarketEventMessage,
+  type WireBookLevel,
+  type WireMarketEvent
+} from "./generated/market-events.js";
 
 export const schemaVersion = "meridian.v1";
 
@@ -39,19 +45,36 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
 export const marketEventJsonCodec: EventCodec<MarketEventMessage> = {
+  encode: encodeMarketEventJson,
+  decode: decodeMarketEventJson
+};
+
+export const marketEventProtobufCodec: EventCodec<MarketEventMessage> = {
   encode: encodeMarketEvent,
   decode: decodeMarketEvent
 };
 
 export function encodeMarketEvent(event: MarketEventMessage): Uint8Array {
-  return textEncoder.encode(JSON.stringify(toWireMarketEvent(event)));
+  return encodeMarketEventMessage(toWireMarketEvent(event));
 }
 
 export function decodeMarketEvent(bytes: Uint8Array): MarketEventMessage {
-  const wire = JSON.parse(textDecoder.decode(bytes)) as WireMarketEvent;
+  return fromWireMarketEvent(decodeMarketEventMessage(bytes));
+}
 
+export function encodeMarketEventJson(event: MarketEventMessage): Uint8Array {
+  return textEncoder.encode(JSON.stringify(toWireMarketEvent(event)));
+}
+
+export function decodeMarketEventJson(bytes: Uint8Array): MarketEventMessage {
+  const wire = JSON.parse(textDecoder.decode(bytes)) as WireMarketEvent;
+  return fromWireMarketEvent(wire);
+}
+
+function fromWireMarketEvent(wire: WireMarketEvent): MarketEventMessage {
   switch (wire.kind) {
     case "trade":
+      if (wire.trade === undefined) throw new Error("Invalid market event: missing trade");
       return {
         kind: "trade",
         symbol: wire.symbol,
@@ -68,6 +91,7 @@ export function decodeMarketEvent(bytes: Uint8Array): MarketEventMessage {
       };
 
     case "kline":
+      if (wire.candle === undefined) throw new Error("Invalid market event: missing candle");
       return {
         kind: "kline",
         symbol: wire.symbol,
@@ -88,6 +112,7 @@ export function decodeMarketEvent(bytes: Uint8Array): MarketEventMessage {
       };
 
     case "depth":
+      if (wire.depth === undefined) throw new Error("Invalid market event: missing depth");
       return {
         kind: "depth",
         symbol: wire.symbol,
@@ -107,6 +132,7 @@ function toWireMarketEvent(event: MarketEventMessage): WireMarketEvent {
   switch (event.kind) {
     case "trade":
       return {
+        schemaVersion,
         ...event,
         trade: {
           ...event.trade,
@@ -117,6 +143,7 @@ function toWireMarketEvent(event: MarketEventMessage): WireMarketEvent {
 
     case "kline":
       return {
+        schemaVersion,
         ...event,
         candle: {
           ...event.candle,
@@ -130,6 +157,7 @@ function toWireMarketEvent(event: MarketEventMessage): WireMarketEvent {
 
     case "depth":
       return {
+        schemaVersion,
         ...event,
         depth: {
           ...event.depth,
@@ -153,54 +181,3 @@ function fromWireLevel(level: WireBookLevel): BookLevel {
     quantity: new Decimal(level.quantity)
   };
 }
-
-type WireBookLevel = {
-  readonly price: string;
-  readonly quantity: string;
-};
-
-type WireMarketEvent =
-  | {
-      readonly kind: "trade";
-      readonly symbol: string;
-      readonly eventId: string;
-      readonly occurredAtMs: number;
-      readonly trade: {
-        readonly symbol: string;
-        readonly tradeId: string;
-        readonly price: string;
-        readonly quantity: string;
-        readonly eventTimeMs: number;
-        readonly isBuyerMaker: boolean;
-      };
-    }
-  | {
-      readonly kind: "kline";
-      readonly symbol: string;
-      readonly eventId: string;
-      readonly occurredAtMs: number;
-      readonly candle: {
-        readonly symbol: string;
-        readonly interval: string;
-        readonly openTimeMs: number;
-        readonly closeTimeMs: number;
-        readonly open: string;
-        readonly high: string;
-        readonly low: string;
-        readonly close: string;
-        readonly volume: string;
-        readonly closed: boolean;
-      };
-    }
-  | {
-      readonly kind: "depth";
-      readonly symbol: string;
-      readonly eventId: string;
-      readonly occurredAtMs: number;
-      readonly depth: {
-        readonly firstUpdateId: number;
-        readonly finalUpdateId: number;
-        readonly bids: readonly WireBookLevel[];
-        readonly asks: readonly WireBookLevel[];
-      };
-    };

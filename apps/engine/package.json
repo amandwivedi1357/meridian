@@ -11,12 +11,17 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@meridian/binance-client": "workspace:*",
     "@meridian/bus": "workspace:*",
     "@meridian/config": "workspace:*",
     "@meridian/core": "workspace:*",
-    "@meridian/observability": "workspace:*"
+    "@meridian/observability": "workspace:*",
+    "@meridian/proto": "workspace:*",
+    "pg": "^8.23.1",
+    "redis": "^6.3.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.1"
   }
 }

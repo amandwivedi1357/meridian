@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createExecutorRuntime } from "./executor-runtime.js";
 import type { GatewayOrderSnapshot, LocalOrderForReconciliation } from "@meridian/core";
+import type { SignalProcessingResult } from "./signal-execution.js";
 
 const localOrders: readonly LocalOrderForReconciliation[] = [
   {
@@ -70,6 +71,38 @@ describe("createExecutorRuntime", () => {
     );
   });
 
+  it("prepares the signal consumer only after startup reconciliation succeeds", async () => {
+    const events: string[] = [];
+    const store = {
+      listOrdersForReconciliation: vi.fn(async () => {
+        events.push("reconcile");
+        return localOrders;
+      }),
+      markOrderReconciledTerminal: vi.fn()
+    };
+    const exchange = {
+      getOrder: vi.fn(async () => exchangeOrder)
+    };
+    const signalConsumer = {
+      ensureReady: vi.fn(async () => {
+        events.push("signals-ready");
+      }),
+      pollOnce: vi.fn(),
+      claimStaleOnce: vi.fn()
+    };
+    const runtime = createExecutorRuntime({
+      store,
+      exchange,
+      logger: createLogger(),
+      signalConsumer
+    });
+
+    await runtime.start();
+
+    expect(signalConsumer.ensureReady).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["reconcile", "signals-ready"]);
+  });
+
   it("propagates startup reconciliation failures so the runtime fails closed", async () => {
     const error = new Error("database unavailable");
     const store = {
@@ -95,6 +128,31 @@ describe("createExecutorRuntime", () => {
       { error },
       "startup order reconciliation failed"
     );
+  });
+
+  it("does not prepare the signal consumer when startup reconciliation fails", async () => {
+    const error = new Error("database unavailable");
+    const store = {
+      listOrdersForReconciliation: vi.fn(async (): Promise<readonly LocalOrderForReconciliation[]> => {
+        throw error;
+      }),
+      markOrderReconciledTerminal: vi.fn()
+    };
+    const signalConsumer = {
+      ensureReady: vi.fn(),
+      pollOnce: vi.fn(),
+      claimStaleOnce: vi.fn()
+    };
+    const runtime = createExecutorRuntime({
+      store,
+      exchange: { getOrder: vi.fn() },
+      logger: createLogger(),
+      signalConsumer
+    });
+
+    await expect(runtime.start()).rejects.toBe(error);
+
+    expect(signalConsumer.ensureReady).not.toHaveBeenCalled();
   });
 
   it("can run reconciliation again after a reconnect trigger", async () => {
@@ -126,6 +184,54 @@ describe("createExecutorRuntime", () => {
         matched: 1
       }),
       "reconnect order reconciliation completed"
+    );
+  });
+
+  it("delegates signal polling and stale claiming to the configured consumer", async () => {
+    const freshResult: SignalProcessingResult = {
+      outcome: "submitted",
+      signalId: "sig_1",
+      clientOrderId: "mrd_order_1"
+    };
+    const staleResult: SignalProcessingResult = {
+      outcome: "expired",
+      signalId: "sig_old"
+    };
+    const signalConsumer = {
+      ensureReady: vi.fn(),
+      pollOnce: vi.fn(async () => [freshResult]),
+      claimStaleOnce: vi.fn(async () => [staleResult])
+    };
+    const runtime = createExecutorRuntime({
+      store: {
+        listOrdersForReconciliation: vi.fn(async () => []),
+        markOrderReconciledTerminal: vi.fn()
+      },
+      exchange: { getOrder: vi.fn() },
+      logger: createLogger(),
+      signalConsumer
+    });
+
+    await expect(runtime.pollSignalsOnce()).resolves.toEqual([freshResult]);
+    await expect(runtime.claimStaleSignalsOnce()).resolves.toEqual([staleResult]);
+
+    expect(signalConsumer.pollOnce).toHaveBeenCalledTimes(1);
+    expect(signalConsumer.claimStaleOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails clearly when signal polling is requested without a configured consumer", async () => {
+    const runtime = createExecutorRuntime({
+      store: {
+        listOrdersForReconciliation: vi.fn(async () => []),
+        markOrderReconciledTerminal: vi.fn()
+      },
+      exchange: { getOrder: vi.fn() },
+      logger: createLogger()
+    });
+
+    await expect(runtime.pollSignalsOnce()).rejects.toThrow("Signal consumer is not configured");
+    await expect(runtime.claimStaleSignalsOnce()).rejects.toThrow(
+      "Signal consumer is not configured"
     );
   });
 });

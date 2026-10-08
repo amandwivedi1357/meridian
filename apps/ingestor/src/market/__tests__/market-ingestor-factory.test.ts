@@ -47,6 +47,8 @@ describe("createMarketIngestor", () => {
 
     expect(publishedFields?.kind).toBe("trade");
     expect(publishedFields?.schemaVersion).toBe("meridian.v1");
+    expect(Buffer.isBuffer(publishedFields?.payload)).toBe(true);
+    expect((publishedFields?.payload as Buffer).toString("utf8").startsWith("{")).toBe(false);
 
     const decoded = decodeMarketEvent(publishedFields?.payload ?? Buffer.from([]));
     expect(decoded.kind).toBe("trade");

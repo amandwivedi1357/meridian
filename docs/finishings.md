@@ -20,7 +20,7 @@ When progress is reported:
   - Acceptance: after reconnect/startup, query recent account trades for affected symbols/orders, dedupe by trade/execution identity, persist fee-aware fills, and prove a missed-fill downtime scenario in tests.
 
 - [ ] **`architecture` / `prototype-gap`: Replace Phase 3.1 adapter placeholders with full exchange-backed capabilities before unattended execution.**
-  - Recorded: 2026-10-07. The Phase 3.1 adapter layer is intentionally narrow and locally tested, but it is not the final execution layer. The Binance `ExchangeGateway` reads balances through an injected callback because an authenticated account endpoint wrapper is not implemented yet. The simulator gateway exposes order submission and fill processing but cancellation is unsupported because the current `SimBroker` has no cancel primitive. The backtest candle-feed `MarketDataSource` supports only the feed's current bounded `15m`/`1h` intervals.
+  - Recorded: 2026-10-07; updated 2026-10-08. The Phase 3.1 adapter layer is intentionally narrow and locally tested, but it is not the final execution layer. A signed Binance account endpoint now exists and is wired into the live engine context, but the broader adapter layer still needs full exchange-metadata/filter preflight and final account/order capability coverage. The simulator gateway exposes order submission and fill processing but cancellation is unsupported because the current `SimBroker` has no cancel primitive. The backtest candle-feed `MarketDataSource` supports only the feed's current bounded `15m`/`1h` intervals.
   - This is acceptable for closing the shared-contract adapter work, but Phase 3.2 must not assume these adapters provide full lifecycle, reconciliation, or exchange-metadata behavior.
   - Acceptance: add real account/balance retrieval, exchange metadata/filter preflight, simulator cancellation/order-state support, and clear integration tests before unattended paper trading.
 
@@ -52,6 +52,16 @@ When progress is reported:
   - Acceptance: stream memory stays bounded during a multi-hour soak; dashboard shows stream length/memory trend; consumer-group safety is preserved or documented when trimming pending entries.
 
 ## Resolved Items
+
+- [x] **`architecture` / `prototype-gap`: Replace JSON-bytes EventCodec implementation with generated Protobuf/buf output.**
+  - Recorded: 2026-10-08. Phase 3.3 engine consumers parsed market payloads through the shared `EventCodec<MarketEventMessage>` boundary, but the concrete codec implementation was still the JSON-bytes debug codec.
+  - Resolved: added the market-event `.proto` schema, generated-style protobuf wire encode/decode, `marketEventProtobufCodec`, and default protobuf wiring in both ingestor and engine. JSON remains available as an explicit debug/legacy codec, and the engine keeps a legacy JSON payload fallback.
+  - Result: market stream payloads are protobuf binary by default. Verified 2026-10-08 with `@meridian/proto` typecheck/build/tests, `@meridian/ingestor` typecheck/build/tests, and `@meridian/engine` typecheck/build/tests.
+
+- [x] **`architecture` / `prototype-gap`: Wire live StrategyContext positions and balances from durable/account state.**
+  - Recorded: 2026-10-08. Phase 3.3 runtime wiring originally started a real engine process and provided the `StrategyContext` facade, but the executable engine still fell back to zero/default positions and balances unless injected callbacks were provided.
+  - Resolved: added signed Testnet account balance snapshots to the Binance trading client, added engine Postgres runtime access to persisted `order_fills`, wired `createLiveFillReader` + `createLiveAccountState` into the executable engine path, and refreshed that state before strategy startup/market execution.
+  - Result: live strategies now see positions derived from persisted fills and balances from authenticated account snapshots in the real engine main path. Verified 2026-10-08 with `@meridian/binance-client` typecheck/build/tests and `@meridian/engine` typecheck/build/tests.
 
 - [x] **`correctness` / `testing`: Restore green workspace-package build/typecheck state after source/dist drift.**
   - Recorded: 2026-10-05. `@meridian/ingestor` had failed typecheck/test because it resolved stale built declarations from `@meridian/proto` and `@meridian/config`.

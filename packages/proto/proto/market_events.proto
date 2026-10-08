@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package meridian.market.v1;
+
+message MarketEvent {
+  string schema_version = 1;
+  string kind = 2;
+  string symbol = 3;
+  string event_id = 4;
+  uint64 occurred_at_ms = 5;
+  Trade trade = 10;
+  Candle candle = 11;
+  Depth depth = 12;
+}
+
+message Trade {
+  string symbol = 1;
+  string trade_id = 2;
+  string price = 3;
+  string quantity = 4;
+  uint64 event_time_ms = 5;
+  bool is_buyer_maker = 6;
+}
+
+message Candle {
+  string symbol = 1;
+  string interval = 2;
+  uint64 open_time_ms = 3;
+  uint64 close_time_ms = 4;
+  string open = 5;
+  string high = 6;
+  string low = 7;
+  string close = 8;
+  string volume = 9;
+  bool closed = 10;
+}
+
+message Depth {
+  uint64 first_update_id = 1;
+  uint64 final_update_id = 2;
+  repeated BookLevel bids = 3;
+  repeated BookLevel asks = 4;
+}
+
+message BookLevel {
+  string price = 1;
+  string quantity = 2;
+}

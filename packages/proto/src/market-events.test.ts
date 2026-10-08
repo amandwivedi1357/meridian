@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   decodeMarketEvent,
   encodeMarketEvent,
+  encodeMarketEventJson,
   marketEventJsonCodec,
+  marketEventProtobufCodec,
   type MarketEventMessage
 } from "./index.js";
 
@@ -28,6 +30,7 @@ describe("market event protobuf codec", () => {
     const decoded = decodeMarketEvent(encoded);
 
     expect(encoded).toBeInstanceOf(Uint8Array);
+    expect(new TextDecoder().decode(encoded).startsWith("{")).toBe(false);
     expect(decoded.kind).toBe("trade");
     expect(decoded.symbol).toBe("BTCUSDT");
     expect(decoded.eventId).toBe("12345");
@@ -110,7 +113,7 @@ describe("market event protobuf codec", () => {
     expect(decoded.depth.asks[0]?.quantity.toString()).toBe("2.25");
   });
 
-  it("exposes the default JSON bytes codec behind the EventCodec interface", () => {
+  it("exposes the default protobuf codec behind the EventCodec interface", () => {
     const event: MarketEventMessage = {
       kind: "trade",
       symbol: "BTCUSDT",
@@ -126,6 +129,28 @@ describe("market event protobuf codec", () => {
       }
     };
 
+    const decoded = marketEventProtobufCodec.decode(marketEventProtobufCodec.encode(event));
+
+    expect(decoded).toEqual(decodeMarketEvent(encodeMarketEvent(event)));
+  });
+
+  it("keeps JSON bytes available as an explicit debug codec", () => {
+    const event: MarketEventMessage = {
+      kind: "trade",
+      symbol: "BTCUSDT",
+      eventId: "12345",
+      occurredAtMs: 1_700_000_000_000,
+      trade: {
+        symbol: "BTCUSDT",
+        tradeId: "12345",
+        price: new Decimal("100.10000001"),
+        quantity: new Decimal("0.02000003"),
+        eventTimeMs: 1_700_000_000_000,
+        isBuyerMaker: true
+      }
+    };
+
+    expect(new TextDecoder().decode(encodeMarketEventJson(event)).startsWith("{")).toBe(true);
     const decoded = marketEventJsonCodec.decode(marketEventJsonCodec.encode(event));
 
     expect(decoded).toEqual(decodeMarketEvent(encodeMarketEvent(event)));
