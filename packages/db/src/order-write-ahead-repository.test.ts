@@ -46,6 +46,47 @@ describe("createOrderWriteAheadRepository", () => {
     createdAtMs: 1_000
   };
 
+  it("reads submission state without mutation and checks immutable identity in SQL", async () => {
+    const execute = vi.fn(async () => ({
+      rowCount: 1,
+      rows: [{ state: "UNKNOWN", identity_matches: true }]
+    }));
+    expect(await createOrderWriteAheadRepository({ execute }).getSubmissionState(record)).toBe(
+      "UNKNOWN"
+    );
+    const query = (execute.mock.calls as unknown as [SqlQuery][])[0]![0];
+    expect(normalizeSql(query.text)).toContain("select state");
+    expect(normalizeSql(query.text)).toContain("limit_price is not distinct from $9::numeric");
+    expect(query.values).toEqual([
+      "same-id",
+      "ema",
+      "signal",
+      0,
+      "BTCUSDT",
+      "BUY",
+      "LIMIT",
+      "0.001",
+      "100"
+    ]);
+  });
+  it("reports missing submission as unsent", async () => {
+    expect(
+      await createOrderWriteAheadRepository({
+        execute: async () => ({ rowCount: 0, rows: [] })
+      }).getSubmissionState(record)
+    ).toBeNull();
+  });
+  it.each([
+    { rowCount: 0 },
+    { rowCount: 1, rows: [{ state: "UNKNOWN", identity_matches: false }] },
+    { rowCount: 1, rows: [{ state: "bogus", identity_matches: true }] },
+    { rowCount: 1, rows: [null] }
+  ])("fails closed on unavailable or mismatched submission rows: %j", async (result) => {
+    await expect(
+      createOrderWriteAheadRepository({ execute: async () => result }).getSubmissionState(record)
+    ).rejects.toThrow();
+  });
+
   it("accepts an identical retry when the database confirms the identity", async () => {
     const db = createQueryRecorder();
     const repo = createOrderWriteAheadRepository(db);

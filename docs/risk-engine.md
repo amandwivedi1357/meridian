@@ -1,7 +1,8 @@
 # Phase 3.4 Risk Controls
 
-Implemented locally on 2026-10-08. Live kill-switch timing, full order/fill integration,
-crash tests, and the 48-hour Testnet run remain Phase 3.5 verification tasks.
+Implemented locally on 2026-10-08. Bounded real Testnet cancellation and allocated
+strategy/risk/executor fills were verified on 2026-10-09. Full unattended acceptance
+and the 48-hour Testnet run remain pending; see `phase-3-5-verification.md`.
 
 ## Execution Rules
 
@@ -69,8 +70,8 @@ smoke test. API authentication/roles will be added in Phase 4.
 See `.env.example` for conservative defaults. Notional, exposure, equity and loss
 use `EXECUTOR_RISK_QUOTE_ASSET` (default `USDT`). Drawdown and price deviation are
 fractions, not percentage numbers: `0.1` means 10%. UTC is the daily-loss boundary.
-All account base holdings, including pre-existing Testnet balances, count toward
-exposure; choose limits deliberately before activation.
+By default, all account base holdings, including pre-existing Testnet balances,
+count toward exposure; choose limits deliberately before activation.
 
 `EXECUTOR_RISK_SYMBOLS` is a comma-separated symbol allowlist. These symbols must
 trade against the configured quote asset. Per-symbol limits accept JSON overrides:
@@ -88,6 +89,56 @@ trade against the configured quote asset. Per-symbol limits accept JSON override
 Decimal values must be strings; the order-rate value is an integer. Invalid or
 unknown configuration fields fail startup. Equity peaks survive process restarts;
 changing quote currency against an existing peak fails closed.
+
+## Optional Testnet Allocation
+
+`MERIDIAN_TESTNET_ALLOCATION` is OFF by default. It defines a dedicated managed
+portfolio, not a valuation of the entire exchange wallet. Example:
+
+```json
+{ "id": "prototype", "quoteAsset": "USDT", "initialQuote": "100", "symbols": ["BTCUSDT"] }
+```
+
+Engine and executor must use the identical policy, Testnet API key and database.
+The risk quote currency must match and all engine/risk symbols must be allowed.
+Initialization requires an engaged DB kill switch and a fresh order/reservation/
+equity ledger with existing schema migrations applied. Use a dedicated database;
+do not erase existing order history or peaks to force initialization. Authenticate
+with the operator tokens described above, then run:
+
+```powershell
+node apps/executor/dist/risk-control-cli.js allocate --confirm-testnet-allocation
+```
+
+This performs read-only exchange funding/metadata/open-order preflight and writes
+an immutable audit record containing the canonical policy, API-key hash, initial
+wallet backing totals and explicitly excluded wallet asset names. It does not
+place orders or reset the kill switch. Existing identical initialization is
+idempotent, not a capital/peak reset. Configuration/account drift blocks startup
+and approvals. The allocation cannot be changed silently; an audited operator
+rebaseline workflow remains future work. `engage` still works after configuration
+drift, while `reset` requires a matching policy. Allocated cancellation is limited
+to persisted managed client IDs; foreign orders are not canceled by this scope.
+
+Managed capital starts at the configured quote amount, with zero managed base
+inventory. Existing wallet BTC cannot be sold as managed inventory. Both engine
+positions and executor equity/exposure reconstruct the same ledger, including
+base/quote fees, open-order locks and remaining SELL inventory. Outside assets
+are explicitly outside this portfolio, not assigned zero full-wallet prices.
+Full-wallet mode continues to reject unpriceable assets.
+
+Real wallet balances must back managed total/free/locked amounts and match the
+saved backing baseline plus persisted fill deltas. Missing fills, Testnet resets,
+deposits/withdrawals or external trading in allocated assets fail closed even if
+the wallet still has enough funds. Any unmanaged exchange open order blocks
+allocated trading. Unsupported nonzero third-asset fees block until historical
+conversion is implemented. This is conservative accounting, not an exchange
+subaccount or a guarantee of physical isolation from other users of the key.
+Do not share the allocated assets with another bot/manual trading workflow.
+
+The existing application's `.env` and shared ledger were not converted during
+verification. The live fixture used disposable storage and an explicitly audited
+100-USDT allocation. Long-running activation requires separate operator setup.
 
 ## Safe Limitations
 

@@ -15,6 +15,7 @@
     "@meridian/bus": "workspace:*",
     "@meridian/config": "workspace:*",
     "@meridian/core": "workspace:*",
+    "@meridian/db": "workspace:*",
     "@meridian/observability": "workspace:*",
     "@meridian/proto": "workspace:*",
     "pg": "^8.23.1",

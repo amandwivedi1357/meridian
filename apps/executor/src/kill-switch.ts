@@ -57,7 +57,7 @@ export function createKillSwitch(options: {
     try {
       for (const order of await options.listOpenOrders()) {
         try {
-          await options.cancelOrder(order);
+          await options.cancelOrder({ symbol: order.symbol, clientOrderId: order.clientOrderId });
         } catch {
           failures.push(`${order.symbol}:${order.clientOrderId}`);
         }

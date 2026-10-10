@@ -59,6 +59,22 @@ function fixture() {
   };
 }
 describe("durable fail-closed kill switch", () => {
+  it("projects native open-order DTOs to strict cancellation lookup fields", async () => {
+    const f = fixture();
+    const order = {
+      symbol: "BTCUSDT",
+      clientOrderId: "order-1",
+      orderId: 123,
+      status: "NEW",
+      origQty: "0.0002",
+      price: "81000"
+    };
+    f.listOpenOrders.mockResolvedValue([order]);
+    f.setEngaged(true);
+    await f.kill.check();
+    expect(f.cancelOrder).toHaveBeenCalledOnce();
+    expect(f.cancelOrder).toHaveBeenCalledWith({ symbol: "BTCUSDT", clientOrderId: "order-1" });
+  });
   it("allows trading only when both stores explicitly say inactive", async () => {
     const f = fixture();
     expect(await f.kill.check()).toBe(false);

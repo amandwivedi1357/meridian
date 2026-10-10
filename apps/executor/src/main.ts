@@ -5,6 +5,7 @@ import {
   BinanceRestClient
 } from "@meridian/binance-client";
 import { loadConfig } from "@meridian/config";
+import { allocationFromEnv } from "@meridian/core";
 import { createLogger, createMetricsRegistry, Counter, Gauge } from "@meridian/observability";
 import { pathToFileURL } from "node:url";
 
@@ -16,7 +17,9 @@ import {
   createOrderWriteAheadRepository,
   createRiskRepository,
   marketDataMigrations,
-  runMigrations
+  runMigrations,
+  createTestnetAllocationRepository,
+  testnetAccountBinding
 } from "@meridian/db";
 import { createExecutorUserDataTracker } from "./user-data-tracker.js";
 import { createRiskEngine } from "./risk-engine.js";
@@ -37,6 +40,12 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
   const tradingClient = await createTestnetTradingClientFromEnv({ autoSynchronizeTime: true });
   const publicClient = new BinanceRestClient({ environment: "testnet" });
   const riskRepo = createRiskRepository(clients.postgres);
+  const allocation = allocationFromEnv(process.env);
+  const allocationRepo = createTestnetAllocationRepository(clients.postgres);
+  const accountBinding = allocation
+    ? testnetAccountBinding(process.env.BINANCE_API_KEY)
+    : undefined;
+  const assertPortfolioPolicy = () => allocationRepo.assertPolicy(allocation, accountBinding);
   const killMetric = new Gauge({
     name: "kill_switch_active",
     help: "Whether execution is blocked by the kill switch",
@@ -51,7 +60,17 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
   const killSwitch = createKillSwitch({
     repo: riskRepo,
     command: clients.redis.command,
-    listOpenOrders: tradingClient.openOrders,
+    async listOpenOrders() {
+      const orders = await tradingClient.openOrders();
+      if (!allocation) return orders;
+      const managed = new Map(
+        (await allocationRepo.listManagedOrders()).map((order) => [
+          order.clientOrderId,
+          order.symbol
+        ])
+      );
+      return orders.filter((order) => managed.get(order.clientOrderId) === order.symbol);
+    },
     cancelOrder: tradingClient.cancelOrder,
     alert(details) {
       killMetric.set(1);
@@ -108,12 +127,25 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
       );
     }
 
+    await assertPortfolioPolicy();
+    logger.info({ portfolio: allocation ?? "full-wallet" }, "risk portfolio scope");
     await killSwitch.check();
     const snapshot = createRiskSnapshotReader({
       publicClient,
       tradingClient,
       repo: riskRepo,
       quoteAsset: riskConfig.quoteAsset,
+      assertPortfolioPolicy,
+      ...(allocation
+        ? {
+            allocation: {
+              policy: allocation,
+              assertPolicy: assertPortfolioPolicy,
+              backingBaseline: allocationRepo.backingBaseline,
+              listManagedOrders: allocationRepo.listManagedOrders
+            }
+          }
+        : {}),
       symbols: (process.env.EXECUTOR_RISK_SYMBOLS ?? "BTCUSDT")
         .split(",")
         .map((value) => value.trim())
@@ -124,6 +156,7 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
       killSwitch,
       config: riskConfig,
       snapshot,
+      assertPortfolioPolicy,
       async assertReady() {
         if (tracker === undefined) throw new Error("User-data tracker is not configured");
         await tracker.assertReady();

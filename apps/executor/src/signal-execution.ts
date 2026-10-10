@@ -10,11 +10,13 @@ import {
   parseSignalPayload,
   type ExchangeGateway,
   type GatewayOrderRequest,
+  type OrderState,
   type Signal
 } from "@meridian/core";
 import type { PendingOrderRecord } from "@meridian/db";
 
 export interface SignalOrderStore {
+  readonly getSubmissionState?: (record: PendingOrderRecord) => Promise<OrderState | null>;
   readonly recordPendingOrder: (record: PendingOrderRecord) => Promise<void>;
   readonly claimOrderSubmission: (clientOrderId: string) => Promise<boolean>;
 }
@@ -108,11 +110,6 @@ export async function processSignalMessage(
     return finish({ outcome: "rejected", reason: "invalid-payload" });
   }
 
-  if (isSignalExpired(signal, deps.nowMs())) {
-    deps.metrics?.recordExpiredSignal(signal);
-    return finish({ outcome: "expired", signalId: signal.signalId });
-  }
-
   const result = await executeSignal(signal, deps);
   return finish(result);
 }
@@ -130,15 +127,6 @@ export async function executeSignal(
     };
   }
 
-  const riskDecision = await evaluateRisk(signal, deps);
-  if (!riskDecision.approved) {
-    return {
-      outcome: "rejected",
-      signalId: signal.signalId,
-      reason: riskDecision.reason
-    };
-  }
-
   const attempt = 0;
   const clientOrderId = createClientOrderId({
     prefix: deps.clientOrderIdPrefix,
@@ -147,7 +135,21 @@ export async function executeSignal(
     attempt
   });
   const request = toGatewayOrderRequest(signal, clientOrderId);
+  const record = toPendingOrderRecord(signal, request, attempt, deps.nowMs());
+  // Recovery confirms previous side effects; it never grants permission for a new send.
+  const state = await deps.store.getSubmissionState?.(record);
+  if (state !== undefined && state !== null && state !== "PENDING_NEW") {
+    return recoverSubmission(signal, request, deps);
+  }
 
+  if (isSignalExpired(signal, deps.nowMs())) {
+    deps.metrics?.recordExpiredSignal(signal);
+    return { outcome: "expired", signalId: signal.signalId };
+  }
+  const riskDecision = await evaluateRisk(signal, deps);
+  if (!riskDecision.approved) {
+    return { outcome: "rejected", signalId: signal.signalId, reason: riskDecision.reason };
+  }
   if (isSignalExpired(signal, deps.nowMs())) {
     deps.metrics?.recordExpiredSignal(signal);
     return { outcome: "expired", signalId: signal.signalId };
@@ -159,17 +161,7 @@ export async function executeSignal(
   }
 
   if (!(await deps.store.claimOrderSubmission(clientOrderId))) {
-    if (deps.exchange.getOrder === undefined)
-      throw new Error("Order recovery query is not configured");
-    const existing = await deps.exchange.getOrder({ symbol: request.symbol, clientOrderId });
-    if (
-      existing === null ||
-      existing.clientOrderId !== clientOrderId ||
-      existing.symbol !== request.symbol
-    ) {
-      throw new Error("Order submission is ambiguous; reconciliation required");
-    }
-    return { outcome: "submitted", signalId: signal.signalId, clientOrderId };
+    return recoverSubmission(signal, request, deps);
   }
   if (isSignalExpired(signal, deps.nowMs())) {
     deps.metrics?.recordExpiredSignal(signal);
@@ -187,6 +179,27 @@ export async function executeSignal(
     signalId: signal.signalId,
     clientOrderId
   };
+}
+
+async function recoverSubmission(
+  signal: Signal,
+  request: GatewayOrderRequest,
+  deps: SignalExecutionDeps
+): Promise<SignalProcessingResult> {
+  if (deps.exchange.getOrder === undefined)
+    throw new Error("Order recovery query is not configured");
+  const existing = await deps.exchange.getOrder({
+    symbol: request.symbol,
+    clientOrderId: request.clientOrderId
+  });
+  if (
+    existing === null ||
+    existing.clientOrderId !== request.clientOrderId ||
+    existing.symbol !== request.symbol
+  ) {
+    throw new Error("Order submission is ambiguous; reconciliation required");
+  }
+  return { outcome: "submitted", signalId: signal.signalId, clientOrderId: request.clientOrderId };
 }
 
 async function ackSignalMessage(message: StreamMessage, deps: SignalMessageDeps): Promise<void> {

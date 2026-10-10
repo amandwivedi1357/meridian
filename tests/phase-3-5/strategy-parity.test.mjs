@@ -1,4 +1,6 @@
 import { createReadStream } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { describe, expect, it } from "vitest";
 import { Decimal } from "../../packages/core/src/index.ts";
@@ -40,12 +42,12 @@ function normalized(intent, nowMs) {
     symbol: intent.symbol,
     side: intent.side,
     type: intent.type,
-    quantity: intent.quantity.toFixed(),
-    price: intent.limitPrice?.toFixed(),
+    quantity: new Decimal(intent.quantity).toFixed(),
+    price: intent.limitPrice === undefined ? undefined : new Decimal(intent.limitPrice).toFixed(),
     reason: intent.reason
   };
 }
-async function verify(candles) {
+async function verify(candles, expectedSignals) {
   expect(candles.length).toBeGreaterThan(5);
   const options = {
     symbol: "BTCUSDT",
@@ -112,10 +114,48 @@ async function verify(candles) {
   });
   expect(live.length).toBeGreaterThan(0);
   expect(replay).toEqual(live);
+  if (expectedSignals !== undefined) expect(replay).toEqual(expectedSignals);
   return { bars: candles.length, signals: live.length };
 }
 
 describe("live/backtest signal parity", () => {
+  it.skipIf(!process.env.PARITY_CANDLE_SESSION)(
+    "replays clean captured klines against saved live-runner decisions",
+    async () => {
+      const directory = process.env.PARITY_CANDLE_SESSION;
+      const manifest = JSON.parse(await readFile(join(directory, "manifest.json"), "utf8"));
+      expect(manifest.liveClosedBars).toBeGreaterThan(0);
+      expect(manifest.signals).toBeGreaterThan(0);
+      const records = (await readFile(join(directory, "events.ndjson"), "utf8"))
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => JSON.parse(line));
+      expect(records.filter((record) => record.source === "websocket")).toHaveLength(
+        manifest.liveClosedBars
+      );
+      expect(records).toHaveLength(manifest.bars);
+      const candles = [];
+      for await (const bar of createRecordedSessionCandleFeed(
+        join(directory, "events.ndjson")
+      ).read({
+        symbol: "BTCUSDT",
+        interval: "15m",
+        fromMs: records[0].candle.openTimeMs,
+        toMs: records.at(-1).candle.closeTimeMs + 1
+      }))
+        candles.push(bar);
+      expect(candles).toHaveLength(manifest.bars);
+      for (let i = 1; i < candles.length; i++)
+        expect(candles[i].openTimeMs).toBe(candles[i - 1].closeTimeMs + 1);
+      const saved = (await readFile(join(directory, "signals.ndjson"), "utf8"))
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => JSON.parse(line))
+        .map((record) => normalized(record.signal.intent, record.decisionAtMs));
+      expect(saved).toHaveLength(manifest.signals);
+      console.log("Clean captured-candle parity", await verify(candles, saved));
+    }
+  );
   it("matches nonempty crossover signals on recorded-format deterministic candles", async () => {
     const prices = [100, 99, 98, 97, 101, 105, 110, 90, 85, 80, 120, 125, 130, 70, 60, 50];
     await verify(prices.map((price, index) => candle(index * intervalMs, price)));

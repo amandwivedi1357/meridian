@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createRiskRepository, marketDataMigrations, type RiskSqlDatabase } from "@meridian/db";
+import {
+  createRiskRepository,
+  createTestnetAllocationRepository,
+  testnetAccountBinding,
+  marketDataMigrations,
+  type RiskSqlDatabase
+} from "@meridian/db";
 
 // Opt-in local database verification; never touches the application's schema or Redis keys.
 describe.skipIf(!process.env.RISK_TEST_DATABASE_URL)("isolated PostgreSQL risk storage", () => {
@@ -118,5 +124,43 @@ describe.skipIf(!process.env.RISK_TEST_DATABASE_URL)("isolated PostgreSQL risk s
       "UPDATE orders SET state = 'CANCELED' WHERE client_order_id = 'risk-test-order'"
     );
     expect(await repo.listActiveReservations(100000)).toHaveLength(0);
+  });
+  it("audits allocation once under concurrent initialization and forbids policy drift", async () => {
+    await repo.locked((tx) => tx.setKillState(true, "allocation-check", "test-operator"));
+    const allocation = createTestnetAllocationRepository(db);
+    const options = {
+      database: db,
+      policy: { id: "check", quoteAsset: "USDT", initialQuote: "100", symbols: ["BTCUSDT"] },
+      accountBinding: testnetAccountBinding("test-only-key"),
+      actor: "test-operator",
+      backingBaseline: { USDT: "1000", BTC: "1" },
+      excludedWalletAssets: ["FAUCET"]
+    };
+    await pool.query("TRUNCATE order_fills, orders CASCADE");
+    await pool.query(`INSERT INTO orders (client_order_id, strategy_id, signal_id, attempt, symbol, side, type, quantity, state)
+      VALUES ('allocation-test-order','ema','allocation-test',0,'BTCUSDT','BUY','MARKET',0.0002,'UNKNOWN')`);
+    await expect(allocation.initialize(options)).rejects.toThrow("fresh");
+    await pool.query("TRUNCATE order_fills, orders CASCADE");
+    await Promise.all([allocation.initialize(options), allocation.initialize(options)]);
+    expect(
+      (await pool.query("SELECT * FROM audit_log WHERE action='testnet-allocation-created'")).rows
+    ).toHaveLength(1);
+    expect((await repo.getKillState()).engaged).toBe(true);
+    await allocation.assertPolicy(options.policy, options.accountBinding);
+    expect(await allocation.backingBaseline()).toEqual(options.backingBaseline);
+    await expect(
+      allocation.initialize({ ...options, policy: { ...options.policy, initialQuote: "101" } })
+    ).rejects.toThrow("immutable");
+    await pool.query(`INSERT INTO orders (client_order_id, strategy_id, signal_id, attempt, symbol, side, type, quantity, state)
+      VALUES ('allocation-export-order','bounded-fill-check','export-test',0,'BTCUSDT','BUY','MARKET',0.0002,'FILLED')`);
+    await pool.query(`INSERT INTO order_fills (client_order_id, execution_id, trade_id, symbol, side, quantity, price, fee, fee_asset, event_time_ms)
+      VALUES ('allocation-export-order','1','1','BTCUSDT','BUY',0.0002,80000,0,'BTC',1)`);
+    expect(await repo.listFills()).toEqual([
+      expect.objectContaining({
+        strategy_id: "bounded-fill-check",
+        quantity: "0.0002",
+        fee_asset: "BTC"
+      })
+    ]);
   });
 });

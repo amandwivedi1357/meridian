@@ -1,4 +1,4 @@
-import type { LocalOrderForReconciliation, OrderState } from "@meridian/core";
+import { ORDER_STATES, type LocalOrderForReconciliation, type OrderState } from "@meridian/core";
 
 import type { SqlQuery } from "./migration-runner.js";
 
@@ -52,6 +52,43 @@ export interface OrderWriteAheadRepositoryDeps {
 
 export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryDeps) {
   return {
+    async getSubmissionState(record: PendingOrderRecord): Promise<OrderState | null> {
+      validateRecord(record);
+      const result = await deps.execute({
+        text: `SELECT state,
+          (strategy_id = $2 AND signal_id = $3 AND attempt = $4 AND symbol = $5
+           AND side = $6 AND type = $7 AND quantity = $8::numeric
+           AND limit_price IS NOT DISTINCT FROM $9::numeric) AS identity_matches
+          FROM orders WHERE client_order_id = $1`,
+        values: [
+          record.clientOrderId,
+          record.strategyId,
+          record.signalId,
+          record.attempt,
+          record.symbol,
+          record.side,
+          record.type,
+          record.quantity,
+          record.limitPrice ?? null
+        ]
+      });
+      if (result.rows === undefined) throw new Error("Submission state unavailable");
+      if (result.rows.length === 0) return null;
+      const row = result.rows[0];
+      if (
+        result.rows.length !== 1 ||
+        typeof row !== "object" ||
+        row === null ||
+        !("identity_matches" in row) ||
+        row.identity_matches !== true
+      ) {
+        throw new Error("Write-ahead order identity conflict");
+      }
+      if (!("state" in row) || !ORDER_STATES.includes(row.state as OrderState)) {
+        throw new Error("Submission state invalid");
+      }
+      return row.state as OrderState;
+    },
     async claimOrderSubmission(clientOrderId: string): Promise<boolean> {
       if (clientOrderId.trim() === "") throw new Error("clientOrderId is required");
       // Persist ambiguity before network I/O: a crash must never authorize a second sender.

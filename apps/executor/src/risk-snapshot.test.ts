@@ -63,6 +63,36 @@ function fixture() {
   return { publicClient, tradingClient, repo, read };
 }
 describe("runtime risk snapshot", () => {
+  it("values only explicitly allocated capital, while checking real backing", async () => {
+    const f = fixture();
+    f.tradingClient.getBalances.mockResolvedValue([
+      { asset: "USDT", free: new Decimal(1000), locked: new Decimal(0) },
+      { asset: "BTC", free: new Decimal(1), locked: new Decimal(0) },
+      { asset: "FAUCET", free: new Decimal(1000), locked: new Decimal(0) }
+    ]);
+    const assertPolicy = vi.fn(async () => {});
+    const read = createRiskSnapshotReader({
+      publicClient: f.publicClient,
+      tradingClient: f.tradingClient,
+      repo: f.repo,
+      symbols: ["BTCUSDT"],
+      quoteAsset: "USDT",
+      nowMs: () => 100000,
+      allocation: {
+        policy: { id: "check", quoteAsset: "USDT", initialQuote: "100", symbols: ["BTCUSDT"] },
+        assertPolicy,
+        backingBaseline: async () => ({ USDT: "1000", BTC: "1" }),
+        listManagedOrders: async () => []
+      }
+    });
+    const snapshot = await read();
+    expect(snapshot.equity.toFixed()).toBe("100");
+    expect(snapshot.globalExposure.toFixed()).toBe("0");
+    expect(snapshot.positions.get("BTCUSDT")?.toFixed()).toBe("0");
+    assertPolicy.mockRejectedValueOnce(new Error("policy drift"));
+    await expect(read()).rejects.toThrow("policy drift");
+    await expect(f.read()).rejects.toThrow("valuation unavailable");
+  });
   it("marks all holdings using exchange metadata and bid/ask midpoint", async () => {
     const f = fixture();
     const snapshot = await f.read();

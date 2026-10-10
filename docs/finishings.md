@@ -15,6 +15,18 @@ When progress is reported:
 
 ## Open Items
 
+- [ ] **`reliability` / `acceptance-gate`: Resolve ambiguous submission liveness without blind resends.**
+  - Recorded: 2026-10-09. A worker can die after the durable UNKNOWN claim but before network send; a missing exchange order cannot prove the old send was never accepted/in flight. Current behavior correctly keeps this uncertainty pending, including after TTL expiry. Accepted post-send orders are now recovered read-only before expiry/new-order risk checks.
+  - Acceptance: explicitly define an audited recovery/operator-resolution policy, prove delayed/unknown exchange outcomes and concurrent workers do not authorize duplicate sends, and account for every signal without claiming the current at-most-once policy guarantees automatic no-loss execution.
+
+- [x] **`reliability` / `prototype-check`: Define audited Testnet allocation and prove bounded risk-approved fills.**
+  - Recorded: 2026-10-09. Real read-only full-account snapshot failed on a faucet asset with no priceable market. Other wallet holdings/limits may also block once that is resolved. The bounded live cancellation fixture verifies real order/user-data/kill adapters in isolated storage, not risk-approved strategy fills.
+  - Resolved 2026-10-09 for the prototype: opt-in dedicated Testnet portfolio with immutable policy/API-key binding, audited initial funding/exclusions/backing baseline, fresh-ledger gate, fee-aware engine/risk state and drift/foreign-order rejection. A real risk-approved 0.0002 BTC BUY/SELL round trip passed with no own open orders or managed BTC remaining. Artifact: `logs/verification/fill-4b0f19c47a01490690ca.json`. Limits were not raised; default full-wallet valuation still blocks unpriceable assets. Shared application configuration was not changed. Full-wallet valuation and rebaselining remain below.
+
+- [ ] **`reliability` / `acceptance-gate`: Complete unattended Phase 3.5 acceptance and demo evidence.**
+  - Final bounded fixture version also awaits a clean authorized rerun: the second round trip passed trading/post-fill monitoring but failed only evidence export, now fixed and PostgreSQL-tested. Do not overwrite that failed artifact or call it a clean pass. No extra live orders were placed after the export fix.
+  - The user explicitly kept the 48h gate pending. A bounded deterministic-strategy fill fixture does not prove EMA performance, long-running account parity, reconnect durability or 48h operation. Complete the full planned run and screen recording only with separate authorization and an appropriate prepared portfolio.
+
 - [ ] **`reliability` / `prototype-gap`: Extend risk valuation and operator rebaselining without weakening fail-closed behavior.**
   - Recorded: 2026-10-08. Phase 3.4 blocks unpriceable account assets, missing opening cost basis, and third-asset fees without historical conversion. Portfolio snapshots/fill replay are conservative but become expensive with many assets or a long fill history.
   - Acceptance: support explicit, audited opening inventory and Testnet-reset/cash-flow equity rebaselining; persist exact historical fee conversion and incremental accounting; improve snapshot collection without hiding stale data. Current unsupported inputs must remain blocked until their values are reliable. See `docs/risk-engine.md`.

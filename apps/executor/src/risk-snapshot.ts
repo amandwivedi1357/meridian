@@ -1,4 +1,4 @@
-import { Decimal } from "@meridian/core";
+import { Decimal, projectTestnetAllocation, type TestnetAllocation } from "@meridian/core";
 import type { BinanceRestClient, createTestnetTradingClient } from "@meridian/binance-client";
 import type { RiskRepository } from "@meridian/db";
 import type { RiskFill } from "./risk-accounting.js";
@@ -11,14 +11,48 @@ export function createRiskSnapshotReader(options: {
   symbols: readonly string[];
   quoteAsset: string;
   nowMs?: () => number;
+  assertPortfolioPolicy?: () => Promise<void>;
+  allocation?: {
+    policy: TestnetAllocation;
+    assertPolicy: () => Promise<void>;
+    backingBaseline: () => Promise<Record<string, string>>;
+    listManagedOrders: () => Promise<readonly { clientOrderId: string; symbol: string }[]>;
+  };
 }) {
   const now = options.nowMs ?? Date.now;
   return async (): Promise<RiskSnapshot> => {
     // Timestamp at the start, so slow or queued requests cannot look fresh.
     const observedAtMs = now();
+    await options.assertPortfolioPolicy?.();
     const info = await options.publicClient.getExchangeInfo();
-    const balances = await options.tradingClient.getBalances();
+    let balances = await options.tradingClient.getBalances();
     const openOrders = await options.tradingClient.openOrders();
+    const fillRows = await options.repo.listFills();
+    if (options.allocation) {
+      await options.allocation.assertPolicy();
+      if (
+        options.allocation.policy.quoteAsset !== options.quoteAsset ||
+        options.symbols.some((symbol) => !options.allocation!.policy.symbols.includes(symbol))
+      )
+        throw new Error("Risk allocation scope mismatch");
+      balances = projectTestnetAllocation({
+        policy: options.allocation.policy,
+        metadata: info.symbols,
+        balances,
+        openOrders,
+        backingBaseline: await options.allocation.backingBaseline(),
+        managedOrders: await options.allocation.listManagedOrders(),
+        fills: fillRows.map((row) => ({
+          symbol: String(row.symbol),
+          side: row.side as "BUY" | "SELL",
+          quantity: String(row.quantity),
+          price: String(row.price),
+          fee: String(row.fee),
+          feeAsset: String(row.fee_asset),
+          eventTimeMs: Number(row.event_time_ms)
+        }))
+      }).balances;
+    }
     const markets = new Map<
       string,
       { mid: Decimal; bid: Decimal; ask: Decimal; observedAtMs: number }
@@ -106,7 +140,7 @@ export function createRiskSnapshotReader(options: {
       positions.set(symbol, total);
     }
     const fills: RiskFill[] = [];
-    for (const row of await options.repo.listFills()) {
+    for (const row of fillRows) {
       const metadata = info.symbols.find((entry) => entry.symbol === row.symbol);
       if (
         metadata === undefined ||

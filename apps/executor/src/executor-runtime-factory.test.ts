@@ -326,8 +326,9 @@ describe("createExecutorRuntimeFromDeps", () => {
       [{ key: "signals", id: ">" }],
       { count: 7, blockMs: 25 }
     );
-    expect(normalizeSql(queries[0]?.text ?? "")).toContain("insert into orders");
-    expect(queries[0]?.values).toEqual(
+    expect(normalizeSql(queries[0]?.text ?? "")).toContain("select state");
+    expect(normalizeSql(queries[1]?.text ?? "")).toContain("insert into orders");
+    expect(queries[1]?.values).toEqual(
       expect.arrayContaining(["ema", "sig_1", "BTCUSDT", "BUY", "LIMIT", "0.0002", "83000.91"])
     );
     expect(placeOrder).toHaveBeenCalledWith(

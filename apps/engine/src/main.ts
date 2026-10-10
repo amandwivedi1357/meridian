@@ -1,6 +1,8 @@
-import { createTestnetTradingClientFromEnv } from "@meridian/binance-client";
+import { createTestnetTradingClientFromEnv, BinanceRestClient } from "@meridian/binance-client";
 import { loadConfig } from "@meridian/config";
-import { Decimal } from "@meridian/core";
+import { Decimal, allocationFromEnv } from "@meridian/core";
+import { createTestnetAllocationRepository, testnetAccountBinding } from "@meridian/db";
+import { createAllocatedAccountState } from "./allocated-account-state.js";
 import { createLogger } from "@meridian/observability";
 import { pathToFileURL } from "node:url";
 
@@ -45,10 +47,34 @@ export async function runCliMain(): Promise<EngineMainResult> {
     const fillReader = createLiveFillReader({
       query: clients.postgres.query
     });
-    const accountState = createLiveAccountState({
-      listFills: fillReader.listFills,
-      getBalances: tradingClient.getBalances
+    const allocation = allocationFromEnv(process.env);
+    const allocationRepo = createTestnetAllocationRepository({
+      async execute(query) {
+        return { ...(await clients.postgres.query(query)), rowCount: null };
+      }
     });
+    const binding = allocation ? testnetAccountBinding(process.env.BINANCE_API_KEY) : undefined;
+    const assertPolicy = () => allocationRepo.assertPolicy(allocation, binding);
+    await assertPolicy();
+    if (allocation && !allocation.symbols.includes(symbol))
+      throw new Error("Engine symbol outside allocated portfolio");
+    const accountState = allocation
+      ? createAllocatedAccountState({
+          policy: allocation,
+          publicClient: new BinanceRestClient({ environment: "testnet" }),
+          tradingClient,
+          fillReader,
+          assertPolicy,
+          backingBaseline: allocationRepo.backingBaseline,
+          listManagedOrders: allocationRepo.listManagedOrders
+        })
+      : createLiveAccountState({
+          listFills: fillReader.listFills,
+          async getBalances() {
+            await assertPolicy();
+            return tradingClient.getBalances();
+          }
+        });
 
     const runtime = createEngineRuntimeFromDeps({
       bus: clients.redis,

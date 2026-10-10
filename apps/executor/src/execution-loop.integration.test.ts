@@ -120,7 +120,7 @@ describe.skipIf(process.env.RUN_EXECUTION_INTEGRATION !== "1")(
         payload: JSON.stringify(serializeSignal(signal()))
       });
     }
-    async function launch(stage: string) {
+    async function launch(stage: string, nowMs?: number) {
       const child = fork(new URL("./testing/crash-worker.mjs", import.meta.url), [], {
         stdio: ["ignore", "ignore", "pipe", "ipc"],
         execArgv: [],
@@ -128,7 +128,8 @@ describe.skipIf(process.env.RUN_EXECUTION_INTEGRATION !== "1")(
           ...process.env,
           CRASH_TEST_DATABASE_URL: databaseUrl,
           CRASH_TEST_REDIS_URL: redisUrl,
-          CRASH_TEST_STAGE: stage
+          CRASH_TEST_STAGE: stage,
+          ...(nowMs === undefined ? {} : { CRASH_TEST_NOW_MS: String(nowMs) })
         }
       });
       children.add(child);
@@ -251,6 +252,25 @@ describe.skipIf(process.env.RUN_EXECUTION_INTEGRATION !== "1")(
         ((await redis.sendCommand(["XPENDING", streams.signals, "executor"])) as unknown[])[0]
       ).toBe(1);
     }, 30000);
+    it.each(["sent-before-ack", "claimed-before-send"])(
+      "recovers expired %s without losing uncertainty or duplicating placement",
+      async (stage) => {
+        await publish();
+        const original = await launch(stage);
+        original.child.kill("SIGKILL");
+        await original.exited;
+        const recovered = await launch("recover", Date.now() + 120000);
+        expect(recovered.report.stage).toBe(stage === "sent-before-ack" ? "completed" : "blocked");
+        await recovered.exited;
+        expect((await pool.query("SELECT sends FROM simulated_exchange")).rows).toEqual(
+          stage === "sent-before-ack" ? [{ sends: 1 }] : []
+        );
+        expect(
+          ((await redis.sendCommand(["XPENDING", streams.signals, "executor"])) as unknown[])[0]
+        ).toBe(stage === "sent-before-ack" ? 0 : 1);
+      },
+      30000
+    );
     it("does not place or ACK when the actual write-ahead insert fails", async () => {
       await publish();
       const message = (await bus().xReadGroup("executor", "test", [

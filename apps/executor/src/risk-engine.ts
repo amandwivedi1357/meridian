@@ -27,6 +27,7 @@ export function createRiskEngine(options: {
   snapshot: () => Promise<RiskSnapshot>;
   assertReady: () => Promise<void>;
   nowMs?: () => number;
+  assertPortfolioPolicy?: () => Promise<void>;
 }) {
   const now = options.nowMs ?? Date.now;
   function validateSnapshot(snapshot: RiskSnapshot) {
@@ -56,6 +57,7 @@ export function createRiskEngine(options: {
     repo: LockedRiskRepository,
     snapshot: RiskSnapshot
   ): Promise<string | undefined> {
+    await options.assertPortfolioPolicy?.();
     validateSnapshot(snapshot);
     const peak = new Decimal(
       await repo.updatePeak(snapshot.equity.toFixed(), options.config.quoteAsset)

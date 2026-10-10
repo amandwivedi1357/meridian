@@ -6,6 +6,7 @@ export * from "./order-lifecycle.js";
 export * from "./client-order-id.js";
 export * from "./order-reconciliation.js";
 export * from "./signal.js";
+export * from "./testnet-allocation.js";
 export type SymbolCode = string;
 export type StrategyId = string;
 

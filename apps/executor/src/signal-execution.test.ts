@@ -59,6 +59,90 @@ function orderResult(clientOrderId: string): GatewayOrderResult {
 }
 
 describe("signal execution", () => {
+  it.each(["expired", "kill-switch"])(
+    "confirms an already-sent order after %s without new approval or placement",
+    async (mode) => {
+      const riskGate = {
+        evaluate: vi.fn(async () => ({ approved: false as const, reason: "kill-switch-engaged" }))
+      };
+      const store = {
+        getSubmissionState: vi.fn(async () => "UNKNOWN" as const),
+        recordPendingOrder: vi.fn(),
+        claimOrderSubmission: vi.fn()
+      };
+      const exchange = {
+        placeOrder: vi.fn(),
+        getOrder: vi.fn(async (request: { symbol: string; clientOrderId: string }) => request)
+      };
+      const bus = { xAck: vi.fn(async () => 1) };
+      const result = await processWithoutDefaults(message(signal()), {
+        store,
+        exchange,
+        bus,
+        riskGate,
+        group: "executor",
+        clientOrderIdPrefix: "mrd",
+        nowMs: () => (mode === "expired" ? 3000 : 1500)
+      });
+      expect(result.outcome).toBe("submitted");
+      expect(exchange.getOrder).toHaveBeenCalledOnce();
+      expect(exchange.placeOrder).not.toHaveBeenCalled();
+      expect(riskGate.evaluate).not.toHaveBeenCalled();
+      expect(store.recordPendingOrder).not.toHaveBeenCalled();
+      expect(store.claimOrderSubmission).not.toHaveBeenCalled();
+      expect(bus.xAck).toHaveBeenCalledOnce();
+    }
+  );
+  it.each(["not-found", "query-failed", "identity-conflict"])(
+    "leaves expired uncertain orders pending on %s",
+    async (mode) => {
+      const store = {
+        getSubmissionState: vi.fn(async () => {
+          if (mode === "identity-conflict") throw new Error("Write-ahead order identity conflict");
+          return "UNKNOWN" as const;
+        }),
+        recordPendingOrder: vi.fn(),
+        claimOrderSubmission: vi.fn()
+      };
+      const exchange = {
+        placeOrder: vi.fn(),
+        getOrder: vi.fn(async () => {
+          if (mode === "query-failed") throw new Error("query failed");
+          return null;
+        })
+      };
+      const bus = { xAck: vi.fn(async () => 1) };
+      await expect(
+        processWithoutDefaults(message(signal()), {
+          store,
+          exchange,
+          bus,
+          group: "executor",
+          clientOrderIdPrefix: "mrd",
+          nowMs: () => 3000
+        })
+      ).rejects.toThrow();
+      expect(exchange.placeOrder).not.toHaveBeenCalled();
+      expect(bus.xAck).not.toHaveBeenCalled();
+    }
+  );
+  it("still expires an unsent pending order without exchange calls", async () => {
+    const store = {
+      getSubmissionState: vi.fn(async () => "PENDING_NEW" as const),
+      recordPendingOrder: vi.fn(),
+      claimOrderSubmission: vi.fn()
+    };
+    const exchange = { placeOrder: vi.fn(), getOrder: vi.fn() };
+    const result = await executeWithoutDefaults(signal(), {
+      store,
+      exchange,
+      clientOrderIdPrefix: "mrd",
+      nowMs: () => 3000
+    });
+    expect(result.outcome).toBe("expired");
+    expect(exchange.getOrder).not.toHaveBeenCalled();
+    expect(exchange.placeOrder).not.toHaveBeenCalled();
+  });
   it("persists rejection before ACK and leaves it pending if auditing fails", async () => {
     const bus = { xAck: vi.fn(async () => 1) };
     const recordRejection = vi.fn(async () => {

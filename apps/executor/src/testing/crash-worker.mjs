@@ -32,7 +32,10 @@ try {
   await processSignalMessage(message, {
     group: "executor",
     clientOrderIdPrefix: "test",
-    nowMs: Date.now,
+    nowMs: () =>
+      process.env.CRASH_TEST_NOW_MS === undefined
+        ? Date.now()
+        : Number(process.env.CRASH_TEST_NOW_MS),
     riskGate: { evaluate: async () => ({ approved: true }) },
     bus: {
       async xAck(...args) {
@@ -41,6 +44,7 @@ try {
       }
     },
     store: {
+      getSubmissionState: store.getSubmissionState,
       async recordPendingOrder(record) {
         await store.recordPendingOrder(record);
         await checkpoint("persisted-before-claim");
