@@ -128,6 +128,10 @@ export function createTestnetTradingClient(options: TestnetTradingClientOptions)
       await prepareSignedOperation();
       return account.getBalances();
     },
+    async getAccountTrades(input: Parameters<typeof account.getAccountTrades>[0]) {
+      await prepareSignedOperation();
+      return account.getAccountTrades(input);
+    },
     synchronizeTime,
     userData,
     close: () => userData.close()

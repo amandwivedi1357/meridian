@@ -153,4 +153,34 @@ describe("createExecutorRuntimeClients", () => {
       rows: [{ one: 1 }, { two: 2 }]
     });
   });
+
+  it("uses the last postgres result when a multi-statement query returns an array", async () => {
+    const clients = createExecutorRuntimeClients(
+      {
+        postgresUrl: "postgres://user:pass@localhost:5432/meridian",
+        redisUrl: "redis://localhost:6379"
+      },
+      {
+        createPostgresPool: vi.fn(() => ({
+          query: vi.fn(async () => [
+            { rowCount: null, rows: [] },
+            { rowCount: 1, rows: [{ migrated: true }] }
+          ]),
+          end: vi.fn(async () => undefined)
+        })),
+        createRedisCommandClient: vi.fn(() => ({
+          connect: vi.fn(async () => undefined),
+          quit: vi.fn(async () => undefined),
+          sendCommand: vi.fn(async () => "1700000000000-0")
+        }))
+      }
+    );
+
+    await expect(clients.postgres.execute({ text: "CREATE; SELECT 1", values: [] })).resolves.toEqual(
+      {
+        rowCount: 1,
+        rows: [{ migrated: true }]
+      }
+    );
+  });
 });

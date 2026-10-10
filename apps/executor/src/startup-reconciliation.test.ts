@@ -150,6 +150,49 @@ describe("runStartupReconciliation", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
+  it("runs account-trade catch-up after reconciliation repairs", async () => {
+    const store = {
+      listOrdersForReconciliation: vi.fn(async () => localOrders),
+      markOrderReconciledTerminal: vi.fn(async () => undefined),
+      recordOrderExecutionUpdate: vi.fn(async () => undefined)
+    };
+    const exchange = {
+      getOrder: vi.fn(async () => ({
+        ...exchangeOrder,
+        status: "FILLED" as const,
+        executedQuantity: new Decimal("0.0002"),
+        cumulativeQuoteQuantity: new Decimal("16.600182")
+      }))
+    };
+    const accountTradeCatchUp = vi.fn(async () => ({
+      ordersChecked: 1,
+      tradesFetched: 1,
+      fillsPersisted: 1
+    }));
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    };
+
+    const report = await runStartupReconciliation({
+      store,
+      exchange,
+      logger,
+      accountTradeCatchUp
+    });
+
+    expect(accountTradeCatchUp).toHaveBeenCalledWith(report);
+    expect(logger.info).toHaveBeenCalledWith(
+      {
+        ordersChecked: 1,
+        tradesFetched: 1,
+        fillsPersisted: 1
+      },
+      "startup account-trade catch-up completed"
+    );
+  });
+
   it("logs and rethrows terminal repair failures so executor startup can fail closed", async () => {
     const error = new Error("database update failed");
     const store = {

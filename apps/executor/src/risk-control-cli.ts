@@ -1,17 +1,23 @@
 import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadEnvFile } from "node:process";
-import { createTestnetTradingClientFromEnv, BinanceRestClient } from "@meridian/binance-client";
+import {
+  createTestnetTradingClientFromEnv,
+  BinanceRestClient,
+  createBinanceReconciliationExchange
+} from "@meridian/binance-client";
 import { allocationFromEnv, projectTestnetAllocation } from "@meridian/core";
 import { loadConfig } from "@meridian/config";
 import {
   createRiskRepository,
   createTestnetAllocationRepository,
+  createOrderWriteAheadRepository,
   testnetAccountBinding
 } from "@meridian/db";
 import { createLogger } from "@meridian/observability";
 import { createKillSwitch } from "./kill-switch.js";
 import { createExecutorRuntimeClients } from "./runtime-clients.js";
+import { runUnknownOrderResolution } from "./unknown-order-resolution.js";
 
 export function authorizeRiskControl(env: NodeJS.ProcessEnv = process.env): void {
   const expected = env.MERIDIAN_RISK_ADMIN_TOKEN;
@@ -27,15 +33,19 @@ export function authorizeRiskControl(env: NodeJS.ProcessEnv = process.env): void
 }
 export async function runRiskControl(args = process.argv.slice(2)) {
   const action = args[0];
-  if (
-    (action !== "engage" && action !== "reset" && action !== "allocate") ||
-    args.length !== 2 ||
-    args[1] !==
-      (action === "allocate" ? "--confirm-testnet-allocation" : "--confirm-testnet-control")
-  ) {
-    throw new Error(
-      "Use engage|reset --confirm-testnet-control or allocate --confirm-testnet-allocation"
-    );
+  const unknownResolution = parseUnknownResolutionArgs(args);
+  const rebaseline = parseRebaselineArgs(args);
+  if (unknownResolution === undefined && rebaseline === undefined) {
+    if (
+      (action !== "engage" && action !== "reset" && action !== "allocate") ||
+      args.length !== 2 ||
+      args[1] !==
+        (action === "allocate" ? "--confirm-testnet-allocation" : "--confirm-testnet-control")
+    ) {
+      throw new Error(
+        "Use engage|reset --confirm-testnet-control, allocate --confirm-testnet-allocation, rebaseline --reason <reason> --confirm-testnet-rebaseline, or resolve-unknown --client-order-id <id> --reason <reason> --confirm-unknown-not-sent"
+      );
+    }
   }
   try {
     loadEnvFile(fileURLToPath(new URL("../../../.env", import.meta.url)));
@@ -44,7 +54,7 @@ export async function runRiskControl(args = process.argv.slice(2)) {
   }
   authorizeRiskControl();
   const allocation = allocationFromEnv(process.env);
-  if (action === "allocate" && !allocation)
+  if ((action === "allocate" || rebaseline !== undefined) && !allocation)
     throw new Error("MERIDIAN_TESTNET_ALLOCATION is required");
   const config = loadConfig();
   const clients = createExecutorRuntimeClients({
@@ -55,8 +65,19 @@ export async function runRiskControl(args = process.argv.slice(2)) {
   let trading: Awaited<ReturnType<typeof createTestnetTradingClientFromEnv>> | undefined;
   try {
     trading = await createTestnetTradingClientFromEnv({ autoSynchronizeTime: true });
-    await clients.redis.connect();
     const actor = `local-operator:${process.env.USERNAME ?? process.env.USER ?? "authenticated"}`;
+    if (unknownResolution !== undefined) {
+      const result = await runUnknownOrderResolution({
+        ...unknownResolution,
+        actor,
+        store: createOrderWriteAheadRepository(clients.postgres),
+        exchange: createBinanceReconciliationExchange({ client: trading })
+      });
+      logger.info(result, "unknown order resolution checked");
+      return;
+    }
+
+    await clients.redis.connect();
     const allocationRepo = createTestnetAllocationRepository(clients.postgres);
     if (action === "allocate" && allocation) {
       const info = await new BinanceRestClient({ environment: "testnet" }).getExchangeInfo();
@@ -79,6 +100,40 @@ export async function runRiskControl(args = process.argv.slice(2)) {
       logger.info(
         { policy: allocation, excludedWalletAssets: view.excludedWalletAssets },
         "Testnet allocation audited; kill switch remains engaged"
+      );
+      return;
+    }
+    if (rebaseline !== undefined && allocation) {
+      const info = await new BinanceRestClient({ environment: "testnet" }).getExchangeInfo();
+      const fills = (await createRiskRepository(clients.postgres).listFills()).map((row) => ({
+        symbol: String(row.symbol),
+        side: row.side as "BUY" | "SELL",
+        quantity: String(row.quantity),
+        price: String(row.price),
+        fee: String(row.fee),
+        feeAsset: String(row.fee_asset),
+        eventTimeMs: Number(row.event_time_ms)
+      }));
+      const view = projectTestnetAllocation({
+        policy: allocation,
+        metadata: info.symbols,
+        balances: await trading.getBalances(),
+        openOrders: await trading.openOrders(),
+        fills,
+        managedOrders: await allocationRepo.listManagedOrders()
+      });
+      await allocationRepo.rebaseline({
+        database: clients.postgres,
+        policy: allocation,
+        accountBinding: testnetAccountBinding(process.env.BINANCE_API_KEY),
+        actor,
+        reason: rebaseline.reason,
+        excludedWalletAssets: view.excludedWalletAssets,
+        backingBaseline: view.backingTotals
+      });
+      logger.info(
+        { backingBaseline: view.backingTotals, excludedWalletAssets: view.excludedWalletAssets },
+        "Testnet allocation rebaselined; kill switch and ledger remain unchanged"
       );
       return;
     }
@@ -116,6 +171,45 @@ export async function runRiskControl(args = process.argv.slice(2)) {
     await clients.close();
   }
 }
+
+function parseUnknownResolutionArgs(
+  args: readonly string[]
+): { readonly clientOrderId: string; readonly reason: string } | undefined {
+  if (args[0] !== "resolve-unknown") return undefined;
+
+  if (
+    args.length !== 6 ||
+    args[1] !== "--client-order-id" ||
+    args[3] !== "--reason" ||
+    args[5] !== "--confirm-unknown-not-sent"
+  ) {
+    throw new Error(
+      "Use resolve-unknown --client-order-id <id> --reason <reason> --confirm-unknown-not-sent"
+    );
+  }
+
+  const clientOrderId = args[2]?.trim() ?? "";
+  const reason = args[4]?.trim() ?? "";
+  if (clientOrderId === "" || reason === "") {
+    throw new Error("Unknown order resolution requires client order id and reason");
+  }
+
+  return { clientOrderId, reason };
+}
+
+function parseRebaselineArgs(args: readonly string[]): { readonly reason: string } | undefined {
+  if (args[0] !== "rebaseline") return undefined;
+
+  if (args.length !== 4 || args[1] !== "--reason" || args[3] !== "--confirm-testnet-rebaseline") {
+    throw new Error("Use rebaseline --reason <reason> --confirm-testnet-rebaseline");
+  }
+
+  const reason = args[2]?.trim() ?? "";
+  if (reason === "") throw new Error("Rebaseline requires a reason");
+
+  return { reason };
+}
+
 if (process.argv[1] !== undefined && pathToFileURL(process.argv[1]).href === import.meta.url) {
   runRiskControl().catch(() => {
     process.stderr.write("Risk control failed; inspect risk state and configuration.\n");

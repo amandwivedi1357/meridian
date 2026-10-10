@@ -2,7 +2,8 @@ import Fastify from "fastify";
 import { Pool } from "pg";
 import { createClient } from "redis";
 import { fileURLToPath } from "node:url";
-import { registerDashboard } from "./dashboard.js";
+import { loadApiAuthConfig } from "./app/auth.js";
+import { registerApiRoutes } from "./app/register-routes.js";
 
 const server = Fastify({ logger: true });
 const redis = createClient({
@@ -24,7 +25,12 @@ const pool = new Pool({
 pool.on("error", (error) =>
   server.log.warn({ err: error }, "Dashboard database connection unavailable")
 );
-registerDashboard(server, redis, pool, fileURLToPath(new URL("../../../", import.meta.url)));
+registerApiRoutes(server, {
+  auth: loadApiAuthConfig(process.env),
+  redis,
+  pool,
+  workspace: fileURLToPath(new URL("../../../", import.meta.url))
+});
 server.addHook("onClose", async () => {
   if (redis.isOpen) redis.destroy();
   await pool.end();

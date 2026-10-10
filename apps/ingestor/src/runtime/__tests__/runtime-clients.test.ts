@@ -16,7 +16,8 @@ describe("createRuntimeClients", () => {
     const clients = createRuntimeClients(
       {
         postgresUrl: "postgres://user:pass@localhost:5432/meridian",
-        redisUrl: "redis://localhost:6379"
+        redisUrl: "redis://localhost:6379",
+        redisStreamMaxLen: 100000
       },
       {
         createPostgresPool: vi.fn(() => postgresPool),
@@ -43,6 +44,9 @@ describe("createRuntimeClients", () => {
     expect(redisCommandClient.sendCommand).toHaveBeenCalledWith([
       "XADD",
       "market.trade.BTCUSDT",
+      "MAXLEN",
+      "~",
+      "100000",
       "*",
       "schemaVersion",
       "1",
@@ -59,6 +63,54 @@ describe("createRuntimeClients", () => {
     ]);
     expect(redisCommandClient.quit).toHaveBeenCalledOnce();
     expect(postgresPool.end).toHaveBeenCalledOnce();
+  });
+
+  it("omits MAXLEN when Redis stream retention is not configured", async () => {
+    const redisCommandClient = {
+      connect: vi.fn(async () => undefined),
+      quit: vi.fn(async () => undefined),
+      sendCommand: vi.fn(async () => "1700000000000-0")
+    };
+    const clients = createRuntimeClients(
+      {
+        postgresUrl: "postgres://user:pass@localhost:5432/meridian",
+        redisUrl: "redis://localhost:6379"
+      },
+      {
+        createPostgresPool: vi.fn(() => ({
+          query: vi.fn(async () => ({ rows: [] })),
+          end: vi.fn(async () => undefined)
+        })),
+        createRedisCommandClient: vi.fn(() => redisCommandClient)
+      }
+    );
+
+    await clients.redis.xAdd("market.trade.BTCUSDT", "*", {
+      schemaVersion: "1",
+      kind: "trade",
+      symbol: "BTCUSDT",
+      eventId: "trade:BTCUSDT:123",
+      occurredAtMs: "1700000000000",
+      payload: Buffer.from("encoded")
+    });
+
+    expect(redisCommandClient.sendCommand).toHaveBeenCalledWith([
+      "XADD",
+      "market.trade.BTCUSDT",
+      "*",
+      "schemaVersion",
+      "1",
+      "kind",
+      "trade",
+      "symbol",
+      "BTCUSDT",
+      "eventId",
+      "trade:BTCUSDT:123",
+      "occurredAtMs",
+      "1700000000000",
+      "payload",
+      Buffer.from("encoded")
+    ]);
   });
 
   it("does not quit redis when the client was never connected", async () => {

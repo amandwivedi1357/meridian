@@ -176,6 +176,37 @@ describe("createTestnetTradingClient", () => {
     expect(acquire.mock.calls).toEqual([[1], [20]]);
   });
 
+  it("wires account trade catch-up through the same synchronized clock", async () => {
+    const { client, fetch, acquire } = setup();
+    await client.synchronizeTime();
+    fetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify([
+          {
+            symbol: "BTCUSDT",
+            id: 789,
+            orderId: 123,
+            price: "83000.91",
+            qty: "0.0002",
+            quoteQty: "16.600182",
+            commission: "0",
+            commissionAsset: "USDT",
+            time: 1_704_067_201_000,
+            isBuyer: true,
+            isMaker: false,
+            isBestMatch: true
+          }
+        ])
+      )
+    );
+
+    const trades = await client.getAccountTrades({ symbol: "BTCUSDT", orderId: "123" });
+
+    expect(trades[0]?.tradeId).toBe("789");
+    expect(new URL(String(fetch.mock.calls[1]?.[0])).pathname).toBe("/api/v3/myTrades");
+    expect(acquire.mock.calls).toEqual([[1], [20]]);
+  });
+
   it("deduplicates concurrent synchronization and weight acquisition", async () => {
     const { client, fetch, acquire } = setup();
     await Promise.all([

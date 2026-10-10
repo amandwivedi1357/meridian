@@ -13,6 +13,7 @@ import { runEngineMain, type EngineMainResult } from "./main-runner.js";
 import { createLiveAccountState } from "./live-account-state.js";
 import { createLiveFillReader } from "./live-fill-reader.js";
 import { createEngineRuntimeClients } from "./runtime-clients.js";
+import { createStrategyControlReader } from "./strategy-control-reader.js";
 
 const logger = createLogger("engine");
 
@@ -85,6 +86,7 @@ export async function runCliMain(): Promise<EngineMainResult> {
       group: "engine",
       consumer: `engine-${process.pid}`,
       accountState,
+      isStrategyPaused: createStrategyControlReader(clients.postgres).isPaused,
       signalTtlMs: readPositiveInteger(
         process.env.ENGINE_SIGNAL_TTL_MS ?? "5000",
         "ENGINE_SIGNAL_TTL_MS"

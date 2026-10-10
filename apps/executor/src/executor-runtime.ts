@@ -6,6 +6,7 @@ import {
   type StartupReconciliationLogger,
   type StartupReconciliationStore
 } from "./startup-reconciliation.js";
+import type { AccountTradeCatchUpResult } from "./account-trade-catch-up.js";
 import type { ReconciliationExchange } from "@meridian/core";
 
 export interface ExecutorSignalConsumer {
@@ -18,6 +19,7 @@ export interface ExecutorRuntimeDeps {
   readonly store: StartupReconciliationStore;
   readonly exchange: ReconciliationExchange;
   readonly logger: StartupReconciliationLogger;
+  readonly accountTradeCatchUp?: (report: OrderReconciliationReport) => Promise<AccountTradeCatchUpResult>;
   readonly nowMs?: () => number;
   readonly signalConsumer?: ExecutorSignalConsumer;
 }
@@ -38,6 +40,9 @@ export function createExecutorRuntime(deps: ExecutorRuntimeDeps): ExecutorRuntim
       exchange: deps.exchange,
       logger: deps.logger,
       reason,
+      ...(deps.accountTradeCatchUp === undefined
+        ? {}
+        : { accountTradeCatchUp: deps.accountTradeCatchUp }),
       ...(deps.nowMs === undefined ? {} : { nowMs: deps.nowMs })
     });
   }

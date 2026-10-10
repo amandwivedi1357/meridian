@@ -76,6 +76,73 @@ describe("createOrderWriteAheadRepository", () => {
       }).getSubmissionState(record)
     ).toBeNull();
   });
+  it("reads local orders for manual UNKNOWN resolution", async () => {
+    const execute = vi.fn(async () => ({
+      rowCount: 1,
+      rows: [
+        {
+          client_order_id: "mrd_unknown",
+          symbol: "BTCUSDT",
+          state: "UNKNOWN",
+          exchange_order_id: null
+        }
+      ]
+    }));
+
+    await expect(
+      createOrderWriteAheadRepository({ execute }).getOrderForUnknownResolution("mrd_unknown")
+    ).resolves.toEqual({
+      clientOrderId: "mrd_unknown",
+      symbol: "BTCUSDT",
+      state: "UNKNOWN",
+      exchangeOrderId: null
+    });
+
+    const query = (execute.mock.calls as unknown as [SqlQuery][])[0]![0];
+    expect(normalizeSql(query.text)).toContain("from orders where client_order_id = $1");
+    expect(query.values).toEqual(["mrd_unknown"]);
+  });
+
+  it("marks unresolved UNKNOWN orders expired with an audit record for manual not-sent resolution", async () => {
+    const db = createQueryRecorder();
+    const repo = createOrderWriteAheadRepository(db);
+
+    await repo.resolveUnknownOrderAsNotSent({
+      clientOrderId: "mrd_unknown",
+      actor: "local-operator:test",
+      reason: "exchange-query-missing-after-downtime",
+      resolvedAtMs: 1_704_067_200_000
+    });
+
+    const sql = normalizeSql(db.queries[0]?.text ?? "");
+    expect(sql).toContain("update orders");
+    expect(sql).toContain("set state = 'expired'");
+    expect(sql).toContain("where client_order_id = $1");
+    expect(sql).toContain("and state = 'unknown'");
+    expect(sql).toContain("and exchange_order_id is null");
+    expect(sql).toContain("insert into audit_log");
+    expect(sql).toContain("unknown-order-resolved-not-sent");
+    expect(db.queries[0]?.values).toEqual([
+      "mrd_unknown",
+      "local-operator:test",
+      "exchange-query-missing-after-downtime",
+      new Date(1_704_067_200_000)
+    ]);
+  });
+
+  it("fails closed when manual UNKNOWN resolution updates no row", async () => {
+    const db = createQueryRecorder();
+    db.execute.mockResolvedValue({ rowCount: 0 });
+
+    await expect(
+      createOrderWriteAheadRepository(db).resolveUnknownOrderAsNotSent({
+        clientOrderId: "mrd_unknown",
+        actor: "local-operator:test",
+        reason: "exchange-query-missing-after-downtime",
+        resolvedAtMs: 1_704_067_200_000
+      })
+    ).rejects.toThrow("Unknown order resolution unavailable");
+  });
   it.each([
     { rowCount: 0 },
     { rowCount: 1, rows: [{ state: "UNKNOWN", identity_matches: false }] },
@@ -354,7 +421,7 @@ describe("createOrderWriteAheadRepository", () => {
     ]);
   });
 
-  it("records fee-aware trade fills idempotently by execution id", async () => {
+  it("records fee-aware trade fills idempotently by execution id or trade id", async () => {
     const db = createQueryRecorder();
     const repo = createOrderWriteAheadRepository(db);
 
@@ -381,7 +448,7 @@ describe("createOrderWriteAheadRepository", () => {
     const fillQuery = db.queries[1];
     const sql = normalizeSql(fillQuery?.text ?? "");
     expect(sql).toContain("insert into order_fills");
-    expect(sql).toContain("on conflict (client_order_id, execution_id) do nothing");
+    expect(sql).toContain("on conflict do nothing");
     expect(fillQuery?.values).toEqual([
       "mrd_order_1",
       "457",

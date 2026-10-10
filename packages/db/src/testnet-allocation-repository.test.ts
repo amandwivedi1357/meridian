@@ -10,7 +10,14 @@ const backingBaseline = { USDT: "10000", BTC: "1" };
 const saved = { policy, accountBinding: binding, backingBaseline };
 function fixture(details: unknown[] = []) {
   const execute = vi.fn(async (query: SqlQuery) => {
-    if (query.text.startsWith("SELECT details")) return { rows: details, rowCount: details.length };
+    if (query.text.includes("FROM audit_log")) {
+      const rows = details.map((entry) =>
+        typeof entry === "object" && entry !== null && "action" in entry
+          ? entry
+          : { action: "testnet-allocation-created", ...(entry as object) }
+      );
+      return { rows, rowCount: rows.length };
+    }
     if (query.text.startsWith("SELECT\n"))
       return { rows: [{ engaged: true, fresh: true }], rowCount: 1 };
     return { rows: [], rowCount: 1 };
@@ -87,6 +94,70 @@ describe("immutable audited allocation", () => {
       fixture([{ details: { ...saved, backingBaseline: { BTC: "NaN" } } }]).repo.backingBaseline()
     ).rejects.toThrow("unavailable");
     expect(await fixture([{ details: saved }]).repo.policy()).toEqual(policy);
+  });
+  it("audits rebaseline without changing the immutable allocation policy", async () => {
+    const f = fixture([{ action: "testnet-allocation-created", details: saved }]);
+
+    await f.repo.rebaseline({
+      database: f.db,
+      policy,
+      accountBinding: binding,
+      actor: "operator",
+      reason: "testnet faucet reset",
+      excludedWalletAssets: ["FAUCET"],
+      backingBaseline: { USDT: "100.003", BTC: "0" }
+    });
+
+    expect(f.execute.mock.calls[0]![0].text).toContain("pg_advisory_xact_lock(3140034)");
+    const insert = f.execute.mock.calls.at(-1)![0];
+    expect(insert.text).toContain("testnet-allocation-rebaseline");
+    const details = JSON.parse(String(insert.values[1]));
+    expect(details).toMatchObject({
+      policy,
+      accountBinding: binding,
+      previousBackingBaseline: backingBaseline,
+      backingBaseline: { USDT: "100.003", BTC: "0" },
+      reason: "testnet faucet reset",
+      excludedWalletAssets: ["FAUCET"]
+    });
+  });
+
+  it("reads the latest audited rebaseline as the active backing baseline", async () => {
+    const f = fixture([
+      { action: "testnet-allocation-created", details: saved },
+      {
+        action: "testnet-allocation-rebaseline",
+        details: {
+          ...saved,
+          backingBaseline: { USDT: "100.003", BTC: "0" },
+          previousBackingBaseline: backingBaseline,
+          reason: "testnet reset"
+        }
+      }
+    ]);
+
+    expect(await f.repo.backingBaseline()).toEqual({ USDT: "100.003", BTC: "0" });
+    await f.repo.assertPolicy(policy, binding);
+  });
+
+  it("refuses rebaseline when account or allocation policy drifted", async () => {
+    const f = fixture([{ action: "testnet-allocation-created", details: saved }]);
+    const options = {
+      database: f.db,
+      policy,
+      accountBinding: testnetAccountBinding("another-key"),
+      actor: "operator",
+      reason: "testnet reset",
+      excludedWalletAssets: [],
+      backingBaseline
+    };
+
+    await expect(f.repo.rebaseline(options)).rejects.toThrow("drift");
+    expect(
+      f.execute.mock.calls.some(
+        ([q]) => q.values?.[1] === "testnet-allocation-rebaseline"
+      )
+    ).toBe(false);
   });
   it.each([
     { engaged: false, fresh: true },

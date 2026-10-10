@@ -20,6 +20,7 @@ export interface EngineRuntimeFactoryDeps {
   readonly signalTtlMs: number;
   readonly maxMarketDataAgeMs: number;
   readonly accountState?: LiveAccountStateReader;
+  readonly isStrategyPaused?: (strategyId: string) => Promise<boolean>;
   readonly nowMs?: () => number;
   readonly readCount?: number;
   readonly blockMs?: number;
@@ -40,6 +41,7 @@ export function createEngineRuntimeFromDeps(deps: EngineRuntimeFactoryDeps): Eng
     signalTtlMs: deps.signalTtlMs,
     maxMarketDataAgeMs: deps.maxMarketDataAgeMs,
     logger: deps.logger,
+    ...(deps.isStrategyPaused === undefined ? {} : { isStrategyPaused: deps.isStrategyPaused }),
     ...(deps.accountState === undefined ? {} : { accountState: deps.accountState })
   });
 

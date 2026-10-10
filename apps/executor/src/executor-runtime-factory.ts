@@ -8,6 +8,7 @@ import type { RedisStreamClient } from "@meridian/bus";
 import type { Registry } from "@meridian/observability";
 
 import { registerExecutorMetrics } from "./executor-metrics.js";
+import { runAccountTradeCatchUp } from "./account-trade-catch-up.js";
 import { createExecutorRuntime, type ExecutorRuntime } from "./executor-runtime.js";
 import { createSignalConsumer, type SignalConsumerLogger } from "./signal-consumer.js";
 import type { StartupReconciliationLogger } from "./startup-reconciliation.js";
@@ -16,7 +17,9 @@ import type { SignalMessageDeps } from "./signal-execution.js";
 
 export interface ExecutorRuntimeFactoryDeps {
   readonly database: OrderWriteAheadRepositoryDeps;
-  readonly binanceClient: BinanceReconciliationExchangeClient;
+  readonly binanceClient: BinanceReconciliationExchangeClient & {
+    readonly getAccountTrades?: Parameters<typeof runAccountTradeCatchUp>[0]["accountTrades"]["getAccountTrades"];
+  };
   readonly logger: StartupReconciliationLogger & SignalConsumerLogger;
   readonly nowMs?: () => number;
   readonly metricsRegistry?: Registry;
@@ -86,6 +89,16 @@ export function createExecutorRuntimeFromDeps(deps: ExecutorRuntimeFactoryDeps):
     store,
     exchange: reconciliationExchange,
     logger: deps.logger,
+    ...(deps.binanceClient.getAccountTrades === undefined
+      ? {}
+      : {
+          accountTradeCatchUp: (report) =>
+            runAccountTradeCatchUp({
+              report,
+              accountTrades: { getAccountTrades: deps.binanceClient.getAccountTrades! },
+              store
+            })
+        }),
     ...(deps.nowMs === undefined ? {} : { nowMs: deps.nowMs }),
     ...(signalConsumer === undefined ? {} : { signalConsumer })
   });

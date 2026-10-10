@@ -131,8 +131,10 @@ export const marketDataMigrations: readonly SqlMigration[] = [
 
       CREATE INDEX IF NOT EXISTS order_fills_client_event_time_idx
         ON order_fills (client_order_id, event_time_ms);
-    `
-  },
+      CREATE UNIQUE INDEX IF NOT EXISTS order_fills_client_trade_id_idx
+        ON order_fills (client_order_id, trade_id);
+      `
+    },
   {
     id: "005_risk_controls_schema",
     sql: `
@@ -177,6 +179,27 @@ export const marketDataMigrations: readonly SqlMigration[] = [
         ON risk_reservations (strategy_id, reserved_at_ms);
       CREATE INDEX IF NOT EXISTS risk_events_ts_idx ON risk_events (ts DESC);
       CREATE INDEX IF NOT EXISTS orders_strategy_created_idx ON orders (strategy_id, created_at);
+    `
+  },
+  {
+    id: "006_order_fills_trade_id_dedupe_index",
+    sql: `
+      CREATE UNIQUE INDEX IF NOT EXISTS order_fills_client_trade_id_idx
+        ON order_fills (client_order_id, trade_id);
+    `
+  },
+  {
+    id: "007_strategy_control_state",
+    sql: `
+      CREATE TABLE IF NOT EXISTS strategy_control_state (
+        strategy_id text PRIMARY KEY,
+        paused boolean NOT NULL,
+        reason text NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS strategy_control_paused_idx
+        ON strategy_control_state (paused, updated_at);
     `
   }
 ];

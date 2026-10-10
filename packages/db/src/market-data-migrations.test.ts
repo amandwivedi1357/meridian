@@ -22,7 +22,7 @@ describe("market data migrations", () => {
     expect(sql).toContain("values ('global', true, 'awaiting-explicit-activation')");
   });
   it("creates Timescale extension and trades/klines hypertables", () => {
-    expect(marketDataMigrations).toHaveLength(5);
+    expect(marketDataMigrations).toHaveLength(7);
 
     const migration = marketDataMigrations[0];
     expect(migration?.id).toBe("001_market_data_schema");
@@ -131,5 +131,30 @@ describe("market data migrations", () => {
     expect(sql).toContain("fee numeric not null");
     expect(sql).toContain("fee_asset text not null");
     expect(sql).toContain("primary key (client_order_id, execution_id)");
+    expect(sql).toContain("order_fills_client_trade_id_idx");
+    expect(sql).toContain("on order_fills (client_order_id, trade_id)");
+  });
+
+  it("adds a forward-only trade-id dedupe index migration for existing order fills", () => {
+    const migration = marketDataMigrations[5];
+    expect(migration?.id).toBe("006_order_fills_trade_id_dedupe_index");
+
+    const sql = normalizeSql(migration?.sql ?? "");
+
+    expect(sql).toContain("create unique index if not exists order_fills_client_trade_id_idx");
+    expect(sql).toContain("on order_fills (client_order_id, trade_id)");
+  });
+
+  it("adds durable strategy control state for operator pause controls", () => {
+    const migration = marketDataMigrations[6];
+    expect(migration?.id).toBe("007_strategy_control_state");
+
+    const sql = normalizeSql(migration?.sql ?? "");
+
+    expect(sql).toContain("create table if not exists strategy_control_state");
+    expect(sql).toContain("strategy_id text primary key");
+    expect(sql).toContain("paused boolean not null");
+    expect(sql).toContain("reason text not null");
+    expect(sql).toContain("strategy_control_paused_idx");
   });
 });

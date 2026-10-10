@@ -41,7 +41,9 @@ describe("createIngestorApp", () => {
       "002_backtest_results_schema",
       "003_live_order_write_ahead_schema",
       "004_live_order_execution_schema",
-      "005_risk_controls_schema"
+      "005_risk_controls_schema",
+      "006_order_fills_trade_id_dedupe_index",
+      "007_strategy_control_state"
     ]);
     expect(postgres.query).toHaveBeenCalledWith(
       expect.stringContaining("CREATE TABLE IF NOT EXISTS orders"),
@@ -53,6 +55,10 @@ describe("createIngestorApp", () => {
     );
     expect(postgres.query).toHaveBeenCalledWith(
       expect.stringContaining("CREATE TABLE IF NOT EXISTS trades"),
+      []
+    );
+    expect(postgres.query).toHaveBeenCalledWith(
+      expect.stringContaining("CREATE TABLE IF NOT EXISTS strategy_control_state"),
       []
     );
     expect(redis.xAdd).toHaveBeenCalledOnce();

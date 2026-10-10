@@ -6,6 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/main.ts",
+    "smoke:catch-up": "tsx src/account-trade-catch-up-smoke.ts",
+    "verify:missed-fill-catch-up": "tsx src/testing/live-missed-fill-catch-up.mjs",
     "risk:control": "tsx src/risk-control-cli.ts",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",

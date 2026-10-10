@@ -43,6 +43,20 @@ export interface OrderExecutionUpdateRecord {
   };
 }
 
+export interface UnknownOrderResolutionLocalRecord {
+  readonly clientOrderId: string;
+  readonly symbol: string;
+  readonly state: OrderState;
+  readonly exchangeOrderId: string | null;
+}
+
+export interface UnknownOrderNotSentResolutionRecord {
+  readonly clientOrderId: string;
+  readonly actor: string;
+  readonly reason: string;
+  readonly resolvedAtMs: number;
+}
+
 export interface OrderWriteAheadRepositoryDeps {
   readonly execute: (query: SqlQuery) => Promise<{
     readonly rowCount: number | null;
@@ -100,6 +114,59 @@ export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryD
       if (result.rowCount === null) throw new Error("Submission claim result is unavailable");
       return result.rowCount === 1;
     },
+
+    async getOrderForUnknownResolution(
+      clientOrderId: string
+    ): Promise<UnknownOrderResolutionLocalRecord | null> {
+      if (clientOrderId.trim() === "") throw new Error("clientOrderId is required");
+
+      const result = await deps.execute({
+        text: `
+          SELECT client_order_id, symbol, state, exchange_order_id
+          FROM orders WHERE client_order_id = $1
+        `,
+        values: [clientOrderId]
+      });
+      if (result.rows === undefined) throw new Error("Unknown order resolution row unavailable");
+      if (result.rows.length === 0) return null;
+      if (result.rows.length !== 1) throw new Error("Unknown order resolution row invalid");
+
+      return readUnknownResolutionRow(result.rows[0]);
+    },
+
+    async resolveUnknownOrderAsNotSent(record: UnknownOrderNotSentResolutionRecord): Promise<void> {
+      validateUnknownNotSentResolution(record);
+
+      const result = await deps.execute({
+        text: `
+          WITH resolved AS (
+            UPDATE orders
+            SET state = 'EXPIRED',
+                updated_at = $4
+            WHERE client_order_id = $1
+              AND state = 'UNKNOWN'
+              AND exchange_order_id IS NULL
+            RETURNING client_order_id, strategy_id, signal_id, symbol
+          )
+          INSERT INTO audit_log (actor, action, details)
+          SELECT
+            $2,
+            'unknown-order-resolved-not-sent',
+            jsonb_build_object(
+              'clientOrderId', client_order_id,
+              'strategyId', strategy_id,
+              'signalId', signal_id,
+              'symbol', symbol,
+              'reason', $3::text
+            )
+          FROM resolved
+        `,
+        values: [record.clientOrderId, record.actor, record.reason, new Date(record.resolvedAtMs)]
+      });
+
+      if (result.rowCount !== 1) throw new Error("Unknown order resolution unavailable");
+    },
+
     async recordOrderExecutionUpdate(record: OrderExecutionUpdateRecord): Promise<void> {
       validateOrderExecutionUpdate(record);
 
@@ -144,7 +211,7 @@ export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryD
               event_time_ms
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ON CONFLICT (client_order_id, execution_id) DO NOTHING
+            ON CONFLICT DO NOTHING
           `,
           values: [
             record.clientOrderId,
@@ -256,6 +323,45 @@ export function createOrderWriteAheadRepository(deps: OrderWriteAheadRepositoryD
         throw new Error("Write-ahead order identity conflict");
       }
     }
+  };
+}
+
+function validateUnknownNotSentResolution(record: UnknownOrderNotSentResolutionRecord): void {
+  if (record.clientOrderId.trim() === "") throw new Error("clientOrderId is required");
+  if (record.actor.trim() === "") throw new Error("actor is required");
+  if (record.reason.trim() === "") throw new Error("reason is required");
+  if (!Number.isSafeInteger(record.resolvedAtMs) || record.resolvedAtMs < 0) {
+    throw new Error("resolvedAtMs must be a non-negative safe integer");
+  }
+}
+
+function readUnknownResolutionRow(value: unknown): UnknownOrderResolutionLocalRecord {
+  if (value === null || typeof value !== "object") {
+    throw new Error("Invalid unknown order resolution row");
+  }
+
+  const row = value as Record<string, unknown>;
+  const clientOrderId = row.client_order_id;
+  const symbol = row.symbol;
+  const state = row.state;
+  const exchangeOrderId = row.exchange_order_id;
+
+  if (
+    typeof clientOrderId !== "string" ||
+    clientOrderId.trim() === "" ||
+    typeof symbol !== "string" ||
+    !/^[A-Z0-9]{2,30}$/.test(symbol) ||
+    !isOrderState(state) ||
+    (exchangeOrderId !== null && typeof exchangeOrderId !== "string")
+  ) {
+    throw new Error("Invalid unknown order resolution row");
+  }
+
+  return {
+    clientOrderId,
+    symbol,
+    state,
+    exchangeOrderId
   };
 }
 

@@ -2,7 +2,7 @@ import { Decimal } from "@meridian/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { createExecutorRuntime } from "./executor-runtime.js";
-import type { GatewayOrderSnapshot, LocalOrderForReconciliation } from "@meridian/core";
+import type { GatewayOrderSnapshot, LocalOrderForReconciliation, OrderReconciliationReport } from "@meridian/core";
 import type { SignalProcessingResult } from "./signal-execution.js";
 
 const localOrders: readonly LocalOrderForReconciliation[] = [
@@ -185,6 +185,33 @@ describe("createExecutorRuntime", () => {
       }),
       "reconnect order reconciliation completed"
     );
+  });
+
+  it("runs account-trade catch-up during startup and reconnect reconciliation", async () => {
+    const store = {
+      listOrdersForReconciliation: vi.fn(async () => localOrders),
+      markOrderReconciledTerminal: vi.fn()
+    };
+    const exchange = {
+      getOrder: vi.fn(async () => exchangeOrder)
+    };
+    const accountTradeCatchUp = vi.fn(async (_report: OrderReconciliationReport) => ({
+      ordersChecked: 1,
+      tradesFetched: 0,
+      fillsPersisted: 0
+    }));
+    const runtime = createExecutorRuntime({
+      store,
+      exchange,
+      logger: createLogger(),
+      accountTradeCatchUp
+    });
+
+    await runtime.start();
+    await runtime.reconcileAfterReconnect();
+
+    expect(accountTradeCatchUp).toHaveBeenCalledTimes(2);
+    expect(accountTradeCatchUp.mock.calls.map((call) => call[0].matched.length)).toEqual([1, 1]);
   });
 
   it("delegates signal polling and stale claiming to the configured consumer", async () => {

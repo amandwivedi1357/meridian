@@ -12,6 +12,8 @@ Status on 2026-10-09: prototype verification checkpoint complete under the user'
 - Earlier fixture IDs `mrd-check-d3eecfff8cca4129ac58bc97` and `mrd-check-ce4165f3dfed4fa5ad061127` failed verification while the old cancellation implementation was still compiled. Cleanup canceled both; independent signed queries confirmed CANCELED, executed quantity zero and no open order. Each fixture was individually bounded to 0.0002 BTC and 25 USDT. They are not successful verification results.
 - Clean candle replay: `sessions/verification/candle-parity-2be67243-1556-44e0-85f9-11e63d6f90b1`. Captured 100 actual REST warm-up candles plus one closed 15m public WebSocket candle, then replayed all 101 candles against 28 separately saved live-runner decisions. All signals matched. Uses independent simulated execution on both sides, EMA 2/3, zero fees/slippage; this is not real trading/account parity. Capture completed 2026-10-09 21:15 Dubai time.
 - Improved read-only submission recovery: immutable DB identity is checked before expiry/new-order risk checks. Already-claimed/sent orders are queried, never resent; accepted orders can be confirmed even after signal expiry or kill engagement. Query failures/not-found/conflicts preserve pending uncertainty. Actual worker-death tests verify post-send recovery and claim-before-send uncertainty after TTL expiry; eight disposable integration tests pass.
+- REST account-trade catch-up after executor downtime is implemented and tested with mocked Binance/account-trade clients. Startup/reconnect reconciliation can query `/api/v3/myTrades` for matched/terminal exchange order IDs, convert missed trades into fee-aware `order_fills`, dedupe duplicate trade identity and avoid moving order state backwards through the existing monotonic event-time guard.
+- Follow-up: bounded live missed-fill catch-up fixture `missfill-739454811c0f4f2fb3c2` passed. It placed two BTCUSDT IOC Testnet orders, each 0.0002 BTC and below 25 USDT, with user-data persistence intentionally skipped. Reconciliation found both local non-terminal orders as terminal-on-exchange; REST `/api/v3/myTrades` fetched one trade per order and persisted both fills into `order_fills`. BUY fill: trade `211165`, price 82835.62, quantity 0.0002. SELL fill: trade `211166`, price 82835.61, quantity 0.0002. Own open orders ended at zero. Proof: `apps/executor/logs/verification/missfill-739454811c0f4f2fb3c2.json`. This is bounded catch-up evidence, not unattended acceptance.
 - Read-only full-account risk preflight correctly rejected an unpriceable Testnet faucet asset. Nothing was assigned a fabricated price. The separately scoped, audited allocation now enables bounded strategy/risk fill verification without valuing the entire wallet or relaxing risk limits. This does not approve unattended full-wallet trading.
 
 The initial fill fixture used separate BUY/SELL strategy IDs and did not run the
@@ -93,6 +95,15 @@ node node_modules/typescript/bin/tsc -p apps/executor/tsconfig.json
 node apps/executor/src/testing/live-fill-check.mjs --confirm-bounded-testnet-fills
 ```
 
+The bounded missed-fill catch-up fixture creates at most two actual IOC orders,
+caps each at 0.0002 BTC and 25 USDT, intentionally skips user-data persistence,
+then verifies reconciliation plus REST `/myTrades` can recover the fills. It is
+not a substitute for the unattended 48h run.
+
+```powershell
+pnpm --filter @meridian/executor verify:missed-fill-catch-up -- --confirm-bounded-testnet-missed-fill-catch-up
+```
+
 The Testnet smoke requires explicit authorization before rerunning, since it creates a real order:
 
 ```powershell
@@ -106,6 +117,6 @@ The smoke enforces BTCUSDT only, quantity at most 0.0002 BTC and notional at mos
 
 - Resolve the durable-claim/before-network-send liveness boundary without unsafe retries; current UNKNOWN reservations require exchange reconciliation/operator investigation.
 - Clean candle-session replay is now verified under identical simulated execution assumptions. Longer sessions and real account/fill parity remain stronger follow-up evidence.
-- Real kill-switch cancellation, user-data persistence and risk-approved allocated strategy BUY/SELL fills are verified in bounded fixtures. Longer real strategy/account parity, missed-fill catch-up, audited reset/rebaseline handling and full-wallet valuation remain follow-ups before unattended trading. The shared application has not been activated with the opt-in allocation policy.
+- Real kill-switch cancellation, user-data persistence, risk-approved allocated strategy BUY/SELL fills, and REST missed-fill catch-up are verified in bounded fixtures. Allocated Testnet backing rebaseline has an audited operator command. Longer real strategy/account parity, full-wallet valuation/opening-inventory handling and unattended evidence remain follow-ups before unattended trading. The shared application has not been activated with the opt-in allocation policy.
 - The planned 48h+ unattended Testnet run has not happened. The user authorized a bounded short check and said 48h was too long; a short pass must not be labeled a 48h pass.
 - Produce the planned screen recording of trading and kill-switch activation.

@@ -1,5 +1,6 @@
 import { runOrderReconciliation, type OrderReconciliationReport } from "@meridian/core";
 import type { OrderReconciliationStore, OrderState, ReconciliationExchange } from "@meridian/core";
+import type { AccountTradeCatchUpResult, AccountTradeCatchUpStore } from "./account-trade-catch-up.js";
 
 export interface StartupReconciliationLogger {
   readonly info: (data: Record<string, unknown>, message: string) => void;
@@ -11,11 +12,12 @@ export interface StartupReconciliationOptions {
   readonly store: StartupReconciliationStore;
   readonly exchange: ReconciliationExchange;
   readonly logger: StartupReconciliationLogger;
+  readonly accountTradeCatchUp?: (report: OrderReconciliationReport) => Promise<AccountTradeCatchUpResult>;
   readonly nowMs?: () => number;
   readonly reason?: "startup" | "reconnect";
 }
 
-export interface StartupReconciliationStore extends OrderReconciliationStore {
+export interface StartupReconciliationStore extends OrderReconciliationStore, Partial<AccountTradeCatchUpStore> {
   readonly markOrderReconciledTerminal: (record: {
     readonly clientOrderId: string;
     readonly terminalState: Extract<OrderState, "FILLED" | "CANCELED" | "REJECTED" | "EXPIRED">;
@@ -34,6 +36,17 @@ export async function runStartupReconciliation(
       exchange: options.exchange
     });
     await applyTerminalRepairs(options.store, report, options.nowMs ?? Date.now);
+    if (options.accountTradeCatchUp !== undefined) {
+      const catchUpResult = await options.accountTradeCatchUp(report);
+      options.logger.info(
+        {
+          ordersChecked: catchUpResult.ordersChecked,
+          tradesFetched: catchUpResult.tradesFetched,
+          fillsPersisted: catchUpResult.fillsPersisted
+        },
+        `${reason} account-trade catch-up completed`
+      );
+    }
     const summary = summarizeReport(report);
 
     options.logger.info(

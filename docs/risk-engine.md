@@ -57,13 +57,23 @@ From the repository root, after building the executor:
 ```powershell
 node apps/executor/dist/risk-control-cli.js engage --confirm-testnet-control
 node apps/executor/dist/risk-control-cli.js reset --confirm-testnet-control
+node apps/executor/dist/risk-control-cli.js resolve-unknown --client-order-id <id> --reason <reason> --confirm-unknown-not-sent
+node apps/executor/dist/risk-control-cli.js rebaseline --reason <reason> --confirm-testnet-rebaseline
 ```
 
 `engage` cancels Testnet open orders. `reset` explicitly authenticates the operator,
 updates Redis, and commits the DB reset plus audit/event records. It does not clear
 losses, equity peaks, unknown orders, or other breached limits. A continuing breach
 will immediately engage the switch again. Do not run these commands as a read-only
-smoke test. API authentication/roles will be added in Phase 4.
+smoke test. `resolve-unknown` is only for claim-before-send ambiguity: it queries
+Binance by `clientOrderId`, refuses to mutate local state if the order exists or
+the query fails, and marks the local `UNKNOWN` order `EXPIRED` with an audit record
+only when Binance returns not found. It does not resend or place orders.
+`rebaseline` is for allocated Testnet portfolios only. It performs read-only
+exchange/account preflight, projects the current managed portfolio from persisted
+fills and managed open orders, and writes a new audited backing baseline without
+changing the immutable allocation policy, clearing the ledger, resetting equity
+peaks/losses, or placing orders. API authentication/roles will be added in Phase 4.
 
 ## Configuration
 
@@ -115,10 +125,11 @@ an immutable audit record containing the canonical policy, API-key hash, initial
 wallet backing totals and explicitly excluded wallet asset names. It does not
 place orders or reset the kill switch. Existing identical initialization is
 idempotent, not a capital/peak reset. Configuration/account drift blocks startup
-and approvals. The allocation cannot be changed silently; an audited operator
-rebaseline workflow remains future work. `engage` still works after configuration
-drift, while `reset` requires a matching policy. Allocated cancellation is limited
-to persisted managed client IDs; foreign orders are not canceled by this scope.
+and approvals. The allocation cannot be changed silently; audited operator
+rebaseline records update wallet backing only, preserving policy and ledger
+history. `engage` still works after configuration drift, while `reset` requires a
+matching policy. Allocated cancellation is limited to persisted managed client
+IDs; foreign orders are not canceled by this scope.
 
 Managed capital starts at the configured quote amount, with zero managed base
 inventory. Existing wallet BTC cannot be sold as managed inventory. Both engine
@@ -150,9 +161,13 @@ Pending BUY quantities are exposure, not inventory available for SELL orders.
 Daily realized PnL reconstructs per-strategy cost basis from persisted fills using
 Decimal arithmetic, including base/quote fees and earlier-day inventory. Missing
 opening cost basis or third-asset fees without historical valuation block trading.
-REST missed-fill catch-up, reviewed Testnet-reset/equity rebaselining, and more
-efficient persisted accounting are tracked in `finishings.md`. Deposits, withdrawals
-or exchange resets can conservatively trip drawdown; never blindly clear peaks.
+REST missed-fill catch-up is locally implemented with mocked account-trade clients
+and startup/reconnect wiring. A read-only signed Testnet catch-up smoke passed in
+an empty affected-order environment; a true missed-fill live fixture still needs
+an affected order. Audited Testnet backing rebaseline exists, while full-wallet
+valuation and more efficient persisted accounting are tracked in `finishings.md`.
+Deposits, withdrawals or exchange resets can conservatively trip drawdown; never
+blindly clear peaks.
 
 ## Verification
 

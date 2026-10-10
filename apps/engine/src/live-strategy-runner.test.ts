@@ -218,6 +218,68 @@ describe("createLiveStrategyRunner", () => {
     expect(signals[0]?.intent.side).toBe("SELL");
   });
 
+  it("skips strategy execution and signal publishing while strategy is paused", async () => {
+    const onCandle = vi.fn((input: Candle, ctx) => {
+      ctx.submit({
+        symbol: input.symbol,
+        side: "BUY",
+        type: "MARKET",
+        quantity: new Decimal("0.0002"),
+        reason: "should not publish"
+      });
+    });
+    const publishSignal = vi.fn(async () => "1-0");
+    const logger = { info: vi.fn() };
+    const runner = createLiveStrategyRunner({
+      strategy: {
+        id: "paused-strategy",
+        onCandle
+      },
+      publishSignal,
+      nowMs: () => 2_500,
+      signalTtlMs: 5_000,
+      logger,
+      isStrategyPaused: vi.fn(async () => true)
+    });
+
+    const signals = await runner.handleMarketEvent({ kind: "candle", candle: candle() });
+
+    expect(signals).toEqual([]);
+    expect(onCandle).not.toHaveBeenCalled();
+    expect(publishSignal).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      { strategyId: "paused-strategy" },
+      "paused strategy skipped"
+    );
+  });
+
+  it("fails closed when strategy pause state cannot be read", async () => {
+    const runner = createLiveStrategyRunner({
+      strategy: {
+        id: "pause-query-fails",
+        onCandle(input, ctx) {
+          ctx.submit({
+            symbol: input.symbol,
+            side: "BUY",
+            type: "MARKET",
+            quantity: new Decimal("0.0002"),
+            reason: "should not publish"
+          });
+        }
+      },
+      publishSignal: vi.fn(async () => "1-0"),
+      nowMs: () => 2_500,
+      signalTtlMs: 5_000,
+      isStrategyPaused: vi.fn(async () => {
+        throw new Error("pause state unavailable");
+      })
+    });
+
+    await expect(runner.handleMarketEvent({ kind: "candle", candle: candle() })).rejects.toThrow(
+      "pause state unavailable"
+    );
+  });
+
   it("creates deterministic but distinct signal ids for multiple submitted intents", async () => {
     const strategy: Strategy = {
       id: "multi",

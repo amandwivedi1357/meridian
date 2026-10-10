@@ -44,6 +44,7 @@ export interface LiveStrategyRunnerDeps {
   readonly balance?: (asset: string) => Decimal;
   readonly logger?: LiveStrategyLogger;
   readonly accountState?: LiveAccountStateReader;
+  readonly isStrategyPaused?: (strategyId: string) => Promise<boolean>;
 }
 
 export interface LiveAccountStateReader {
@@ -94,6 +95,16 @@ export function createLiveStrategyRunner(deps: LiveStrategyRunnerDeps): LiveStra
       }
 
       await deps.accountState?.refresh();
+
+      if (await deps.isStrategyPaused?.(deps.strategy.id)) {
+        deps.logger?.info?.(
+          {
+            strategyId: deps.strategy.id
+          },
+          "paused strategy skipped"
+        );
+        return [];
+      }
 
       const submitted: OrderIntent[] = [];
       const context = createContext(deps, submitted);

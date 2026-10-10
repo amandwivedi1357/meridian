@@ -77,7 +77,7 @@ export function createRuntimeClients(
 
     async xAdd(stream, id, fields) {
       const reply = await redisCommandClient.sendCommand(
-        buildXaddCommand(stream, id, fields)
+        buildXaddCommand(stream, id, fields, config.redisStreamMaxLen)
       );
 
       if (typeof reply !== "string") {
@@ -100,9 +100,16 @@ export function createRuntimeClients(
 function buildXaddCommand(
   stream: string,
   id: "*",
-  fields: RedisStreamFields
+  fields: RedisStreamFields,
+  maxLen?: number
 ): readonly (string | Buffer)[] {
-  const command: (string | Buffer)[] = ["XADD", stream, id];
+  const command: (string | Buffer)[] = ["XADD", stream];
+
+  if (maxLen !== undefined) {
+    command.push("MAXLEN", "~", String(maxLen));
+  }
+
+  command.push(id);
 
   for (const [field, value] of Object.entries(fields)) {
     command.push(field, value);

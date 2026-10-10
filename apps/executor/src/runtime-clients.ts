@@ -27,10 +27,16 @@ export interface PostgresPoolLike {
   readonly query: (
     text: string,
     values?: readonly unknown[]
-  ) => Promise<{
-    readonly rowCount?: number | null;
-    readonly rows: readonly Record<string, unknown>[];
-  }>;
+  ) => Promise<
+    | {
+      readonly rowCount?: number | null;
+      readonly rows: readonly Record<string, unknown>[];
+    }
+    | readonly {
+        readonly rowCount?: number | null;
+        readonly rows: readonly Record<string, unknown>[];
+      }[]
+  >;
   readonly end: () => Promise<void>;
 }
 
@@ -67,7 +73,7 @@ export function createExecutorRuntimeClients(
         await client.query("SET LOCAL statement_timeout = '5s'");
         const result = await work({
           async execute(query) {
-            const response = await client.query(query.text, query.values);
+            const response = lastPostgresResult(await client.query(query.text, query.values));
             return { rowCount: response.rowCount ?? null, rows: response.rows };
           }
         });
@@ -81,7 +87,7 @@ export function createExecutorRuntimeClients(
       }
     },
     async execute(query: SqlQuery) {
-      const result = await postgresPool.query(query.text, query.values);
+      const result = lastPostgresResult(await postgresPool.query(query.text, query.values));
 
       return {
         rowCount: result.rowCount ?? result.rows.length,
@@ -127,6 +133,23 @@ export function createExecutorRuntimeClients(
       await Promise.all([redis.close(), postgres.close()]);
     }
   };
+}
+
+function lastPostgresResult(
+  result:
+    | {
+        readonly rowCount?: number | null;
+        readonly rows: readonly Record<string, unknown>[];
+      }
+    | readonly {
+        readonly rowCount?: number | null;
+        readonly rows: readonly Record<string, unknown>[];
+      }[]
+) {
+  if (!Array.isArray(result)) return result;
+  const last = result.at(-1);
+  if (last === undefined) throw new Error("Postgres query returned no result");
+  return last;
 }
 
 const defaultExecutorRuntimeClientFactoryDeps: ExecutorRuntimeClientFactoryDeps = {
