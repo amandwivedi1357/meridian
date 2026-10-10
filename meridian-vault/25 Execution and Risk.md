@@ -1,6 +1,6 @@
 # Execution and Risk
 
-Execution is now implemented as a local/tested service flow. The full risk engine is the next major phase.
+Execution is implemented as a local/tested service flow. The Phase 3.4 risk engine is locally complete, but full live acceptance is still Phase 3.5 work.
 
 ## Implemented Execution Foundation
 
@@ -12,7 +12,7 @@ Execution is now implemented as a local/tested service flow. The full risk engin
 - persisted user-data execution reports and fills
 - executor signal consumer
 - signal expiry handling
-- risk-gate hook before order send
+- risk engine before order send
 - local service loops for engine and executor
 - live strategy account context from persisted fills plus Testnet account balances
 
@@ -25,12 +25,12 @@ market stream
   -> strategy runs with StrategyContext
   -> engine publishes Signal
   -> executor consumes Signal
-  -> validation and risk hook
+  -> validation and risk engine
   -> write-ahead order record
   -> Testnet placement gateway
 ```
 
-## Next Risk Goals
+## Implemented Risk Controls
 
 - max notional checks
 - position limits
@@ -44,23 +44,33 @@ market stream
 - cancel-all when kill switch engages
 - fail-closed behavior when Redis/DB/risk state cannot be read
 
+## Remaining Verification
+
+- claim-before-send ambiguity is safe but still manual/fail-closed
+- clean recorded-kline/live-signal parity remains open
+- real end-to-end strategy/risk/executor/user-data fill flow remains open
+- real kill-switch cancellation timing remains open
+- 48h unattended Testnet paper-trading run has not happened
+- screen recording has not been produced
+
 ## Do Not Overclaim
 
 Safe to say:
 
 - Phase 3.3 core service flow is locally implemented and tested.
 - Order execution has idempotency and reconciliation foundations.
+- Phase 3.4 risk engine is locally implemented and unit/integration tested.
+- Phase 3.5 is partially verified with disposable infrastructure.
 
 Not safe to say yet:
 
 - production-ready trading bot
-- complete risk management
 - verified 48h unattended paper trading
-- kill switch proven in chaos tests
+- real exchange fill loop proven end to end
+- final Phase 3.5 acceptance complete
 
 Related:
 
 - [[24 Backtesting]]
 - [[26 Observability]]
 - [[92 Resume Story]]
-

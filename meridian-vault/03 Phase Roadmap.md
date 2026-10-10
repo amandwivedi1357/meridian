@@ -4,11 +4,11 @@ Source of truth: `docs/implementation-plan.md`.
 
 ## Current Position
 
-Phase 3.3 is complete in local code/tests.
+Phase 3.4 is locally complete. Phase 3.5 is partially verified, not accepted as complete.
 
 Current next phase:
 
-- Phase 3.4 Risk engine
+- Remaining Phase 3.5 acceptance work
 
 ## Completed Highlights
 
@@ -36,24 +36,26 @@ Current next phase:
 - protobuf market `EventCodec` by default
 - live strategy account context from persisted fills plus Testnet account balances
 - signal consumption, expiry, write-ahead, risk hook, Testnet placement path
+- Phase 3.4 risk engine local implementation
+- durable fail-closed kill switch
+- risk reservations and limits
+- persisted `risk_events`
+- daily loss and drawdown breakers
+- partial Phase 3.5 verification with disposable infrastructure
 
 ## Next
 
-Phase 3.4:
+Remaining Phase 3.5:
 
-- complete the risk engine checks from TRD section 4.10
-- orders/minute limits
-- daily loss and drawdown breakers
-- price sanity bands
-- durable risk-state wiring
-- persisted `risk_events`
-- global kill switch that fails closed
-- cancel-all behavior when kill switch engages
-
-After Phase 3.4:
-
-- Phase 3.5 integration, chaos, parity, and fail-closed verification
+- resolve or explicitly document the claim-before-send liveness boundary
+- clean recorded-kline/live-signal parity
+- real end-to-end strategy/risk/executor/user-data fill flow
+- real kill-switch cancellation verification
 - 48h unattended Testnet paper-trading run
+- screen recording of trading plus kill-switch activation
+
+After Phase 3.5:
+
 - Phase 4 API gateway and dashboard
 
 Related:
@@ -61,4 +63,3 @@ Related:
 - [[04 Current State]]
 - [[25 Execution and Risk]]
 - [[26 Observability]]
-

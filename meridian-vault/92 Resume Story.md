@@ -32,16 +32,18 @@ Meridian should tell a strong engineering story.
 - Executor service that consumes signals, validates, applies a risk hook, persists pending orders, and routes to the Testnet gateway.
 - Protobuf-backed market event codec by default, with JSON debug/legacy fallback.
 - Live strategy account context from persisted fills and Testnet account balance snapshots.
+- Local risk engine with notional, quantity, position/exposure, open-order, orders/minute, daily-loss, drawdown, freshness, and price-sanity checks.
+- Durable fail-closed kill switch with audit/risk event persistence.
+- Opt-in disposable infrastructure tests for signal/fill flow, process-kill recovery boundaries, write-ahead failure, and Redis outage behavior.
 
 ## Claims Still To Earn
 
-- Full risk engine with orders/minute, daily loss, drawdown, price sanity, and durable state.
-- Global kill switch with cancel-all, audit entry, alerting, and fail-closed Redis/DB behavior.
-- Persisted `risk_events`.
 - Exchange metadata/filter preflight.
-- Full signal-to-order-to-fill integration tests with Redis and Timescale.
-- Chaos tests: kill Redis, kill executor mid-flight, network interruption, duplicate/out-of-order events.
+- Clean recorded-kline/live-signal parity.
+- Real exchange fill delivery through user-data stream.
+- Real kill-switch cancellation timing.
 - 48h unattended Testnet paper-trading run.
+- Demo/screen recording of trading and kill-switch activation.
 - Production-grade API/dashboard UX.
 
 Related:
@@ -50,4 +52,3 @@ Related:
 - [[20 Order Book]]
 - [[25 Execution and Risk]]
 - [[26 Observability]]
-

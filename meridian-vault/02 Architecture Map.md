@@ -75,15 +75,19 @@ Completed through local code/tests:
 - Phase 3.3 engine plus executor service flow
 - protobuf-backed market `EventCodec` default with JSON fallback
 - live strategy account context from persisted fills plus signed Testnet balances
+- Phase 3.4 local risk engine
+- durable fail-closed kill switch
+- persisted risk events
+- partial Phase 3.5 disposable infrastructure verification
 
 Still pending before calling this production-grade:
 
-- Phase 3.4 full risk engine
-- kill switch
-- persisted `risk_events`
 - exchange metadata/filter preflight
-- chaos/integration tests
+- clean recorded-kline/live-signal parity
+- actual live fill flow
+- real kill-switch cancellation timing
 - 48h unattended Testnet paper-trading run
+- screen recording/demo evidence
 - Phase 4 real API/dashboard
 
 Related:
@@ -92,4 +96,3 @@ Related:
 - [[20 Order Book]]
 - [[22 Redis Streams]]
 - [[23 TimescaleDB]]
-
