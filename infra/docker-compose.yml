@@ -37,10 +37,25 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
       - prometheus-data:/prometheus
     depends_on:
       redis:
         condition: service_healthy
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: ["alerts"]
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--cluster.listen-address="
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./alertmanager/.local:/etc/alertmanager:ro
+      - alertmanager-data:/alertmanager
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:11.2.0
@@ -62,3 +77,4 @@ volumes:
   timescale-data:
   prometheus-data:
   grafana-data:
+  alertmanager-data:

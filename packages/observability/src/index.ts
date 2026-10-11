@@ -2,6 +2,9 @@ import pino, { type LoggerOptions } from "pino";
 import { Registry as PrometheusRegistry, collectDefaultMetrics } from "prom-client";
 
 export { Counter, Gauge, Histogram, Registry } from "prom-client";
+export { createServiceDiagnostics, diagnosticsAddress } from "./service-diagnostics.js";
+export { createBinanceMetricsFetch } from "./binance-http-metrics.js";
+export { createShutdownGuard, shutdownTimeout } from "./shutdown.js";
 
 const redactPaths = [
   "req.headers.authorization",

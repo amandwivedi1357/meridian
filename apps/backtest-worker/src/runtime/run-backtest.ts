@@ -1,11 +1,13 @@
 import type { Decimal, Fill, Strategy } from "@meridian/core";
 import { Decimal as DecimalCtor } from "@meridian/core";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import type { CandleFeed, CandleFeedRequest } from "../feeds/candle-feed.js";
 import type { SimBroker } from "../broker/sim-broker.js";
 import { calculateBacktestMetrics } from "../metrics/backtest-metrics.js";
 import { createBacktestContext } from "./strategy-context.js";
 
 export interface BacktestRunOptions {
+  readonly signal?: AbortSignal;
   readonly feed: CandleFeed;
   readonly request: CandleFeedRequest;
   readonly strategy: Strategy;
@@ -14,6 +16,7 @@ export interface BacktestRunOptions {
 }
 
 export async function runBacktest(options: BacktestRunOptions) {
+  options.signal?.throwIfAborted();
   const { feed, request, strategy, broker, initialEquity } = options;
   calculateBacktestMetrics(initialEquity, [], 0);
   if (broker.position().symbol !== request.symbol) {
@@ -36,6 +39,9 @@ export async function runBacktest(options: BacktestRunOptions) {
   await strategy.onInit?.(ctx);
 
   for await (const candle of feed.read(request)) {
+    // In-memory feeds otherwise starve OS signal delivery for the entire replay.
+    if (totalBars % 128 === 0) await yieldToEventLoop();
+    options.signal?.throwIfAborted();
     if (
       !candle.closed ||
       candle.symbol !== request.symbol ||
@@ -78,6 +84,7 @@ export async function runBacktest(options: BacktestRunOptions) {
   if (equityCurve.length === 0) {
     throw new Error("No candles found for requested backtest");
   }
+  options.signal?.throwIfAborted();
 
   const buyAndHoldReturnPct =
     firstClose === null || lastClose === null

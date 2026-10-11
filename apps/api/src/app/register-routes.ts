@@ -15,6 +15,10 @@ import { registerRiskStateRoutes } from "../features/risk/risk-state.js";
 import { registerStrategyControlRoutes } from "../features/strategies/strategy-control.js";
 import { registerStrategiesRoutes } from "../features/strategies/strategies.js";
 import { registerTradingState } from "../features/trading-state/trading-state.js";
+import { registerBacktests } from "../features/backtests/backtests.js";
+import { registerBacktestJobs } from "../features/backtests/jobs.js";
+import { registerWorkspaceSummary } from "../features/health/workspace-summary.js";
+import { registerPortfolioRoute, type PortfolioReader } from "../features/account/portfolio.js";
 
 interface ApiRedis {
   readonly xRevRange: (
@@ -35,9 +39,11 @@ export function registerApiRoutes(
     readonly redis: ApiRedis;
     readonly pool: Pool;
     readonly workspace: string;
+    readonly portfolio: PortfolioReader;
   }
 ): void {
   registerApiAuth(server, deps.auth);
+  registerPortfolioRoute(server, deps.portfolio);
   registerDashboard(server, deps.redis, deps.pool, deps.workspace);
   registerMarketCandlesRoutes(server, deps.pool);
   registerTradingState(server, deps.pool);
@@ -46,8 +52,11 @@ export function registerApiRoutes(
   registerRiskEventsRoutes(server, deps.pool);
   registerRiskStateRoutes(server, deps.pool);
   registerRiskControlRoutes(server, deps.pool, deps.redis);
-  registerPositionsRoutes(server, deps.pool);
-  registerAccountSummaryRoutes(server, deps.pool);
+  registerPositionsRoutes(server, deps.portfolio);
+  registerAccountSummaryRoutes(server, deps.pool, deps.portfolio);
   registerStrategiesRoutes(server, deps.pool);
   registerStrategyControlRoutes(server, deps.pool);
+  registerBacktests(server, deps.pool);
+  registerBacktestJobs(server, deps.pool);
+  registerWorkspaceSummary(server, deps.pool);
 }

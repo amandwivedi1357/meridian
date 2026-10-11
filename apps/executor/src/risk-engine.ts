@@ -4,6 +4,8 @@ import type { RiskDecision } from "./signal-execution.js";
 import type { KillSwitch } from "./kill-switch.js";
 import type { RiskConfig } from "./risk-config.js";
 import { calculateDailyRealizedPnl, type RiskFill } from "./risk-accounting.js";
+import type { Registry } from "@meridian/observability";
+import { createRiskMetrics } from "./risk-metrics.js";
 
 export interface RiskSnapshot {
   observedAtMs: number;
@@ -28,8 +30,17 @@ export function createRiskEngine(options: {
   assertReady: () => Promise<void>;
   nowMs?: () => number;
   assertPortfolioPolicy?: () => Promise<void>;
+  metricsRegistry?: Registry;
+  metricsScope?: "allocated-testnet" | "full-wallet";
 }) {
   const now = options.nowMs ?? Date.now;
+  const metrics = options.metricsRegistry
+    ? createRiskMetrics(
+        options.metricsRegistry,
+        options.config.quoteAsset,
+        options.metricsScope ?? "full-wallet"
+      )
+    : undefined;
   function validateSnapshot(snapshot: RiskSnapshot) {
     const age = now() - snapshot.observedAtMs;
     if (
@@ -70,13 +81,20 @@ export function createRiskEngine(options: {
       options.config.quoteAsset,
       snapshot.assetPrice
     );
+    const drawdown = peak.minus(snapshot.equity).div(peak);
+    metrics?.record({
+      drawdown,
+      limit: options.config.maxDrawdown,
+      dailyPnl: pnl.globalPnl,
+      equity: snapshot.equity,
+      observedAtMs: snapshot.observedAtMs
+    });
     if (pnl.globalPnl.lte(options.config.globalDailyLoss.neg())) return "daily-loss-global";
     for (const [strategyId, realized] of pnl.strategyPnl) {
       if (realized.lte(options.config.strategy(strategyId).dailyLoss.neg()))
         return `daily-loss-strategy:${strategyId}`;
     }
-    if (peak.minus(snapshot.equity).div(peak).gte(options.config.maxDrawdown))
-      return "maximum-drawdown";
+    if (drawdown.gte(options.config.maxDrawdown)) return "maximum-drawdown";
     return undefined;
   }
   async function latch(repo: LockedRiskRepository, reason: string) {
@@ -84,6 +102,7 @@ export function createRiskEngine(options: {
     await repo.recordEvent("risk-breaker", { reason });
   }
   async function monitor() {
+    metrics?.clear();
     if (await options.killSwitch.check()) return;
     try {
       await options.assertReady();
@@ -96,12 +115,14 @@ export function createRiskEngine(options: {
       });
       if (reason !== undefined) await options.killSwitch.engage(reason);
     } catch {
+      metrics?.clear();
       await options.killSwitch.engage("risk-monitor-unavailable");
     }
   }
   return {
     monitor,
     async evaluate(signal: Signal): Promise<RiskDecision> {
+      metrics?.clear();
       let reason: string | undefined;
       let breaker = false;
       try {
@@ -226,6 +247,7 @@ export function createRiskEngine(options: {
           breaker = result.breaker;
         }
       } catch (error) {
+        metrics?.clear();
         reason = `risk-check-error:${error instanceof Error ? error.message : "unavailable"}`;
         try {
           await options.killSwitch.engage("risk-critical-dependency-unavailable");

@@ -20,27 +20,26 @@ export interface IngestorApp extends MarketIngestor {
 }
 
 export function createIngestorApp(deps: IngestorAppDeps): IngestorApp {
+  const metrics = deps.metricsRegistry
+    ? registerIngestorMetrics({ registry: deps.metricsRegistry })
+    : undefined;
   const marketWriter = createPostgresMarketWriter(deps.postgres);
   const marketIngestor = createMarketIngestor({
     xadd: createRedisXadd(deps.redis),
     upsertTrades: marketWriter.upsertTrades,
     upsertKlines: marketWriter.upsertKlines,
+    ...(metrics ? { onPublished: metrics.recordBusLatency } : {}),
     ...(deps.sessionRecorder ? { sessionRecorder: deps.sessionRecorder } : {})
   });
-  const ingestor = deps.metricsRegistry
-    ? createInstrumentedIngestor(
-        marketIngestor,
-        registerIngestorMetrics({ registry: deps.metricsRegistry })
-      )
-    : marketIngestor;
+  const ingestor = metrics ? createInstrumentedIngestor(marketIngestor, metrics) : marketIngestor;
 
   return {
     start() {
       return runIngestorStartupMigrations(deps.postgres);
     },
 
-    ingest(input) {
-      return ingestor.ingest(input);
+    ingest(input, receivedAtMs) {
+      return ingestor.ingest(input, receivedAtMs);
     }
   };
 }

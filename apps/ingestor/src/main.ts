@@ -1,5 +1,5 @@
 import { BinanceRestClient } from "@meridian/binance-client";
-import { createLogger, createMetricsRegistry } from "@meridian/observability";
+import { createLogger, createMetricsRegistry, createShutdownGuard } from "@meridian/observability";
 import { pathToFileURL } from "node:url";
 import { runKlineBackfillCommand } from "./backfill/kline-backfill-command.js";
 import { createKlineBackfillService } from "./backfill/kline-backfill-service.js";
@@ -19,6 +19,8 @@ export async function runCliMain(
 ): Promise<IngestorMainResult> {
   const config = loadIngestorConfig();
   const clients = createRuntimeClients(config);
+  const controller = new AbortController();
+  const shutdown = createShutdownGuard({ onStop: () => controller.abort() });
   const metricsRegistry = createMetricsRegistry("ingestor");
   const binance = new BinanceRestClient();
   const sessionRecorder = config.sessionRecordingPath
@@ -27,6 +29,7 @@ export async function runCliMain(
 
   try {
     await clients.redis.connect();
+    controller.signal.throwIfAborted();
 
     const app = createIngestorApp({
       redis: clients.redis,
@@ -36,7 +39,8 @@ export async function runCliMain(
     });
     const backfillService = createKlineBackfillService({
       binance,
-      postgres: clients.postgres
+      postgres: clients.postgres,
+      signal: controller.signal
     });
     const main = createMain({
       run(args) {
@@ -65,16 +69,20 @@ export async function runCliMain(
             await app.start();
 
             return runLiveIngestSmokeCommand(args, {
-              ingestor: app
+              ingestor: app,
+              signal: controller.signal
             });
           }
         });
       }
     });
 
-    return await main(argv);
+    const result = await main(argv);
+    controller.signal.throwIfAborted();
+    return result;
   } finally {
     await clients.close();
+    shutdown.finish();
   }
 }
 

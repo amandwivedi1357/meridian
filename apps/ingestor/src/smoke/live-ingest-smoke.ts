@@ -23,6 +23,7 @@ export interface LiveIngestSmokeResult {
 }
 
 export interface LiveIngestSmokeDeps {
+  readonly signal?: AbortSignal;
   readonly ingestor: Pick<MarketIngestor, "ingest">;
   readonly createStreamManager?: (args: LiveIngestSmokeArgs) => StreamConnectionManager;
 }
@@ -42,6 +43,7 @@ export function runLiveIngestSmoke(
   args: readonly string[],
   deps: LiveIngestSmokeDeps
 ): Promise<LiveIngestSmokeResult> {
+  if (deps.signal?.aborted) return Promise.reject(deps.signal.reason);
   const parsed = parseLiveIngestSmokeArgs(args);
   const manager =
     deps.createStreamManager?.(parsed) ??
@@ -54,12 +56,13 @@ export function runLiveIngestSmoke(
     let settled = false;
     let eventsReceived = 0;
     let eventsIngested = 0;
+    const pending = new Set<Promise<void>>();
 
     const timeout = setTimeout(() => {
       finish(true);
     }, parsed.timeoutMs);
 
-    function finish(timedOut: boolean): void {
+    function finish(timedOut: boolean, error?: unknown): void {
       if (settled) {
         return;
       }
@@ -67,28 +70,33 @@ export function runLiveIngestSmoke(
       settled = true;
       clearTimeout(timeout);
       manager.close();
-      resolve({
-        kind: "live-ingest-smoke-completed",
-        symbol: parsed.symbol,
-        eventsReceived,
-        eventsIngested,
-        timedOut
+      deps.signal?.removeEventListener("abort", abort);
+      void Promise.allSettled([...pending]).then((results) => {
+        const failed = results.find((result) => result.status === "rejected");
+        if (error !== undefined) reject(error);
+        else if (failed?.status === "rejected") reject(failed.reason);
+        else
+          resolve({
+            kind: "live-ingest-smoke-completed",
+            symbol: parsed.symbol,
+            eventsReceived,
+            eventsIngested,
+            timedOut
+          });
       });
     }
 
     function fail(error: unknown): void {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      clearTimeout(timeout);
-      manager.close();
-      reject(error);
+      finish(false, error);
     }
+    const abort = () => finish(false, deps.signal?.reason);
+    deps.signal?.addEventListener("abort", abort, { once: true });
 
     manager.onMessage((message) => {
-      void handleMessage(message).catch(fail);
+      if (settled) return;
+      const work = handleMessage(message);
+      pending.add(work);
+      void work.catch(fail).finally(() => pending.delete(work));
     });
 
     async function handleMessage(message: StreamMessage): Promise<void> {
@@ -96,9 +104,7 @@ export function runLiveIngestSmoke(
       await deps.ingestor.ingest(message.data);
       eventsIngested += 1;
 
-      if (eventsIngested >= parsed.maxEvents) {
-        finish(false);
-      }
+      if (eventsIngested >= parsed.maxEvents) finish(false);
     }
 
     manager.connect();

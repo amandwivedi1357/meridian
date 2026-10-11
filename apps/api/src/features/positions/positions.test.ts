@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 
 import { registerPositionsRoutes } from "./positions.js";
+import { createPortfolioReader } from "../account/portfolio.js";
 
 describe("positions API", () => {
   function setup(options: { fail?: boolean } = {}) {
@@ -13,19 +14,40 @@ describe("positions API", () => {
         rows: [
           {
             symbol: "BTCUSDT",
-            quantity: "0.0000",
-            bought_quantity: "0.0002",
-            sold_quantity: "0.0002",
-            buy_quote: "16.56712400",
-            sell_quote: "16.56712200",
-            fill_count: "2",
-            last_event_time_ms: "1791622376012"
+            side: "BUY",
+            quantity: "0.0002",
+            price: "82835.62",
+            fee: "0",
+            fee_asset: "USDT",
+            event_time_ms: "1791622376011"
+          },
+          {
+            symbol: "BTCUSDT",
+            side: "SELL",
+            quantity: "0.0002",
+            price: "82835.61",
+            fee: "0",
+            fee_asset: "USDT",
+            event_time_ms: "1791622376012"
           }
         ]
       };
     });
 
-    registerPositionsRoutes(server, { query } as unknown as Pool);
+    registerPositionsRoutes(
+      server,
+      createPortfolioReader(
+        { query } as unknown as Pool,
+        {
+          metadata: async () => [{ symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT" }],
+          mark: async () => {
+            throw new Error("flat positions need no mark");
+          }
+        },
+        "testnet",
+        () => 1791622380000
+      )
+    );
     return { server };
   }
 
@@ -39,11 +61,12 @@ describe("positions API", () => {
         positions: [
           {
             symbol: "BTCUSDT",
-            quantity: "0.0000",
+            quantity: "0",
             boughtQuantity: "0.0002",
             soldQuantity: "0.0002",
-            buyQuote: "16.56712400",
-            sellQuote: "16.56712200",
+            buyQuote: "16.567124",
+            sellQuote: "16.567122",
+            realizedPnl: "-0.000002",
             fillCount: 2,
             lastEventTimeMs: 1_791_622_376_012
           }

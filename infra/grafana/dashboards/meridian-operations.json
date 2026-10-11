@@ -1,0 +1,324 @@
+{
+  "uid": "meridian-operations",
+  "title": "Meridian / Operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "15s",
+  "tags": ["meridian", "phase-5"],
+  "timezone": "utc",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 13,
+      "title": "Backtest dispatcher / local child processes",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 31, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "meridian_backtest_dispatcher_ready",
+          "legendFormat": "dispatcher ready"
+        },
+        {
+          "refId": "B",
+          "expr": "meridian_backtest_active_children",
+          "legendFormat": "active simulation children"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "max": 1, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Idle healthy dispatcher may have zero children. Readiness measures queue/lease polling, not a permanently running worker."
+    },
+    {
+      "id": 14,
+      "title": "Binance REST responses / second",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 31, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service,environment,code) (rate(binance_http_status_total[5m]))",
+          "legendFormat": "{{service}} / {{environment}} / {{code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 15,
+      "title": "Binance observed one-minute IP weight",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 31, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "binance_used_weight and on(job,instance,environment) (time() - meridian_binance_weight_sample_timestamp_seconds < 60) and on(job,instance) (up == 1)",
+          "legendFormat": "{{service}} / {{environment}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Raw latest valid X-MBX-USED-WEIGHT-1M header, not percentage of capacity or API-key quota."
+    },
+    {
+      "id": 1,
+      "title": "Diagnostics reachability",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"meridian-.*\"} and on(job,instance) (time() - timestamp(up) < 30)",
+          "legendFormat": "{{job}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "noValue": "Not reported",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "Unavailable", "color": "red" },
+                "1": { "text": "Reachable", "color": "green" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Operational readiness (not trading permission)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "meridian_service_ready and on(job,instance) (up == 1)",
+          "legendFormat": "{{service}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Not reported",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "Not ready", "color": "orange" },
+                "1": { "text": "Ready", "color": "green" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Storage availability / API observer",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "meridian_dependency_available and on(job,instance) (up == 1)",
+          "legendFormat": "{{dependency}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Not reported",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "Unavailable", "color": "red" },
+                "1": { "text": "Available", "color": "green" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Upstream message age",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "ws_last_message_age_seconds", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "noValue": "Not reported" }, "overrides": [] },
+      "description": "Negative one means no upstream message observed; no sample means unavailable telemetry."
+    },
+    {
+      "id": 5,
+      "title": "Ingest queue / capacity 1000",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [{ "refId": "A", "expr": "ingestor_backlog", "legendFormat": "{{service}}" }],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "Processed public events / second",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 10, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (kind) (rate(ingestor_events_processed_total[2m]))",
+          "legendFormat": "{{kind}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "Ingest operation p95 (includes database)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 10, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(ingestor_operation_duration_ms_bucket[5m])))",
+          "legendFormat": "operation p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(ingest_to_bus_latency_ms_bucket[5m])))",
+          "legendFormat": "receipt-to-bus p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Operation includes DB. Receipt-to-bus includes local queue/normalization/recording/Redis publish, excludes DB and upstream network; neither proves maximum capacity."
+    },
+    {
+      "id": 8,
+      "title": "Retained Redis entries",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 17, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [{ "refId": "A", "expr": "meridian_stream_length", "legendFormat": "{{stream}}" }],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "Undelivered consumer lag",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 17, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "bus_consumer_lag", "legendFormat": "{{group}} / {{stream}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Only configured engine/executor groups; absent or unknown lag is not zero."
+    },
+    {
+      "id": 10,
+      "title": "Pending acknowledgements",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 17, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "bus_pending_entries", "legendFormat": "{{group}} / {{stream}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "title": "API request rate",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(meridian_http_requests_total[2m]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "title": "Resident process memory",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "process_resident_memory_bytes{service=~\"api|ingestor|engine|executor\"}",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    }
+  ]
+}

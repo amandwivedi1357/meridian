@@ -1,0 +1,89 @@
+rule_files:
+  - ../rules/meridian.yml
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - series: 'risk_rejections_total{service="executor",job="meridian-executor",instance="fixture",reason="position"}'
+        values: "0+5x24"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: MeridianRepeatedRiskRejections
+        exp_alerts:
+          - exp_labels:
+              { service: executor, job: meridian-executor, instance: fixture, severity: warning }
+            exp_annotations:
+              {
+                summary: "Repeated risk rejections above prototype threshold; execution policy unchanged"
+              }
+  - interval: 15s
+    input_series:
+      - series: 'risk_rejections_total{service="executor",job="meridian-executor",instance="fixture",reason="position"}'
+        values: "0x24"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: MeridianRepeatedRiskRejections
+        exp_alerts: []
+  - interval: 15s
+    input_series:
+      - series: 'meridian_backtest_dispatcher_ready{service="api"}'
+        values: "0x12"
+      - series: 'meridian_binance_throttle_timestamp_seconds{service="api",environment="testnet"}'
+        values: "0x12"
+      - series: 'drawdown_pct{service="executor",job="meridian-executor",instance="fixture",quote_asset="USDT",scope="allocated-testnet"}'
+        values: "10x12"
+      - series: 'meridian_drawdown_limit_pct{service="executor",job="meridian-executor",instance="fixture",quote_asset="USDT",scope="allocated-testnet"}'
+        values: "10x12"
+      - series: 'meridian_risk_sample_timestamp_seconds{service="executor",job="meridian-executor",instance="fixture",quote_asset="USDT",scope="allocated-testnet"}'
+        values: "0+15x12"
+      - series: 'up{job="meridian-executor",instance="fixture"}'
+        values: "1x12"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: MeridianBacktestDispatcherUnavailable
+        exp_alerts:
+          - exp_labels: { service: api, severity: warning }
+            exp_annotations: { summary: "Backtest dispatcher cannot poll or renew work" }
+      - eval_time: 3m
+        alertname: MeridianBinanceThrottled
+        exp_alerts:
+          - exp_labels: { service: api, environment: testnet, severity: warning }
+            exp_annotations: { summary: "Binance HTTP 418/429 observed in the last five minutes" }
+      - eval_time: 3m
+        alertname: MeridianDrawdownLimit
+        exp_alerts:
+          - exp_labels:
+              {
+                service: executor,
+                job: meridian-executor,
+                instance: fixture,
+                quote_asset: USDT,
+                scope: allocated-testnet,
+                severity: critical
+              }
+            exp_annotations:
+              { summary: "Validated executor drawdown reached its effective breaker limit" }
+  - interval: 15s
+    input_series:
+      - series: 'meridian_backtest_dispatcher_ready{service="api"}'
+        values: "1x24"
+      - series: 'meridian_binance_throttle_timestamp_seconds{service="api",environment="testnet"}'
+        values: "0x24"
+      - series: 'drawdown_pct{service="executor",job="meridian-executor",instance="fixture",quote_asset="USDT",scope="allocated-testnet"}'
+        values: "20x24"
+      - series: 'meridian_drawdown_limit_pct{service="executor",job="meridian-executor",instance="fixture",quote_asset="USDT",scope="allocated-testnet"}'
+        values: "10x24"
+      - series: 'meridian_risk_sample_timestamp_seconds{service="executor",job="meridian-executor",instance="fixture",quote_asset="USDT",scope="allocated-testnet"}'
+        values: "0x24"
+      - series: 'up{job="meridian-executor",instance="fixture"}'
+        values: "1x24"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: MeridianBacktestDispatcherUnavailable
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: MeridianBinanceThrottled
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: MeridianDrawdownLimit
+        exp_alerts: []

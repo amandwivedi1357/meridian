@@ -15,6 +15,16 @@ When progress is reported:
 
 ## Open Items
 
+- [ ] **`observability` / `ui-follow-up`: Complete operational telemetry behind the seven-page workspace.**
+  - Recorded 2026-10-11: separate pages and icon rail are implemented. Do not replace explicit Not reported fields with inferred healthy status. Add worker liveness/heartbeat telemetry for Engine, Executor and Backtest Worker; strategy symbol/interval/last signal/last input/decisions and strategy-attributed position/PnL; allocation equity; effective running executor limits including overrides; verified DB retention policy. API-host allowlisted configuration is only a configured snapshot, not running worker proof. Applied migration list does not prove every expected migration is present. Historical soak file size is not an active recorder. Storage/config/audit snapshots are on entry/manual refresh, timestamped; market/account/health use shared SSE. UNKNOWN/pending queue uses latest bounded account snapshot, not an exhaustive recovery registry. HTML report rejects histories over 10,000 points/fills rather than silently truncating.
+
+- [ ] **`correctness` / `phase-4`: Finish account/market API contracts before claiming a live trading dashboard.**
+  - Updated 2026-10-10: Phase 4.1 backend is verified, including durable backtest jobs, actual read-only wallet valuation/quantity reconciliation, synchronized REST bootstrap and real-feed SSE/reconnect continuity. Full-wallet equity stays null when any nonzero asset is unpriceable (three of 517 live Testnet assets); unexplained opening/external inventory remains visible with unknown basis. Persisted-fill PnL is not full-wallet PnL. No assets or trading limits were silently excluded/relaxed.
+  - Remaining acceptance: explicit audited full-wallet opening-cost inputs and exact historical third-asset fee conversion; replace mock UI metrics/order book during 4.2 wiring (current UI position row is inferred from latest fill). Add strategy pagination before exceeding 100 rows and a retention policy for terminal backtest jobs/results. Wallet/DB reconciliation is an observed comparison across separate timestamps, not an atomic account snapshot or proof that no external activity occurred. See `docs/api-gateway.md`.
+
+- [ ] **`reliability` / `phase-4`: Prove SSE fan-out and browser recovery.**
+  - Redis-backed resume/gap detection, heartbeats and bounded sockets are locally tested; market source reads are per client, while account sampling is shared within one API instance. Add shared market fan-out if needed, run the planned 500-client k6 gate and test real UI reconnect/session expiry/API restart before claiming sub-second dashboard acceptance. Account stream is bounded recent-state snapshots, not lossless intermediate-state history.
+
 - [x] **`reliability` / `prototype-check`: Define audited Testnet allocation and prove bounded risk-approved fills.**
   - Recorded: 2026-10-09. Real read-only full-account snapshot failed on a faucet asset with no priceable market. Other wallet holdings/limits may also block once that is resolved. The bounded live cancellation fixture verifies real order/user-data/kill adapters in isolated storage, not risk-approved strategy fills.
   - Resolved 2026-10-09 for the prototype: opt-in dedicated Testnet portfolio with immutable policy/API-key binding, audited initial funding/exclusions/backing baseline, fresh-ledger gate, fee-aware engine/risk state and drift/foreign-order rejection. A real risk-approved 0.0002 BTC BUY/SELL round trip passed with no own open orders or managed BTC remaining. Artifact: `logs/verification/fill-4b0f19c47a01490690ca.json`. Limits were not raised; default full-wallet valuation still blocks unpriceable assets. Shared application configuration was not changed. Full-wallet valuation and rebaselining remain below.
@@ -103,6 +113,10 @@ When progress is reported:
 - [x] **`docs`: Refresh the next-chat prompt in `docs/current-state.md` before handing off again.**
   - Recorded: 2026-10-05. The top handoff prompt still said to continue from Phase 2.1, while the state summary had already moved beyond that.
   - Resolved: verified on 2026-10-08 that the top handoff prompt now points to Phase 3.2 order lifecycle, matches the implementation-plan phase status, and keeps the soak monitor paused unless explicitly restarted.
+
+## Backtest UI Follow-Ups
+
+- [ ] **`resume-polish`: Restore tracked simulation jobs and uncertain submission identities after a full browser reload.** Recorded 2026-10-11. Current Backtests view keeps selected run/job and retry request ID in memory across dashboard navigation. A complete reload starts a new UI session; add bounded actor-scoped non-secret tracking or an authenticated job-history endpoint before claiming reload-safe submission recovery. Do not persist credentials or automatically resubmit unknown jobs.
 
 ## Categories
 

@@ -12,9 +12,21 @@ export interface DashboardSnapshot {
   readonly source: string;
   readonly feed: "live" | "stale" | "waiting";
   readonly trades: readonly DashboardTrade[];
-  readonly redis: { readonly available: boolean; readonly count: number | null; readonly memoryBytes: number | null };
-  readonly database: { readonly available: boolean; readonly count: number | null; readonly checkedAt: number | null };
-  readonly recording: { readonly bytes: number; readonly updatedAt: number; readonly path: string } | null;
+  readonly redis: {
+    readonly available: boolean;
+    readonly count: number | null;
+    readonly memoryBytes: number | null;
+  };
+  readonly database: {
+    readonly available: boolean;
+    readonly count: number | null;
+    readonly checkedAt: number | null;
+  };
+  readonly recording: {
+    readonly bytes: number;
+    readonly updatedAt: number;
+    readonly path: string;
+  } | null;
 }
 
 export interface OrderRecord {
@@ -76,6 +88,97 @@ export interface TradingState {
   readonly riskEvents: readonly RiskEventRecord[];
   readonly riskControl: RiskControlState | null;
   readonly strategies: readonly StrategyControlState[];
+  readonly portfolio?: Portfolio;
+}
+
+export interface Principal {
+  role: "viewer" | "operator";
+  actor: string;
+  expiresAtMs?: number;
+}
+export interface Portfolio {
+  checkedAt?: number;
+  equity: string | null;
+  equityReason: string | null;
+  positions: readonly {
+    symbol: string;
+    quantity: string | null;
+    avgEntry: string | null;
+    markPrice: string | null;
+    realizedPnl: string | null;
+    unrealizedPnl: string | null;
+    status: string;
+    reason: string | null;
+  }[];
+  totals: readonly {
+    quoteAsset: string;
+    realizedPnl: string | null;
+    unrealizedPnl: string | null;
+  }[];
+  wallet?: {
+    status: string;
+    reason: string | null;
+    reconciliation: string;
+    assets: readonly { asset: string; total: string; value: string | null }[];
+  };
+}
+export interface BookLevel {
+  price: string;
+  quantity: string;
+}
+export interface WireTrade {
+  symbol: string;
+  tradeId: string;
+  price: string;
+  quantity: string;
+  eventTimeMs: number;
+  isBuyerMaker: boolean;
+}
+export interface MarketSnapshot {
+  symbol: string;
+  interval: string;
+  cursor: string;
+  checkedAt: number;
+  book: {
+    bids: BookLevel[];
+    asks: BookLevel[];
+    lastUpdateId: number;
+    eventTimeMs: number;
+    complete: boolean;
+  };
+  trades: WireTrade[];
+  candles: MarketCandle[];
+}
+export type MarketEvent = { symbol: string; eventId: string; occurredAtMs: number } & (
+  | { kind: "trade"; trade: WireTrade }
+  | { kind: "kline"; candle: MarketCandle }
+  | {
+      kind: "depth";
+      depth: { firstUpdateId: number; finalUpdateId: number; bids: BookLevel[]; asks: BookLevel[] };
+    }
+);
+export class ApiError extends Error {
+  constructor(readonly status: number) {
+    super(`API request failed (${status})`);
+  }
+}
+export async function getSession(signal?: AbortSignal): Promise<{ principal: Principal }> {
+  return getJson("/api/auth/me", signal);
+}
+export async function login(token: string): Promise<unknown> {
+  return postJson("/api/auth/login", { token });
+}
+export async function logout(): Promise<unknown> {
+  return postJson("/api/auth/logout", {});
+}
+export async function getMarketSnapshot(
+  interval: string,
+  signal?: AbortSignal
+): Promise<MarketSnapshot> {
+  return getJson(
+    `/api/market/snapshot?symbol=BTCUSDT&interval=${encodeURIComponent(interval)}`,
+    signal
+  );
 }
 
 export interface MarketCandle {
@@ -108,8 +211,13 @@ export interface PositionRecord {
 }
 
 export interface AccountSummary {
+  readonly portfolio: Portfolio;
   readonly checkedAt?: number;
-  readonly balances?: readonly { readonly asset: string; readonly free: string; readonly locked: string }[];
+  readonly balances?: readonly {
+    readonly asset: string;
+    readonly free: string;
+    readonly locked: string;
+  }[];
   readonly totalEquity?: string;
   readonly availableEquity?: string;
 }
@@ -123,6 +231,20 @@ export interface RiskState {
 export async function getDashboard(signal?: AbortSignal): Promise<DashboardSnapshot> {
   return getJson("/api/dashboard", signal);
 }
+export interface WorkspaceSummary {
+  checkedAt: number;
+  configuration: {
+    source: string;
+    marketEnvironment: string | null;
+    tradingEnvironment: string | null;
+    allocationMode: string;
+    limits: Record<string, string | null>;
+  };
+  audits: { id: string; tsMs: string; actor: string; action: string }[] | null;
+  migrations: { id: string; appliedAt: string }[] | null;
+}
+export const getWorkspaceSummary = (signal?: AbortSignal) =>
+  getJson<WorkspaceSummary>("/api/system/workspace", signal);
 
 export async function getTradingState(signal?: AbortSignal): Promise<TradingState> {
   return getJson("/api/trading/state", signal);
@@ -140,15 +262,23 @@ export async function getMarketCandles(
   );
 }
 
-export async function getOrders(limit = 50, signal?: AbortSignal): Promise<{ readonly orders: readonly OrderRecord[] }> {
+export async function getOrders(
+  limit = 50,
+  signal?: AbortSignal
+): Promise<{ readonly orders: readonly OrderRecord[] }> {
   return getJson(`/api/orders?limit=${limit}`, signal);
 }
 
-export async function getFills(limit = 50, signal?: AbortSignal): Promise<{ readonly fills: readonly FillRecord[] }> {
+export async function getFills(
+  limit = 50,
+  signal?: AbortSignal
+): Promise<{ readonly fills: readonly FillRecord[] }> {
   return getJson(`/api/fills?limit=${limit}`, signal);
 }
 
-export async function getPositions(signal?: AbortSignal): Promise<{ readonly positions: readonly PositionRecord[] }> {
+export async function getPositions(
+  signal?: AbortSignal
+): Promise<{ readonly positions: readonly PositionRecord[] }> {
   return getJson("/api/positions", signal);
 }
 
@@ -156,7 +286,10 @@ export async function getRiskState(signal?: AbortSignal): Promise<RiskState> {
   return getJson("/api/risk/state", signal);
 }
 
-export async function getRiskEvents(limit = 50, signal?: AbortSignal): Promise<{ readonly events: readonly RiskEventRecord[] }> {
+export async function getRiskEvents(
+  limit = 50,
+  signal?: AbortSignal
+): Promise<{ readonly events: readonly RiskEventRecord[] }> {
   return getJson(`/api/risk/events?limit=${limit}`, signal);
 }
 
@@ -179,18 +312,25 @@ export async function resumeStrategy(strategyId: string, reason: string): Promis
   });
 }
 
-async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, signal === undefined ? {} : { signal });
-  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+      : AbortSignal.timeout(10000)
+  });
+  if (!response.ok) throw new ApiError(response.status);
   return response.json() as Promise<T>;
 }
 
-async function postJson(path: string, body: unknown): Promise<unknown> {
+export async function postJson<T = unknown>(path: string, body: unknown): Promise<T> {
   const response = await fetch(path, {
+    credentials: "same-origin",
+    signal: AbortSignal.timeout(10000),
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
-  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
-  return response.json() as Promise<unknown>;
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json() as Promise<T>;
 }

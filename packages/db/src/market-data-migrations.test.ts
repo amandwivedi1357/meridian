@@ -6,6 +6,15 @@ function normalizeSql(sql: string): string {
 }
 
 describe("market data migrations", () => {
+  it("adds durable idempotent backtest jobs with worker leases", () => {
+    const migration = marketDataMigrations[7];
+    expect(migration?.id).toBe("008_backtest_jobs");
+    const sql = normalizeSql(migration?.sql ?? "");
+    expect(sql).toContain("unique (actor,request_id)");
+    expect(sql).toContain("worker_token uuid");
+    expect(sql).toContain("lease_until timestamptz");
+    expect(sql).toContain("references backtest_runs(run_id)");
+  });
   it("creates durable risk controls, audit events, equity peaks and reservations", () => {
     const migration = marketDataMigrations[4];
     expect(migration?.id).toBe("005_risk_controls_schema");
@@ -22,7 +31,7 @@ describe("market data migrations", () => {
     expect(sql).toContain("values ('global', true, 'awaiting-explicit-activation')");
   });
   it("creates Timescale extension and trades/klines hypertables", () => {
-    expect(marketDataMigrations).toHaveLength(7);
+    expect(marketDataMigrations).toHaveLength(8);
 
     const migration = marketDataMigrations[0];
     expect(migration?.id).toBe("001_market_data_schema");

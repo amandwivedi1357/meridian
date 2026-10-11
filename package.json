@@ -6,6 +6,10 @@
   "type": "module",
   "packageManager": "pnpm@9.12.3",
   "scripts": {
+    "dashboard:feed": "node --env-file=.env apps/ingestor/dist/dashboard-feed.js",
+    "dashboard:feed:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dashboard-feed-task.ps1 -Action Install",
+    "dashboard:feed:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dashboard-feed-task.ps1 -Action Stop",
+    "dashboard:feed:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dashboard-feed-task.ps1 -Action Status",
     "build": "turbo run build",
     "backtest": "pnpm --filter @meridian/backtest-worker exec tsx src/main.ts",
     "backtest:list": "pnpm backtest list",

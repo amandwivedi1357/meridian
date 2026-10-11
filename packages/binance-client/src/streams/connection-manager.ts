@@ -11,6 +11,7 @@ import type {
 export type StreamConnectionEventHandler = (event: StreamConnectionEvent) => void;
 export type StreamMessageHandler = (message: StreamMessage) => void;
 export interface StreamConnectionManagerOptions {
+  readonly onReconnect?: () => void;
   readonly subscriptions: readonly StreamSubscription[];
   readonly now?: () => number;
   readonly environment?: BinanceEnvironment;
@@ -259,10 +260,6 @@ export function createStreamConnectionManager(
   }
 
   function close(): void {
-    if (!socket) {
-      return;
-    }
-
     transitionTo("CLOSING", "close requested");
     shouldReconnect = false;
     stopReconnectTimer();
@@ -272,7 +269,7 @@ export function createStreamConnectionManager(
     stopRotationTimer();
     rotatingSocket?.close();
     rotatingSocket = undefined;
-    socket.close();
+    socket?.close();
   }
 
   function checkStale(): void {
@@ -313,9 +310,10 @@ export function createStreamConnectionManager(
   }
 
   function scheduleReconnect(): void {
-    stopReconnectTimer();
+    if (reconnectTimer !== undefined) return;
     reconnectAttempt += 1;
     reconnectCount += 1;
+    options.onReconnect?.();
     const delayMs = calculateReconnectDelayForAttempt(reconnectAttempt);
 
     reconnectTimer = setTimeout(() => {

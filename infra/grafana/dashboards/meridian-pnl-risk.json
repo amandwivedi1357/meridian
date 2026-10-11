@@ -1,0 +1,75 @@
+{
+  "uid": "meridian-pnl-risk",
+  "title": "Meridian / PnL and Drawdown",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "15s",
+  "tags": ["meridian", "phase-5"],
+  "timezone": "utc",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Persisted-fill realized PnL / all time",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pnl_realized and on(job,instance,scope) (time() - meridian_portfolio_sample_timestamp_seconds < 30) and on(job,instance) (up == 1)",
+          "legendFormat": "{{environment}} / {{quote_asset}} / {{scope}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Quote-asset units; weighted-average persisted-fill accounting, not total wallet performance. Unknown basis stays absent."
+    },
+    {
+      "id": 2,
+      "title": "Persisted-fill marked unrealized PnL",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pnl_unrealized and on(job,instance,scope) (time() - meridian_portfolio_sample_timestamp_seconds < 30) and on(job,instance) (up == 1)",
+          "legendFormat": "{{environment}} / {{quote_asset}} / {{scope}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "No mark or unknown basis produces no value. Existing API portfolio reads refresh metrics; scraping does not call exchange account endpoints."
+    },
+    {
+      "id": 3,
+      "title": "Validated executor drawdown / effective risk scope",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 9, "w": 24, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "drawdown_pct and on(job,instance,quote_asset,scope) (time() - meridian_risk_sample_timestamp_seconds < 30) and on(job,instance) (up == 1)",
+          "legendFormat": "drawdown / {{scope}} / {{quote_asset}}"
+        },
+        {
+          "refId": "B",
+          "expr": "meridian_drawdown_limit_pct and on(job,instance,quote_asset,scope) (time() - meridian_risk_sample_timestamp_seconds < 30) and on(job,instance) (up == 1)",
+          "legendFormat": "breaker limit / {{scope}} / {{quote_asset}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Derived only from validated Executor risk snapshots and their actual peak/limit; absent when Executor is off or sample stale. No wallet-based surrogate."
+    }
+  ]
+}

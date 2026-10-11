@@ -46,7 +46,7 @@ describe.skipIf(!process.env.RISK_TEST_DATABASE_URL)("isolated PostgreSQL risk s
   const repo = createRiskRepository(db);
   beforeAll(async () => {
     await admin.query(`CREATE SCHEMA ${schema}`);
-    for (const migration of marketDataMigrations.slice(2)) await pool.query(migration.sql);
+    for (const migration of marketDataMigrations.slice(2, 7)) await pool.query(migration.sql);
   });
   beforeEach(async () => {
     await pool.query("TRUNCATE risk_reservations, risk_events, audit_log, risk_equity_state");

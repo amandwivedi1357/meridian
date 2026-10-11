@@ -77,6 +77,30 @@ describe("parseLiveIngestSmokeArgs", () => {
 });
 
 describe("runLiveIngestSmoke", () => {
+  it("stops accepting messages and drains accepted writes on cancellation", async () => {
+    const manager = new FakeStreamManager();
+    const controller = new AbortController();
+    let complete!: () => void;
+    const ingest = vi.fn(
+      () =>
+        new Promise<never>((resolve) => {
+          complete = () => resolve({} as never);
+        })
+    );
+    const run = runLiveIngestSmoke([], {
+      ingestor: { ingest },
+      signal: controller.signal,
+      createStreamManager: () => manager
+    });
+    const result = expect(run).rejects.toThrow();
+    manager.emit({ stream: "fixture", data: {} });
+    controller.abort();
+    manager.emit({ stream: "fixture", data: {} });
+    expect(ingest).toHaveBeenCalledOnce();
+    expect(manager.close).toHaveBeenCalledOnce();
+    complete();
+    await result;
+  });
   it("ingests stream messages until the max event count is reached", async () => {
     const manager = new FakeStreamManager();
     const ingest = vi.fn(async () => ({

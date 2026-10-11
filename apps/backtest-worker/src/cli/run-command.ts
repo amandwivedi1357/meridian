@@ -6,13 +6,11 @@ import {
 import { createEmaCrossover } from "../strategies/ema-crossover.js";
 import { createSimBroker } from "../broker/create-sim-broker.js";
 import { runBacktest } from "../runtime/run-backtest.js";
-import {
-  createBacktestResultWriter,
-  type SqlQuery
-} from "../results/backtest-result-writer.js";
+import { createBacktestResultWriter, type SqlQuery } from "../results/backtest-result-writer.js";
 import { parseBacktestArgs } from "./arguments.js";
 
 export interface BacktestCommandDeps extends TimescaleCandleFeedDeps {
+  readonly signal?: AbortSignal;
   readonly execute?: (query: SqlQuery) => Promise<void>;
   readonly nowMs?: () => number;
 }
@@ -45,7 +43,8 @@ export async function runBacktestCommand(args: readonly string[], deps: Backtest
     request,
     strategy,
     broker,
-    initialEquity
+    initialEquity,
+    ...(deps.signal ? { signal: deps.signal } : {})
   });
   const strategyParams = {
     fastPeriod: 12,
@@ -58,11 +57,14 @@ export async function runBacktestCommand(args: readonly string[], deps: Backtest
 
   let runId: string | undefined;
   if (parsed.saveRun) {
+    deps.signal?.throwIfAborted();
     if (deps.execute === undefined) {
       throw new Error("Saving backtest runs requires a SQL executor");
     }
 
-    runId = parsed.runId ?? createRunId(name, request.symbol, request.interval, deps.nowMs?.() ?? Date.now());
+    runId =
+      parsed.runId ??
+      createRunId(name, request.symbol, request.interval, deps.nowMs?.() ?? Date.now());
     await createBacktestResultWriter({ execute: deps.execute }).save({
       runId,
       strategy: name,

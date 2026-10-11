@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, QueryResultRow } from "pg";
 
 interface OrderRow {
   readonly client_order_id: string;
@@ -57,11 +57,29 @@ export function registerTradingState(server: FastifyInstance, pool: Pool): void 
   server.get("/api/trading/state", async (request, reply) => {
     reply.header("Cache-Control", "no-store");
     const limit = readLimit(request.query);
-
     try {
-      const [orders, fills, riskEvents, riskControl, strategies] = await Promise.all([
-        pool.query<OrderRow>(
-          `
+      return await readTradingState(pool, limit);
+    } catch {
+      return reply
+        .code(503)
+        .send({ error: "trading_state_unavailable", message: "Trading state is unavailable" });
+    }
+  });
+}
+
+export async function readTradingState(pool: Pick<Pool, "query">, limit = 100, serial = false) {
+  let previous: Promise<unknown> = Promise.resolve();
+  function query<Row extends QueryResultRow>(text: string, values?: unknown[]) {
+    if (!serial) return pool.query<Row>(text, values);
+    const result = previous.then(() => pool.query<Row>(text, values));
+    previous = result.catch(() => undefined);
+    return result;
+  }
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+    throw new Error("Invalid snapshot limit");
+  const [orders, fills, riskEvents, riskControl, strategies] = await Promise.all([
+    query<OrderRow>(
+      `
             SELECT
               client_order_id,
               strategy_id,
@@ -78,13 +96,13 @@ export function registerTradingState(server: FastifyInstance, pool: Pool): void 
               (EXTRACT(EPOCH FROM created_at) * 1000)::bigint::text AS created_at_ms,
               (EXTRACT(EPOCH FROM updated_at) * 1000)::bigint::text AS updated_at_ms
             FROM orders
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, client_order_id
             LIMIT $1
           `,
-          [limit]
-        ),
-        pool.query<FillRow>(
-          `
+      [limit]
+    ),
+    query<FillRow>(
+      `
             SELECT
               f.client_order_id,
               o.strategy_id,
@@ -99,26 +117,26 @@ export function registerTradingState(server: FastifyInstance, pool: Pool): void 
               f.event_time_ms::text
             FROM order_fills f
             JOIN orders o USING (client_order_id)
-            ORDER BY f.event_time_ms DESC
+            ORDER BY f.event_time_ms DESC, f.execution_id
             LIMIT $1
           `,
-          [limit]
-        ),
-        pool.query<RiskEventRow>(
-          `
+      [limit]
+    ),
+    query<RiskEventRow>(
+      `
             SELECT
               id::text,
               (EXTRACT(EPOCH FROM ts) * 1000)::bigint::text AS ts_ms,
               type,
               details
             FROM risk_events
-            ORDER BY ts DESC
+            ORDER BY ts DESC, id
             LIMIT $1
           `,
-          [limit]
-        ),
-        pool.query<RiskControlRow>(
-          `
+      [limit]
+    ),
+    query<RiskControlRow>(
+      `
             SELECT
               scope,
               engaged,
@@ -128,36 +146,29 @@ export function registerTradingState(server: FastifyInstance, pool: Pool): void 
             WHERE scope = 'global'
             LIMIT 1
           `
-        ),
-        pool.query<StrategyControlRow>(
-          `
+    ),
+    query<StrategyControlRow>(
+      `
             SELECT
               strategy_id,
               paused,
               reason,
               (EXTRACT(EPOCH FROM updated_at) * 1000)::bigint::text AS updated_at_ms
             FROM strategy_control_state
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, strategy_id
+            LIMIT 100
           `
-        )
-      ]);
+    )
+  ]);
 
-      return {
-        checkedAt: Date.now(),
-        orders: orders.rows.map(toOrder),
-        fills: fills.rows.map(toFill),
-        riskEvents: riskEvents.rows.map(toRiskEvent),
-        riskControl:
-          riskControl.rows[0] === undefined ? null : toRiskControl(riskControl.rows[0]),
-        strategies: strategies.rows.map(toStrategyControl)
-      };
-    } catch {
-      return reply.code(503).send({
-        error: "trading_state_unavailable",
-        message: "Trading state is unavailable"
-      });
-    }
-  });
+  return {
+    checkedAt: Date.now(),
+    orders: orders.rows.map(toOrder),
+    fills: fills.rows.map(toFill),
+    riskEvents: riskEvents.rows.map(toRiskEvent),
+    riskControl: riskControl.rows[0] === undefined ? null : toRiskControl(riskControl.rows[0]),
+    strategies: strategies.rows.map(toStrategyControl)
+  };
 }
 
 function readLimit(query: unknown): number {

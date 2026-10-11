@@ -43,7 +43,8 @@ describe("createIngestorApp", () => {
       "004_live_order_execution_schema",
       "005_risk_controls_schema",
       "006_order_fills_trade_id_dedupe_index",
-      "007_strategy_control_state"
+      "007_strategy_control_state",
+      "008_backtest_jobs"
     ]);
     expect(postgres.query).toHaveBeenCalledWith(
       expect.stringContaining("CREATE TABLE IF NOT EXISTS orders"),

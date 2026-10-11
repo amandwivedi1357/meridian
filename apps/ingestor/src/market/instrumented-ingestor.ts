@@ -6,9 +6,9 @@ export function createInstrumentedIngestor(
   metrics: IngestorMetrics
 ): MarketIngestor {
   return {
-    async ingest(input) {
+    async ingest(input, receivedAtMs) {
       try {
-        const result = await ingestor.ingest(input);
+        const result = await ingestor.ingest(input, receivedAtMs);
 
         metrics.recordProcessed(result.event.kind);
         metrics.recordPublished(result.publishResult.stream);

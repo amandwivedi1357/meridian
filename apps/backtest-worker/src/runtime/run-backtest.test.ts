@@ -68,6 +68,28 @@ function broker(symbol = "BTCUSDT", slippage = "0", fee = "0") {
 const passive: Strategy = { id: "passive" };
 
 describe("runBacktest", () => {
+  it("cancels an in-memory replay without publishing a completed result", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const strategy: Strategy = {
+      id: "abort",
+      onCandle() {
+        calls++;
+        controller.abort();
+      }
+    };
+    await expect(
+      runBacktest({
+        feed: feed([candle(0), candle(1)]),
+        request,
+        broker: broker(),
+        strategy,
+        initialEquity: new Decimal(1000),
+        signal: controller.signal
+      })
+    ).rejects.toThrow();
+    expect(calls).toBe(1);
+  });
   it("awaits initialization, fills at the next open, and delivers fills before the closed candle", async () => {
     const events: string[] = [];
     const strategy: Strategy = {

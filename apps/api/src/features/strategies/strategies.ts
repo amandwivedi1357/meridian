@@ -22,6 +22,7 @@ export function registerStrategiesRoutes(server: FastifyInstance, pool: Pool): v
             (EXTRACT(EPOCH FROM updated_at) * 1000)::bigint::text AS updated_at_ms
           FROM strategy_control_state
           ORDER BY strategy_id ASC
+          LIMIT 100
         `
       );
 

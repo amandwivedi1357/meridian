@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createRiskEngine, type RiskSnapshot } from "./risk-engine.js";
 import { loadRiskConfig } from "./risk-config.js";
 import type { RiskFill } from "./risk-accounting.js";
+import { Registry } from "@meridian/observability";
 
 function fixture(env: NodeJS.ProcessEnv = {}) {
   let now = 100_000;
@@ -69,7 +70,10 @@ function fixture(env: NodeJS.ProcessEnv = {}) {
   };
   const readSnapshot = vi.fn(async () => snapshot);
   const assertReady = vi.fn(async () => undefined);
+  const registry = new Registry();
   const engine = createRiskEngine({
+    metricsRegistry: registry,
+    metricsScope: "allocated-testnet",
     repo,
     killSwitch,
     config: loadRiskConfig(env),
@@ -92,6 +96,7 @@ function fixture(env: NodeJS.ProcessEnv = {}) {
     }
   };
   return {
+    registry,
     engine,
     repo,
     killSwitch,
@@ -121,6 +126,21 @@ function lossFills(): RiskFill[] {
   ];
 }
 describe("Phase 3.4 risk engine", () => {
+  it("exports validated scoped drawdown and clears values after dependency failures", async () => {
+    const f = fixture({ EXECUTOR_MAX_DRAWDOWN: "0.1" });
+    f.snapshot.equity = new Decimal(950);
+    await f.engine.evaluate(f.signal);
+    let metrics = await f.registry.metrics();
+    expect(metrics).toContain('drawdown_pct{quote_asset="USDT",scope="allocated-testnet"} 5');
+    expect(metrics).toContain(
+      'meridian_drawdown_limit_pct{quote_asset="USDT",scope="allocated-testnet"} 10'
+    );
+    f.readSnapshot.mockRejectedValueOnce(new Error("unavailable"));
+    await f.engine.evaluate({ ...f.signal, signalId: "second" });
+    metrics = await f.registry.metrics();
+    expect(metrics).not.toContain("drawdown_pct{");
+    expect(metrics).not.toContain("meridian_risk_equity{");
+  });
   it("approves and durably reserves a valid signal", async () => {
     const f = fixture();
     await expect(f.engine.evaluate(f.signal)).resolves.toEqual({ approved: true });

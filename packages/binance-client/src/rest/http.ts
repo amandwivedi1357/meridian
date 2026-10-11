@@ -15,12 +15,16 @@ export interface HttpGetOptions {
   readonly baseUrl: string;
   readonly path: string;
   readonly query?: Readonly<Record<string, string | number | boolean | undefined>>;
+  readonly timeoutMs?: number;
+  readonly fetch?: typeof globalThis.fetch | undefined;
 }
 
 export async function httpGetJson<TResponse>({
   baseUrl,
   path,
-  query
+  query,
+  timeoutMs,
+  fetch: fetchRequest = globalThis.fetch
 }: HttpGetOptions): Promise<TResponse> {
   return withRetry(
     async () => {
@@ -32,7 +36,10 @@ export async function httpGetJson<TResponse>({
         }
       }
 
-      const response = await fetch(url);
+      const response = await fetchRequest(
+        url,
+        timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : undefined
+      );
 
       if (!response.ok) {
         const body = await response.text();
@@ -50,7 +57,11 @@ export async function httpGetJson<TResponse>({
       baseDelayMs: 250,
       maxDelayMs: 5_000,
       shouldRetry: (error) =>
-        error instanceof BinanceHttpError ? isRetryableHttpStatus(error.status) : true
+        error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
+          ? false
+          : error instanceof BinanceHttpError
+            ? isRetryableHttpStatus(error.status)
+            : true
     }
   );
 }

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Histogram, type Registry } from "@meridian/observability";
 
 import {
   Decimal,
@@ -35,6 +36,7 @@ export interface LiveStrategyLogger {
 }
 
 export interface LiveStrategyRunnerDeps {
+  readonly metricsRegistry?: Registry;
   readonly strategy: Strategy;
   readonly publishSignal: (signal: Signal) => Promise<string>;
   readonly nowMs: () => number;
@@ -60,6 +62,14 @@ export interface LiveStrategyRunner {
 
 export function createLiveStrategyRunner(deps: LiveStrategyRunnerDeps): LiveStrategyRunner {
   let started = false;
+  const latency = deps.metricsRegistry
+    ? new Histogram({
+        name: "strategy_signal_latency_ms",
+        help: "Local event handling through successful signal publication; not exchange-to-signal latency",
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
+        registers: [deps.metricsRegistry]
+      })
+    : undefined;
 
   return {
     async start() {
@@ -73,6 +83,7 @@ export function createLiveStrategyRunner(deps: LiveStrategyRunnerDeps): LiveStra
     },
 
     async handleMarketEvent(event) {
+      const processingStarted = performance.now();
       if (!started) {
         await this.start();
       }
@@ -140,6 +151,7 @@ export function createLiveStrategyRunner(deps: LiveStrategyRunnerDeps): LiveStra
 
       for (const signal of signals) {
         await deps.publishSignal(signal);
+        latency?.observe(performance.now() - processingStarted);
       }
 
       return signals;

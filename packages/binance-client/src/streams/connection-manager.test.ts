@@ -10,6 +10,49 @@ class FakeWebSocket extends EventEmitter {
 }
 
 describe("StreamConnectionManager", () => {
+  it("counts one scheduled reconnect for an error/close pair", () => {
+    vi.useFakeTimers();
+    try {
+      const socket = new FakeWebSocket();
+      const onReconnect = vi.fn();
+      const manager = createStreamConnectionManager({
+        subscriptions: [],
+        createWebSocket: () => socket as unknown as WebSocket,
+        random: () => 1,
+        onReconnect
+      });
+      manager.connect();
+      socket.emit("open");
+      socket.emit("error", new Error("disconnected"));
+      socket.emit("close");
+      expect(onReconnect).toHaveBeenCalledOnce();
+      expect(manager.getReconnectCount()).toBe(1);
+      manager.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("cancels reconnection when closed during socket-free backoff", () => {
+    vi.useFakeTimers();
+    try {
+      const socket = new FakeWebSocket();
+      const createWebSocket = vi.fn(() => socket as unknown as WebSocket);
+      const manager = createStreamConnectionManager({
+        subscriptions: [],
+        createWebSocket,
+        random: () => 1
+      });
+      manager.connect();
+      socket.emit("close");
+      expect(manager.getState()).toBe("BACKOFF");
+      manager.close();
+      vi.advanceTimersByTime(60000);
+      expect(createWebSocket).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("starts idle and stores subscriptions", () => {
     const manager = createStreamConnectionManager({
       subscriptions: [{ streamName: "btcusdt@trade" }]
@@ -139,7 +182,7 @@ describe("StreamConnectionManager", () => {
     expect(manager.getLastPingAtMs()).toBeUndefined();
     expect(manager.getLastPongAtMs()).toBeUndefined();
   });
-    it("exposes last message age for metrics", () => {
+  it("exposes last message age for metrics", () => {
     let now = 1_000;
 
     const manager = createStreamConnectionManager({

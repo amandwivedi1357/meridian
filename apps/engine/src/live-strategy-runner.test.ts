@@ -1,5 +1,6 @@
 import { Decimal, type Candle, type Strategy } from "@meridian/core";
 import { describe, expect, it, vi } from "vitest";
+import { Registry } from "@meridian/observability";
 
 import { createLiveStrategyRunner } from "./live-strategy-runner.js";
 
@@ -20,6 +21,34 @@ function candle(overrides: Partial<Candle> = {}): Candle {
 }
 
 describe("createLiveStrategyRunner", () => {
+  it("observes only successful signal publications without identity labels", async () => {
+    const registry = new Registry();
+    const publish = vi.fn(async () => "1-0");
+    const runner = createLiveStrategyRunner({
+      metricsRegistry: registry,
+      strategy: {
+        id: "private-strategy",
+        onCandle(c, ctx) {
+          ctx.submit({
+            symbol: c.symbol,
+            side: "BUY",
+            type: "MARKET",
+            quantity: new Decimal(1),
+            reason: "private-reason"
+          });
+        }
+      },
+      publishSignal: publish,
+      nowMs: () => 2500,
+      signalTtlMs: 5000
+    });
+    await runner.handleMarketEvent({ kind: "candle", candle: candle() });
+    expect(await registry.metrics()).toContain("strategy_signal_latency_ms_count 1");
+    expect(await registry.metrics()).not.toContain("private-strategy");
+    publish.mockRejectedValueOnce(new Error("failure"));
+    await expect(runner.handleMarketEvent({ kind: "candle", candle: candle() })).rejects.toThrow();
+    expect(await registry.metrics()).toContain("strategy_signal_latency_ms_count 1");
+  });
   it("runs strategy candle handlers and publishes submitted intents as expiring signals", async () => {
     const publishSignal = vi.fn(async () => "1-0");
     const strategy: Strategy = {

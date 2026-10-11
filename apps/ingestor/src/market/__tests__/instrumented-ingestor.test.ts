@@ -22,6 +22,7 @@ describe("createInstrumentedIngestor", () => {
       }
     }));
     const metrics = {
+      recordBusLatency: vi.fn(),
       recordProcessed: vi.fn(),
       recordFailed: vi.fn(),
       recordPublished: vi.fn(),
@@ -44,6 +45,7 @@ describe("createInstrumentedIngestor", () => {
       throw error;
     });
     const metrics = {
+      recordBusLatency: vi.fn(),
       recordProcessed: vi.fn(),
       recordFailed: vi.fn(),
       recordPublished: vi.fn(),

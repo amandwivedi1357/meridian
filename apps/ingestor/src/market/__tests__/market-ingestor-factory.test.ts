@@ -4,6 +4,42 @@ import { createMarketIngestor } from "../market-ingestor-factory.js";
 import type { MarketEventPublisherDeps } from "../market-publisher.js";
 
 describe("createMarketIngestor", () => {
+  it("observes bus success before DB work and never observes failed publication", async () => {
+    const order: string[] = [];
+    const observer = vi.fn((kind: string, ms: number) => {
+      expect(kind).toBe("trade");
+      expect(ms).toBeGreaterThanOrEqual(25);
+      order.push("observed");
+    });
+    const xadd = vi.fn(async () => {
+      order.push("bus");
+      return "1-0";
+    });
+    const ingestor = createMarketIngestor({
+      xadd,
+      onPublished: observer,
+      upsertTrades: async () => {
+        order.push("db");
+      },
+      upsertKlines: async () => {}
+    });
+    const input = {
+      e: "trade",
+      E: 1700000000000,
+      s: "BTCUSDT",
+      t: 1,
+      p: "100",
+      q: "0.1",
+      T: 1700000000000,
+      m: false,
+      M: true
+    };
+    await ingestor.ingest(input, performance.now() - 25);
+    expect(order).toEqual(["bus", "observed", "db"]);
+    xadd.mockRejectedValueOnce(new Error("unavailable"));
+    await expect(ingestor.ingest(input)).rejects.toThrow("unavailable");
+    expect(observer).toHaveBeenCalledOnce();
+  });
   it("wires normalization, shared encoding, Redis publishing, and batch persistence", async () => {
     let publishedFields: Parameters<MarketEventPublisherDeps["xadd"]>[2] | undefined;
     const xadd = vi.fn(async (...args: Parameters<MarketEventPublisherDeps["xadd"]>) => {

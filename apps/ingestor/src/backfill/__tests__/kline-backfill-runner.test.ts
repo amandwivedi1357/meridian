@@ -3,6 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 import { runKlineBackfill } from "../kline-backfill-runner.js";
 
 describe("runKlineBackfill", () => {
+  it("does not persist or fetch another window after cancellation", async () => {
+    const controller = new AbortController();
+    const fetchKlines = vi.fn(async () => {
+      controller.abort();
+      return [];
+    });
+    const upsertKlines = vi.fn();
+    await expect(
+      runKlineBackfill(
+        { symbol: "BTCUSDT", interval: "1m", startTimeMs: 0, endTimeMs: 120000, limit: 2 },
+        { fetchKlines, upsertKlines, signal: controller.signal }
+      )
+    ).rejects.toThrow();
+    expect(fetchKlines).toHaveBeenCalledOnce();
+    expect(upsertKlines).not.toHaveBeenCalled();
+  });
   it("fetches planned kline windows and persists returned candles", async () => {
     const fetchKlines = vi.fn(async () => [
       {

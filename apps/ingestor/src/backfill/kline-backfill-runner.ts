@@ -7,9 +7,8 @@ import {
 import type { KlineRow } from "../market/market-batch-writer.js";
 
 export interface KlineBackfillRunnerDeps {
-  readonly fetchKlines: (
-    request: KlineBackfillRequest
-  ) => Promise<readonly Candle[]>;
+  readonly signal?: AbortSignal;
+  readonly fetchKlines: (request: KlineBackfillRequest) => Promise<readonly Candle[]>;
   readonly upsertKlines: (rows: readonly KlineRow[]) => Promise<void>;
 }
 
@@ -28,7 +27,9 @@ export async function runKlineBackfill(
   let candlesWritten = 0;
 
   for (const request of requests) {
+    deps.signal?.throwIfAborted();
     const candles = await deps.fetchKlines(request);
+    deps.signal?.throwIfAborted();
     requestsCompleted += 1;
 
     const rows = candles.map(candleToKlineRow);

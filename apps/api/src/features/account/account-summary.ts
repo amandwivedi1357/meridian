@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import type { PortfolioReader } from "./portfolio.js";
 
 interface CountRow {
   readonly count: string;
@@ -17,18 +18,16 @@ interface RiskControlRow {
   readonly updated_at_ms: string;
 }
 
-interface PositionRow {
-  readonly symbol: string;
-  readonly quantity: string;
-  readonly fill_count: string;
-}
-
-export function registerAccountSummaryRoutes(server: FastifyInstance, pool: Pool): void {
+export function registerAccountSummaryRoutes(
+  server: FastifyInstance,
+  pool: Pool,
+  portfolio: PortfolioReader
+): void {
   server.get("/api/account/summary", async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
 
     try {
-      const [orders, orderStates, fills, riskControl, positions] = await Promise.all([
+      const [orders, orderStates, fills, riskControl] = await Promise.all([
         pool.query<CountRow>("SELECT COUNT(*)::text AS count FROM orders"),
         pool.query<OrderStateCountRow>(
           `
@@ -50,19 +49,10 @@ export function registerAccountSummaryRoutes(server: FastifyInstance, pool: Pool
             WHERE scope = 'global'
             LIMIT 1
           `
-        ),
-        pool.query<PositionRow>(
-          `
-            SELECT
-              symbol,
-              SUM(CASE WHEN side = 'BUY' THEN quantity ELSE -quantity END)::text AS quantity,
-              COUNT(*)::text AS fill_count
-            FROM order_fills
-            GROUP BY symbol
-            ORDER BY symbol ASC
-          `
         )
       ]);
+
+      const valuation = await portfolio();
 
       return {
         checkedAt: Date.now(),
@@ -71,9 +61,9 @@ export function registerAccountSummaryRoutes(server: FastifyInstance, pool: Pool
         ordersByState: Object.fromEntries(
           orderStates.rows.map((row) => [row.state, Number(row.count)])
         ),
-        riskControl:
-          riskControl.rows[0] === undefined ? null : toRiskControl(riskControl.rows[0]),
-        positions: positions.rows.map(toPosition)
+        riskControl: riskControl.rows[0] === undefined ? null : toRiskControl(riskControl.rows[0]),
+        positions: valuation.positions,
+        portfolio: valuation
       };
     } catch {
       return reply.code(503).send({
@@ -94,13 +84,5 @@ function toRiskControl(row: RiskControlRow) {
     engaged: row.engaged,
     reason: row.reason,
     updatedAtMs: Number(row.updated_at_ms)
-  };
-}
-
-function toPosition(row: PositionRow) {
-  return {
-    symbol: row.symbol,
-    quantity: row.quantity,
-    fillCount: Number(row.fill_count)
   };
 }

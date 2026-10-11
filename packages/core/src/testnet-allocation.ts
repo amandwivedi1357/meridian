@@ -1,5 +1,6 @@
 import { Decimal } from "decimal.js";
 import type { BalanceSnapshot } from "./exchange.js";
+import { applySpotFill } from "./spot-accounting.js";
 
 export interface TestnetAllocation {
   id: string;
@@ -110,23 +111,24 @@ export function projectTestnetAllocation(options: {
     const direction = fill.side === "BUY" ? 1 : -1;
     const previousQuantity = total.get(m.baseAsset)!;
     const previousCost = costs.get(m.baseAsset) ?? new Decimal(0);
-    const baseFee = fill.feeAsset === m.baseAsset ? fee : new Decimal(0);
-    const quoteFee = fill.feeAsset === policy.quoteAsset ? fee : new Decimal(0);
-    if (fill.side === "BUY")
-      costs.set(m.baseAsset, previousCost.plus(qty.mul(price)).plus(quoteFee));
-    else {
-      if (previousQuantity.lte(0) || qty.plus(baseFee).gt(previousQuantity))
-        throw new Error("Allocation sell exceeds managed inventory");
-      const removedCost = previousCost.div(previousQuantity).mul(qty.plus(baseFee));
-      costs.set(m.baseAsset, previousCost.minus(removedCost));
-      realized.set(
-        m.baseAsset,
-        (realized.get(m.baseAsset) ?? new Decimal(0))
-          .plus(qty.mul(price))
-          .minus(quoteFee)
-          .minus(removedCost)
-      );
-    }
+    const next = applySpotFill(
+      {
+        quantity: previousQuantity,
+        cost: previousCost,
+        realizedPnl: realized.get(m.baseAsset) ?? new Decimal(0)
+      },
+      {
+        side: fill.side,
+        quantity: qty,
+        price,
+        fee,
+        feeAsset: fill.feeAsset,
+        baseAsset: m.baseAsset,
+        quoteAsset: policy.quoteAsset
+      }
+    );
+    costs.set(m.baseAsset, next.cost);
+    realized.set(m.baseAsset, next.realizedPnl);
     total.set(
       m.baseAsset,
       total

@@ -6,7 +6,16 @@ import {
 } from "@meridian/binance-client";
 import { loadConfig } from "@meridian/config";
 import { allocationFromEnv } from "@meridian/core";
-import { createLogger, createMetricsRegistry, Counter, Gauge } from "@meridian/observability";
+import {
+  createLogger,
+  createShutdownGuard,
+  createMetricsRegistry,
+  createBinanceMetricsFetch,
+  Counter,
+  Gauge,
+  createServiceDiagnostics,
+  diagnosticsAddress
+} from "@meridian/observability";
 import { pathToFileURL } from "node:url";
 
 import { createExecutorRuntimeFromDeps } from "./executor-runtime-factory.js";
@@ -26,6 +35,7 @@ import { createRiskEngine } from "./risk-engine.js";
 import { createKillSwitch } from "./kill-switch.js";
 import { loadRiskConfig } from "./risk-config.js";
 import { createRiskSnapshotReader } from "./risk-snapshot.js";
+import { createOrderSubmitMetrics } from "./order-submit-metrics.js";
 
 const logger = createLogger("executor");
 
@@ -36,9 +46,20 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
     postgresUrl: config.DATABASE_URL,
     redisUrl: config.REDIS_URL
   });
+  let running = true;
+  let markStopping = () => {};
+  const stop = () => {
+    running = false;
+    markStopping();
+  };
+  const shutdown = createShutdownGuard({ onStop: stop });
   const metricsRegistry = createMetricsRegistry("executor");
-  const tradingClient = await createTestnetTradingClientFromEnv({ autoSynchronizeTime: true });
-  const publicClient = new BinanceRestClient({ environment: "testnet" });
+  const monitoredFetch = createBinanceMetricsFetch(metricsRegistry);
+  const tradingClient = await createTestnetTradingClientFromEnv({
+    autoSynchronizeTime: true,
+    fetch: monitoredFetch
+  });
+  const publicClient = new BinanceRestClient({ environment: "testnet", fetch: monitoredFetch });
   const riskRepo = createRiskRepository(clients.postgres);
   const allocation = allocationFromEnv(process.env);
   const allocationRepo = createTestnetAllocationRepository(clients.postgres);
@@ -79,27 +100,39 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
   });
   let tracker: ReturnType<typeof createExecutorUserDataTracker> | undefined;
   const safeOrderSubmitter = createQueryBeforeRetryOrderSubmitter(tradingClient);
+  const measureSubmit = createOrderSubmitMetrics(metricsRegistry);
   const placementGateway = createBinanceExchangeGateway({
     client: {
       ...tradingClient,
       async placeOrder(input) {
+        if (!running) throw new Error("Executor is stopping; submission blocked");
         if (tracker === undefined) throw new Error("User-data tracker is not configured");
         await tracker.assertReady();
         await killSwitch.assertSafe();
-        const result = await safeOrderSubmitter.placeOrder(input);
+        if (!running) throw new Error("Executor is stopping; submission blocked");
+        const result = await measureSubmit(() => safeOrderSubmitter.placeOrder(input));
         return result.order;
       }
     }
   });
-  let running = true;
+  let lastPoll = 0;
+  const diagnostics = createServiceDiagnostics({
+    service: "executor",
+    registry: metricsRegistry,
+    async checkReady() {
+      if (!running || !tracker || lastPoll === 0 || Date.now() - lastPoll >= 10000) return false;
+      await tracker.assertReady();
+      await clients.redis.command(["PING"]);
+      await clients.postgres.execute({ text: "SELECT 1", values: [] });
+      return running && lastPoll > 0 && Date.now() - lastPoll < 10000;
+    }
+  });
 
-  const stop = () => {
-    running = false;
-  };
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
+  markStopping = () => diagnostics.stopping();
 
   try {
+    if (!running) throw new Error("Executor startup cancelled");
+    await diagnostics.listen(diagnosticsAddress("executor"));
     try {
       await clients.redis.connect();
     } catch {
@@ -152,6 +185,8 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
         .filter(Boolean)
     });
     const riskGate = createRiskEngine({
+      metricsRegistry,
+      metricsScope: allocation ? "allocated-testnet" : "full-wallet",
       repo: riskRepo,
       killSwitch,
       config: riskConfig,
@@ -173,6 +208,7 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
         exchange: placementGateway,
         riskGate,
         async beforeSubmit(signal) {
+          if (!running) throw new Error("Executor is stopping; submission blocked");
           const decision = await riskGate.evaluate(signal);
           if (!decision.approved) {
             await riskRepo.recordEvent("submission-blocked", {
@@ -221,7 +257,34 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
     const main = createExecutorMainEntry({
       run() {
         return runExecutorMain({
-          runtime,
+          runtime: {
+            ...runtime,
+            async start() {
+              const result = await runtime.start();
+              diagnostics.started();
+              return result;
+            },
+            async pollSignalsOnce() {
+              try {
+                const result = await diagnostics.measure(
+                  "signal_poll",
+                  () => runtime.pollSignalsOnce(),
+                  (items) => items.length
+                );
+                lastPoll = Date.now();
+                return result;
+              } catch (error) {
+                lastPoll = 0;
+                throw error;
+              }
+            },
+            claimStaleSignalsOnce: () =>
+              diagnostics.measure(
+                "signal_reclaim",
+                () => runtime.claimStaleSignalsOnce(),
+                (items) => items.length
+              )
+          },
           logger,
           shouldContinue: () => running,
           sleepMs: sleep,
@@ -256,11 +319,21 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
 
     return await main();
   } finally {
-    process.off("SIGINT", stop);
-    process.off("SIGTERM", stop);
-    await tracker?.close();
-    await tradingClient.close();
-    await clients.close();
+    diagnostics.stopping();
+    try {
+      await tracker?.close();
+    } finally {
+      try {
+        await tradingClient.close();
+      } finally {
+        try {
+          await clients.close();
+        } finally {
+          await diagnostics.close();
+        }
+      }
+    }
+    shutdown.finish();
   }
 }
 

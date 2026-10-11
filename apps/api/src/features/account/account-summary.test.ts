@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 
 import { registerAccountSummaryRoutes } from "./account-summary.js";
+import { createPortfolioReader } from "./portfolio.js";
 
 describe("account summary API", () => {
   function setup(options: { fail?: boolean } = {}) {
@@ -33,15 +34,48 @@ describe("account summary API", () => {
           ]
         };
       }
-      if (sql.includes("FROM order_fills") && sql.includes("GROUP BY symbol")) {
+      if (sql.includes("FROM order_fills") && sql.includes("LIMIT 10001")) {
         return {
-          rows: [{ symbol: "BTCUSDT", quantity: "0.0000", fill_count: "2" }]
+          rows: [
+            {
+              symbol: "BTCUSDT",
+              side: "BUY",
+              quantity: "1",
+              price: "100",
+              fee: "0",
+              fee_asset: "USDT",
+              event_time_ms: "1"
+            },
+            {
+              symbol: "BTCUSDT",
+              side: "SELL",
+              quantity: "1",
+              price: "110",
+              fee: "0",
+              fee_asset: "USDT",
+              event_time_ms: "2"
+            }
+          ]
         };
       }
       throw new Error(`unexpected query: ${sql}`);
     });
 
-    registerAccountSummaryRoutes(server, { query } as unknown as Pool);
+    const pool = { query } as unknown as Pool;
+    registerAccountSummaryRoutes(
+      server,
+      pool,
+      createPortfolioReader(
+        pool,
+        {
+          metadata: async () => [{ symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT" }],
+          mark: async () => {
+            throw new Error("flat position");
+          }
+        },
+        "testnet"
+      )
+    );
     return { server };
   }
 
@@ -64,7 +98,8 @@ describe("account summary API", () => {
           reason: "manual-kill",
           updatedAtMs: 1_791_622_300_000
         },
-        positions: [{ symbol: "BTCUSDT", quantity: "0.0000", fillCount: 2 }]
+        positions: [{ symbol: "BTCUSDT", quantity: "0", fillCount: 2, realizedPnl: "10" }],
+        portfolio: { scope: "persisted-fills", equity: null }
       });
     } finally {
       await server.close();

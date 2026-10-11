@@ -1,0 +1,211 @@
+{
+  "uid": "meridian-trading-risk",
+  "title": "Meridian / Trading and Risk",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "15s",
+  "tags": ["meridian", "phase-5"],
+  "timezone": "utc",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 7,
+      "title": "Persisted orders by current lifecycle state",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 25, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "orders_total and on(job,instance) (time() - meridian_ledger_sample_timestamp_seconds < 60) and on(job,instance) (up == 1)",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "min": 0, "noValue": "Not reported" }, "overrides": [] },
+      "description": "Gauge of committed current state populations, not transition counters. Do not use rate()."
+    },
+    {
+      "id": 8,
+      "title": "Persisted fill timing / latest 1000 executions",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 25, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "order_fill_latency_ms and on(job,instance) (time() - meridian_ledger_sample_timestamp_seconds < 60) and on(job,instance) (up == 1)",
+          "legendFormat": "quantile {{quantile}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Exchange execution time minus local order creation. Includes partial fills, retries and clock skew; negative samples excluded. No fills means no latency, not zero."
+    },
+    {
+      "id": 9,
+      "title": "Durable backtest jobs by current state",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 32, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "meridian_backtest_jobs_by_state and on(job,instance) (time() - meridian_ledger_sample_timestamp_seconds < 60) and on(job,instance) (up == 1)",
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "min": 0, "noValue": "Not reported" }, "overrides": [] },
+      "description": "Database state, not inferred from worker process exit."
+    },
+    {
+      "id": 10,
+      "title": "Local event-to-published-signal p95",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 32, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le,service) (rate(strategy_signal_latency_ms_bucket[5m])))",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Local processing and successful publication, not exchange-to-signal latency; Engine is not started for viewer verification."
+    },
+    {
+      "id": 6,
+      "title": "Submission operation p95 / not fill latency",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le,service) (rate(order_submit_latency_ms_bucket[5m])))",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Existing query-before-retry submit flow, timed after tracker/kill guards, including failed operations. Resolved lookup is not proof of a new placement."
+    },
+    {
+      "id": 1,
+      "title": "Executor kill switch (not inferred from API)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kill_switch_active and on(job,instance) (up == 1)",
+          "legendFormat": "{{service}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Not reported",
+          "color": { "mode": "fixed", "fixedColor": "text" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "Not engaged", "color": "orange" },
+                "1": { "text": "Engaged", "color": "red" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Completed runtime work / second",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service,operation) (rate(meridian_work_items_total[2m]))",
+          "legendFormat": "{{service}} / {{operation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      },
+      "description": "Processed loop items are not placed orders or confirmed fills."
+    },
+    {
+      "id": 3,
+      "title": "Runtime operation p95",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le,service,operation) (rate(meridian_work_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{service}} / {{operation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Risk rejections / second",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 11, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (rate(risk_rejections_total[5m]))",
+          "legendFormat": "{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Runtime operation failures / second",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 11, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service,operation) (rate(meridian_work_failures_total[5m]))",
+          "legendFormat": "{{service}} / {{operation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    }
+  ]
+}

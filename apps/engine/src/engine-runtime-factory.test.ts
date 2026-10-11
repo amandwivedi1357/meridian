@@ -19,81 +19,91 @@ function strategy(): Strategy {
 }
 
 describe("createEngineRuntimeFromDeps", () => {
-  it("creates a kline market consumer and publishes strategy signals", async () => {
-    const xReadGroup = vi.fn(async () => [
-      {
-        stream: "market.kline.BTCUSDT.15m",
-        messages: [
-          {
-            id: "1-0",
-            fields: {
-              kind: "kline",
-              payload: JSON.stringify({
-                symbol: "BTCUSDT",
-                interval: "15m",
-                openTimeMs: 1_000,
-                closeTimeMs: 2_000,
-                open: "100",
-                high: "101",
-                low: "99",
-                close: "100.5",
-                volume: "1",
-                closed: true
-              })
+  it.each([false, true])(
+    "gates signal publication during shutdown (stopping=%s)",
+    async (stopping) => {
+      const xReadGroup = vi.fn(async () => [
+        {
+          stream: "market.kline.BTCUSDT.15m",
+          messages: [
+            {
+              id: "1-0",
+              fields: {
+                kind: "kline",
+                payload: JSON.stringify({
+                  symbol: "BTCUSDT",
+                  interval: "15m",
+                  openTimeMs: 1_000,
+                  closeTimeMs: 2_000,
+                  open: "100",
+                  high: "101",
+                  low: "99",
+                  close: "100.5",
+                  volume: "1",
+                  closed: true
+                })
+              }
             }
-          }
-        ]
+          ]
+        }
+      ]);
+      const bus = {
+        xAdd: vi.fn(async () => "2-0"),
+        xGroupCreate: vi.fn(async () => "OK"),
+        xReadGroup,
+        xAck: vi.fn(async () => 1),
+        xAutoClaim: vi.fn(async () => ({ nextStartId: "0-0", messages: [] }))
+      };
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn()
+      };
+      const runtime = createEngineRuntimeFromDeps({
+        isStopping: () => stopping,
+        bus,
+        strategy: strategy(),
+        symbol: "BTCUSDT",
+        interval: "15m",
+        logger,
+        group: "engine",
+        consumer: "engine-1",
+        signalTtlMs: 5_000,
+        maxMarketDataAgeMs: 10_000,
+        nowMs: () => 2_500,
+        readCount: 3,
+        blockMs: 25
+      });
+
+      await runtime.start();
+      const processed = await runtime.pollMarketOnce();
+      if (stopping) {
+        expect(processed).toBe(0);
+        expect(bus.xAdd).not.toHaveBeenCalled();
+        expect(bus.xAck).not.toHaveBeenCalled();
+        return;
       }
-    ]);
-    const bus = {
-      xAdd: vi.fn(async () => "2-0"),
-      xGroupCreate: vi.fn(async () => "OK"),
-      xReadGroup,
-      xAck: vi.fn(async () => 1),
-      xAutoClaim: vi.fn(async () => ({ nextStartId: "0-0", messages: [] }))
-    };
-    const logger = {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn()
-    };
-    const runtime = createEngineRuntimeFromDeps({
-      bus,
-      strategy: strategy(),
-      symbol: "BTCUSDT",
-      interval: "15m",
-      logger,
-      group: "engine",
-      consumer: "engine-1",
-      signalTtlMs: 5_000,
-      maxMarketDataAgeMs: 10_000,
-      nowMs: () => 2_500,
-      readCount: 3,
-      blockMs: 25
-    });
 
-    await runtime.start();
-    const processed = await runtime.pollMarketOnce();
-
-    expect(bus.xGroupCreate).toHaveBeenCalledWith("market.kline.BTCUSDT.15m", "engine", "0", {
-      mkStream: true
-    });
-    expect(xReadGroup).toHaveBeenCalledWith(
-      "engine",
-      "engine-1",
-      [{ key: "market.kline.BTCUSDT.15m", id: ">" }],
-      { count: 3, blockMs: 25 }
-    );
-    expect(processed).toBe(1);
-    expect(bus.xAdd).toHaveBeenCalledWith(
-      "signals",
-      "*",
-      expect.objectContaining({
-        kind: "signal"
-      })
-    );
-    expect(bus.xAck).toHaveBeenCalledWith("market.kline.BTCUSDT.15m", "engine", "1-0");
-  });
+      expect(bus.xGroupCreate).toHaveBeenCalledWith("market.kline.BTCUSDT.15m", "engine", "0", {
+        mkStream: true
+      });
+      expect(xReadGroup).toHaveBeenCalledWith(
+        "engine",
+        "engine-1",
+        [{ key: "market.kline.BTCUSDT.15m", id: ">" }],
+        { count: 3, blockMs: 25 }
+      );
+      expect(processed).toBe(1);
+      expect(bus.xAdd).toHaveBeenCalledWith(
+        "signals",
+        "*",
+        expect.objectContaining({
+          kind: "signal"
+        })
+      );
+      expect(bus.xAck).toHaveBeenCalledWith("market.kline.BTCUSDT.15m", "engine", "1-0");
+    }
+  );
 
   it("passes account state into the strategy runner before publishing signals", async () => {
     const xReadGroup = vi.fn(async () => [

@@ -134,7 +134,7 @@ export const marketDataMigrations: readonly SqlMigration[] = [
       CREATE UNIQUE INDEX IF NOT EXISTS order_fills_client_trade_id_idx
         ON order_fills (client_order_id, trade_id);
       `
-    },
+  },
   {
     id: "005_risk_controls_schema",
     sql: `
@@ -200,6 +200,28 @@ export const marketDataMigrations: readonly SqlMigration[] = [
 
       CREATE INDEX IF NOT EXISTS strategy_control_paused_idx
         ON strategy_control_state (paused, updated_at);
+    `
+  },
+  {
+    id: "008_backtest_jobs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS backtest_jobs (
+        job_id uuid PRIMARY KEY,
+        actor text NOT NULL,
+        request_id uuid NOT NULL,
+        request jsonb NOT NULL,
+        state text NOT NULL CHECK (state IN ('queued','running','succeeded','failed')),
+        worker_token uuid,
+        lease_until timestamptz,
+        run_id text REFERENCES backtest_runs(run_id),
+        summary jsonb,
+        error text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        started_at timestamptz,
+        finished_at timestamptz,
+        UNIQUE (actor,request_id)
+      );
+      CREATE INDEX IF NOT EXISTS backtest_jobs_queue_idx ON backtest_jobs (state,created_at);
     `
   }
 ];

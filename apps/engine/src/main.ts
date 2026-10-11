@@ -3,7 +3,13 @@ import { loadConfig } from "@meridian/config";
 import { Decimal, allocationFromEnv } from "@meridian/core";
 import { createTestnetAllocationRepository, testnetAccountBinding } from "@meridian/db";
 import { createAllocatedAccountState } from "./allocated-account-state.js";
-import { createLogger } from "@meridian/observability";
+import {
+  createLogger,
+  createShutdownGuard,
+  createMetricsRegistry,
+  createServiceDiagnostics,
+  diagnosticsAddress
+} from "@meridian/observability";
 import { pathToFileURL } from "node:url";
 
 import { createEngineEmaCrossoverStrategy } from "./ema-crossover-strategy.js";
@@ -23,6 +29,13 @@ export async function runCliMain(): Promise<EngineMainResult> {
     postgresUrl: config.DATABASE_URL,
     redisUrl: config.REDIS_URL
   });
+  let running = true;
+  let markStopping = () => {};
+  const stop = () => {
+    running = false;
+    markStopping();
+  };
+  const shutdown = createShutdownGuard({ onStop: stop });
   const tradingClient = await createTestnetTradingClientFromEnv({ autoSynchronizeTime: true });
   const symbol = process.env.ENGINE_SYMBOL ?? "BTCUSDT";
   const interval = readInterval(process.env.ENGINE_INTERVAL ?? "15m");
@@ -33,15 +46,23 @@ export async function runCliMain(): Promise<EngineMainResult> {
     slowPeriod: readPositiveInteger(process.env.ENGINE_SLOW_PERIOD ?? "26", "ENGINE_SLOW_PERIOD"),
     quantity: new Decimal(process.env.ENGINE_QUANTITY ?? "0.0002")
   });
-  let running = true;
+  let lastPoll = 0;
+  const metricsRegistry = createMetricsRegistry("engine");
+  const diagnostics = createServiceDiagnostics({
+    service: "engine",
+    registry: metricsRegistry,
+    async checkReady() {
+      if (!running || lastPoll === 0 || Date.now() - lastPoll >= 10000) return false;
+      await clients.postgres.query({ text: "SELECT 1", values: [] });
+      return running && lastPoll > 0 && Date.now() - lastPoll < 10000;
+    }
+  });
 
-  const stop = () => {
-    running = false;
-  };
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
+  markStopping = () => diagnostics.stopping();
 
   try {
+    if (!running) throw new Error("Engine startup cancelled");
+    await diagnostics.listen(diagnosticsAddress("engine"));
     await clients.redis.connect();
     await tradingClient.synchronizeTime();
 
@@ -78,6 +99,8 @@ export async function runCliMain(): Promise<EngineMainResult> {
         });
 
     const runtime = createEngineRuntimeFromDeps({
+      metricsRegistry,
+      isStopping: () => !running,
       bus: clients.redis,
       strategy,
       symbol,
@@ -99,7 +122,26 @@ export async function runCliMain(): Promise<EngineMainResult> {
     const main = createEngineMainEntry({
       run() {
         return runEngineMain({
-          runtime,
+          runtime: {
+            async start() {
+              await runtime.start();
+              diagnostics.started();
+            },
+            async pollMarketOnce() {
+              try {
+                const result = await diagnostics.measure(
+                  "market_poll",
+                  () => runtime.pollMarketOnce(),
+                  (n) => n
+                );
+                lastPoll = Date.now();
+                return result;
+              } catch (error) {
+                lastPoll = 0;
+                throw error;
+              }
+            }
+          },
           logger,
           shouldContinue: () => running,
           sleepMs: sleep,
@@ -111,10 +153,17 @@ export async function runCliMain(): Promise<EngineMainResult> {
 
     return await main();
   } finally {
-    process.off("SIGINT", stop);
-    process.off("SIGTERM", stop);
-    await tradingClient.close();
-    await clients.close();
+    diagnostics.stopping();
+    try {
+      await tradingClient.close();
+    } finally {
+      try {
+        await clients.close();
+      } finally {
+        await diagnostics.close();
+      }
+    }
+    shutdown.finish();
   }
 }
 

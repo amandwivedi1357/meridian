@@ -1,0 +1,99 @@
+groups:
+  - name: meridian-operational
+    rules:
+      - alert: MeridianScrapeUnavailable
+        expr: up{job=~"meridian-.*"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Meridian diagnostics unavailable"
+      - alert: MeridianServiceNotReady
+        expr: meridian_service_ready == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Meridian service not ready"
+      - alert: MeridianDependencyUnavailable
+        expr: meridian_dependency_available == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API-observed storage dependency unavailable"
+      - alert: MeridianMarketStale
+        expr: ws_last_message_age_seconds > 15 or ws_last_message_age_seconds < 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Public market feed stale or not yet observed"
+      - alert: MeridianReconnectStorm
+        expr: increase(ws_reconnects_total[5m]) >= 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Repeated upstream reconnect attempts"
+      - alert: MeridianConsumerLag
+        expr: bus_consumer_lag > 1000 or bus_pending_entries > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer lag or pending messages above prototype threshold"
+      - alert: MeridianIngestBacklog
+        expr: ingestor_backlog > 500
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Public feed queue above half its capacity"
+      - alert: MeridianKillSwitchEngaged
+        expr: kill_switch_active == 1
+        for: 30s
+        labels:
+          severity: info
+        annotations:
+          summary: "Execution kill switch engaged; may be intentional"
+      - alert: MeridianApiRateLimited
+        expr: sum by (service) (increase(meridian_http_requests_total{status="429"}[5m])) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API rate limiting above prototype threshold"
+      - alert: MeridianStorageSampleStale
+        expr: time() - meridian_storage_sample_timestamp_seconds > 30
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Underlying storage health sample is stale"
+      - alert: MeridianBacktestDispatcherUnavailable
+        expr: meridian_backtest_dispatcher_ready == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backtest dispatcher cannot poll or renew work"
+      - alert: MeridianBinanceThrottled
+        expr: time() - meridian_binance_throttle_timestamp_seconds < 300
+        labels:
+          severity: warning
+        annotations:
+          summary: "Binance HTTP 418/429 observed in the last five minutes"
+      - alert: MeridianDrawdownLimit
+        expr: (drawdown_pct >= on(service,job,instance,quote_asset,scope) meridian_drawdown_limit_pct) and on(job,instance,quote_asset,scope) (time() - meridian_risk_sample_timestamp_seconds < 30) and on(job,instance) (up == 1)
+        labels:
+          severity: critical
+        annotations:
+          summary: "Validated executor drawdown reached its effective breaker limit"
+      - alert: MeridianRepeatedRiskRejections
+        expr: sum by (service,job,instance) (increase(risk_rejections_total[5m])) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Repeated risk rejections above prototype threshold; execution policy unchanged"

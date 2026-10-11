@@ -8,8 +8,11 @@ import {
 } from "./live-strategy-runner.js";
 import { createMarketConsumer, type MarketConsumerLogger } from "./market-consumer.js";
 import { publishSignal } from "./signal-publisher.js";
+import type { Registry } from "@meridian/observability";
 
 export interface EngineRuntimeFactoryDeps {
+  readonly metricsRegistry?: Registry;
+  readonly isStopping?: () => boolean;
   readonly bus: RedisStreamClient;
   readonly strategy: Strategy;
   readonly symbol: string;
@@ -28,14 +31,13 @@ export interface EngineRuntimeFactoryDeps {
 
 export function createEngineRuntimeFromDeps(deps: EngineRuntimeFactoryDeps): EngineRuntime {
   const runner = createLiveStrategyRunner({
+    ...(deps.metricsRegistry ? { metricsRegistry: deps.metricsRegistry } : {}),
     strategy: deps.strategy,
     publishSignal(signal) {
-      return publishSignal(
-        signal,
-        {
-          bus: deps.bus
-        }
-      );
+      if (deps.isStopping?.()) throw new Error("Engine is stopping; publication blocked");
+      return publishSignal(signal, {
+        bus: deps.bus
+      });
     },
     nowMs: deps.nowMs ?? Date.now,
     signalTtlMs: deps.signalTtlMs,
