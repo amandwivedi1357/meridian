@@ -34,6 +34,15 @@ describe.skipIf(process.env.RUN_EXECUTION_INTEGRATION !== "1")(
           POSTGRES_DB: "verification"
         })
         .withExposedPorts(5432)
+        .withCommand([
+          "postgres",
+          "-c",
+          "shared_buffers=64MB",
+          "-c",
+          "max_worker_processes=8",
+          "-c",
+          "timescaledb.max_background_workers=4"
+        ])
         .withWaitStrategy(Wait.forLogMessage("database system is ready to accept connections", 2))
         .withStartupTimeout(120000)
         .start();
@@ -125,7 +134,8 @@ describe.skipIf(process.env.RUN_EXECUTION_INTEGRATION !== "1")(
         stdio: ["ignore", "ignore", "pipe", "ipc"],
         execArgv: [],
         env: {
-          ...process.env,
+          PATH: process.env.PATH,
+          SystemRoot: process.env.SystemRoot,
           CRASH_TEST_DATABASE_URL: databaseUrl,
           CRASH_TEST_REDIS_URL: redisUrl,
           CRASH_TEST_STAGE: stage,

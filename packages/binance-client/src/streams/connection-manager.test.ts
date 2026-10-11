@@ -10,6 +10,29 @@ class FakeWebSocket extends EventEmitter {
 }
 
 describe("StreamConnectionManager", () => {
+  it("ignores late open/message events from a closed socket without restarting timers", () => {
+    vi.useFakeTimers();
+    try {
+      const socket = new FakeWebSocket();
+      const createWebSocket = vi.fn(() => socket as unknown as WebSocket);
+      const manager = createStreamConnectionManager({ subscriptions: [], createWebSocket });
+      const message = vi.fn();
+      manager.onMessage(message);
+      manager.connect();
+      socket.emit("open");
+      manager.close();
+      const state = manager.getState();
+      socket.emit("open");
+      socket.emit("message", JSON.stringify({ stream: "btcusdt@depth", data: {} }));
+      expect(manager.getState()).toBe(state);
+      expect(message).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(60000);
+      expect(createWebSocket).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("counts one scheduled reconnect for an error/close pair", () => {
     vi.useFakeTimers();
     try {

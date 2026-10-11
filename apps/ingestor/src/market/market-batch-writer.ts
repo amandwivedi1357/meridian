@@ -26,6 +26,7 @@ export interface KlineRow {
 }
 
 export interface MarketBatchWriterDeps {
+  readonly parallelWrites?: boolean;
   readonly upsertTrades: (rows: readonly TradeRow[]) => Promise<void>;
   readonly upsertKlines: (rows: readonly KlineRow[]) => Promise<void>;
 }
@@ -46,7 +47,7 @@ export async function writeMarketEventBatch(
   let duplicatesSkipped = 0;
 
   for (const event of events) {
-    const dedupKey = `${event.kind}:${event.symbol}:${event.eventId}`;
+    const dedupKey = `${event.kind}:${event.symbol}:${event.eventId}${event.kind === "trade" ? `:${event.trade.eventTimeMs}` : ""}`;
 
     if (seen.has(dedupKey)) {
       duplicatesSkipped += 1;
@@ -89,12 +90,21 @@ export async function writeMarketEventBatch(
     }
   }
 
-  if (tradeRows.length > 0) {
-    await deps.upsertTrades(tradeRows);
-  }
+  if (deps.parallelWrites) {
+    const results = await Promise.allSettled([
+      tradeRows.length ? deps.upsertTrades(tradeRows) : Promise.resolve(),
+      klineRows.length ? deps.upsertKlines(klineRows) : Promise.resolve()
+    ]);
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
+  } else {
+    if (tradeRows.length > 0) {
+      await deps.upsertTrades(tradeRows);
+    }
 
-  if (klineRows.length > 0) {
-    await deps.upsertKlines(klineRows);
+    if (klineRows.length > 0) {
+      await deps.upsertKlines(klineRows);
+    }
   }
 
   return {

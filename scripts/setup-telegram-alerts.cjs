@@ -38,6 +38,10 @@ function configuration(token, chatId, tradingAlerts = false) {
             {
               receiver: "local-only",
               matchers: ['job=~"meridian-engine|meridian-executor"']
+            },
+            {
+              receiver: "local-only",
+              matchers: ['job="meridian-health"', 'service=~"engine|executor"']
             }
           ]
     },

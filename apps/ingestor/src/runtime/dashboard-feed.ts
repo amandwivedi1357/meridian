@@ -65,6 +65,13 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
       help: "Queued public-feed events",
       registers: [registry]
     });
+  const rejected =
+    (registry.getSingleMetric("ingestor_backpressure_rejections_total") as Counter | undefined) ??
+    new Counter({
+      name: "ingestor_backpressure_rejections_total",
+      help: "Public feed messages refused at bounded capacity; feed stops for recovery, never silently drops",
+      registers: [registry]
+    });
   const age =
     (registry.getSingleMetric("ws_last_message_age_seconds") as Gauge | undefined) ??
     new Gauge({
@@ -142,8 +149,12 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
       })
     }
   );
-  const app = createIngestorApp({ ...clients, metricsRegistry: registry });
-  let pending = Promise.resolve();
+  const app = createIngestorApp({
+    ...clients,
+    metricsRegistry: registry,
+    buffer: { capacity: 1000, batchSize: 128, flushMs: 1 }
+  });
+  const pending = new Set<Promise<void>>();
   let backlog = 0;
   let leased = false;
   let renewing = false;
@@ -188,28 +199,25 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
         return;
       }
       if (backlog >= 1000) {
+        rejected.inc();
         stop("dashboard_feed_backlog_capacity");
         return;
       }
       backlog++;
       queue.set(backlog);
-      pending = pending
-        .then(async () => {
-          if (stopping) return;
-          if (performance.now() >= leaseDeadline) {
-            stop("dashboard_feed_lease_expired");
-            return;
-          }
-          const started = performance.now();
-          const result = await app.ingest(message.data, receivedAtMs);
-          latency.observe(performance.now() - started);
+      const work = app
+        .ingest(message.data, receivedAtMs)
+        .then((result) => {
+          latency.observe(performance.now() - receivedAtMs);
           counts[result.event.kind]++;
         })
         .catch(() => stop("dashboard_feed_ingest_failed"))
         .finally(() => {
           backlog--;
           queue.set(backlog);
+          pending.delete(work);
         });
+      pending.add(work);
     });
     manager.connect();
     const sample = () => {
@@ -250,7 +258,6 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
       trading: false
     });
     await done;
-    if (failure) throw new Error(failure);
   } finally {
     stop();
     options.signal.removeEventListener("abort", abort);
@@ -258,7 +265,10 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
     clearInterval(progressTimer);
     clearInterval(metricsTimer);
     clearTimeout(durationTimer);
-    await pending;
+    await Promise.allSettled([...pending]);
+    await app.drain?.().catch(() => {
+      failure ??= "dashboard_feed_ingest_failed";
+    });
     if (leased && redis.isReady)
       await command(["EVAL", releaseLeaseScript, "1", dashboardLeaseKey, owner]).catch(
         () => undefined
@@ -267,4 +277,5 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
     await clients.close();
     log({ kind: "public_dashboard_feed_stopped", counts });
   }
+  if (failure) throw new Error(failure);
 }

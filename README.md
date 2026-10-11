@@ -53,14 +53,30 @@ Full result artifacts remain in ignored `logs/verification/phase-4-2/`.
 
 ## Ingestion Benchmark
 
-Local 60-second k6 synthetic-trade baseline (four closed-loop VUs, Redis AOF and
-durable per-event Timescale writes):
+Local 60-second profiled k6 synthetic-trade runs (Redis AOF, durable Timescale writes):
 
-| Events/s | Receipt-to-bus p95 | DB-inclusive p95 | Sampled ingestor RSS peak |
-| -------- | ------------------ | ---------------- | ------------------------- |
-| 165.07   | 42.45 ms           | 50.19 ms         | 97.77 MiB                 |
+| Mode / load       | Events/s | Receipt-to-bus p95 | DB-inclusive p95 | Sampled RSS peak |
+| ----------------- | -------- | ------------------ | ---------------- | ---------------- |
+| Serial / 4 VUs    | 133.94   | 46.75 ms           | 55.09 ms         | 104.20 MiB       |
+| Buffered / 4 VUs  | 256.41   | 5.59 ms            | 21.30 ms         | 120.45 MiB       |
+| Buffered / 64 VUs | 3043.67  | 13.07 ms           | 33.82 ms         | 249.47 MiB       |
 
-All 9,909 completed events match durable rows, with zero failures and bounded retained
-Redis history. This does **not** meet the TRD <10ms bus target or prove 2k+ throughput.
-It is not a saturation, mixed-topic, 2-vCPU/2-GB or long-soak result.
+All completed events match durable rows with zero errors. Public-feed pipelining uses
+bounded 128-row/1ms DB batches and still acknowledges only after persistence. Four-VU
+bus latency meets <10ms locally; 64-VU latency does not. Trade throughput is not proof
+of sustained mixed-topic capacity on the target host. The latest Windows mixed 2k
+offered run completes all 120,020 events without loss, but bus p95 12.45ms still
+misses <10ms. Local 20k/s offered burst safety passes: 307,400 accepted and 892,600
+explicit bounded-queue refusals over 60s, exact Redis/DB counts, no OOM and 121MiB
+ingestor RSS peak. This is overload tolerance, not 20k/s processing capacity.
+Dedicated-host, pipeline-latency and long-soak gates remain open.
+Three identical Linux 2k repeats give bus p95 median22.32ms (18.34-25.11ms), p99
+median78.58ms (77.35-101.78ms); one refuses160 events. A separate single250/s mixed
+Windows run gives p95 6.62ms/p99 8.96ms with all15,000 accepted. These are scoped
+local results, not guarantees. Normal-load p95 is 6.62ms in one 250/s run;
+2k/s mixed-load p95 spans 2.80-29.24ms across shared-laptop sessions, not one pooled
+distribution. Dedicated-host verification remains pending. Host/session conditions
+are an uncontrolled variable; the precise bottleneck remains unresolved. Laptop
+tuning/ablation is stopped; production ingestion stays unchanged. The unapproved
+2k/s <20ms proposal was withdrawn; the original TRD gate is unchanged.
 [Method, caveats and evidence](docs/benchmark.md); command: `node scripts/verify-ingest-benchmark.cjs`.

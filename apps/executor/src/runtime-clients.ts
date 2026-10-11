@@ -2,6 +2,7 @@ import { createRedisStreamClient, type RedisStreamClient } from "@meridian/bus";
 import type { OrderWriteAheadRepositoryDeps, RiskSqlDatabase, SqlQuery } from "@meridian/db";
 import { Pool } from "pg";
 import { createClient } from "redis";
+import { createRedisCommandDeadline } from "./redis-command-deadline.js";
 
 export interface ExecutorRuntimePostgresClient extends RiskSqlDatabase {
   readonly close: () => Promise<void>;
@@ -29,9 +30,9 @@ export interface PostgresPoolLike {
     values?: readonly unknown[]
   ) => Promise<
     | {
-      readonly rowCount?: number | null;
-      readonly rows: readonly Record<string, unknown>[];
-    }
+        readonly rowCount?: number | null;
+        readonly rows: readonly Record<string, unknown>[];
+      }
     | readonly {
         readonly rowCount?: number | null;
         readonly rows: readonly Record<string, unknown>[];
@@ -164,11 +165,19 @@ const defaultExecutorRuntimeClientFactoryDeps: ExecutorRuntimeClientFactoryDeps 
     });
     // Operations report errors to their callers; an EventEmitter error must not crash cancellation retries.
     client.on("error", () => {});
+    const disconnect = () => {
+      if (client.isOpen) client.destroy();
+    };
+    const sendCommand = createRedisCommandDeadline({
+      timeoutMs: 5000,
+      sendCommand: (args) => client.sendCommand([...args]),
+      disconnect
+    });
 
     return {
       isReady: () => client.isReady,
       disconnect() {
-        if (client.isOpen) client.destroy();
+        disconnect();
       },
       connect() {
         return client.connect();
@@ -179,7 +188,7 @@ const defaultExecutorRuntimeClientFactoryDeps: ExecutorRuntimeClientFactoryDeps 
       },
 
       sendCommand(args) {
-        return client.sendCommand([...args]);
+        return sendCommand(args);
       }
     };
   }

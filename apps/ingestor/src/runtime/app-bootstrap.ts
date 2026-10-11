@@ -7,12 +7,14 @@ import type { SessionRecorder } from "../market/session-recorder.js";
 import { runIngestorStartupMigrations } from "./startup-migrations.js";
 import type { Registry } from "prom-client";
 import { registerIngestorMetrics } from "./metrics.js";
+import type { IngestBufferOptions } from "../market/buffered-market-ingestor.js";
 
 export interface IngestorAppDeps {
   readonly redis: RedisXaddClient;
   readonly postgres: PostgresLikeClient;
   readonly metricsRegistry?: Registry;
   readonly sessionRecorder?: SessionRecorder;
+  readonly buffer?: IngestBufferOptions;
 }
 
 export interface IngestorApp extends MarketIngestor {
@@ -29,11 +31,13 @@ export function createIngestorApp(deps: IngestorAppDeps): IngestorApp {
     upsertTrades: marketWriter.upsertTrades,
     upsertKlines: marketWriter.upsertKlines,
     ...(metrics ? { onPublished: metrics.recordBusLatency } : {}),
+    ...(deps.buffer ? { buffer: deps.buffer } : {}),
     ...(deps.sessionRecorder ? { sessionRecorder: deps.sessionRecorder } : {})
   });
   const ingestor = metrics ? createInstrumentedIngestor(marketIngestor, metrics) : marketIngestor;
 
   return {
+    ...(ingestor.drain ? { drain: ingestor.drain } : {}),
     start() {
       return runIngestorStartupMigrations(deps.postgres);
     },

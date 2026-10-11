@@ -1,0 +1,74 @@
+rule_files:
+  - ../rules/meridian.yml
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - series: 'probe_success{job="meridian-health",service="web",check="ready",instance="web-ready"}'
+        values: "1x12"
+      - series: 'up{job="meridian-health",instance="web-ready"}'
+        values: "0x12"
+      - series: 'meridian_ledger_sample_available{service="api",job="meridian-api",instance="api"}'
+        values: "1x12"
+      - series: 'meridian_ledger_sample_timestamp_seconds{service="api",job="meridian-api",instance="api",scope="persisted-ledger"}'
+        values: "0x12"
+      - series: 'up{job="meridian-api",instance="api"}'
+        values: "1x12"
+    promql_expr_test:
+      - expr: 'probe_success{job="meridian-health"} and on(job,instance) (up == 1)'
+        eval_time: 2m
+        exp_samples: []
+      - expr: "meridian_ledger_sample_available and on(job,instance) (time() - meridian_ledger_sample_timestamp_seconds < 45) and on(job,instance) (up == 1)"
+        eval_time: 2m
+        exp_samples: []
+  - interval: 15s
+    input_series:
+      - series: 'probe_success{job="meridian-health",service="web",check="ready",instance="http://web:8080/health/ready"}'
+        values: "0x12"
+      - series: 'meridian_ledger_sample_available{service="api"}'
+        values: "0x12"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: MeridianHealthProbeUnavailable
+        exp_alerts:
+          - exp_labels:
+              {
+                job: meridian-health,
+                service: web,
+                check: ready,
+                instance: "http://web:8080/health/ready",
+                severity: warning
+              }
+            exp_annotations: { summary: "Expected container health endpoint unavailable" }
+      - eval_time: 2m
+        alertname: MeridianLedgerSampleUnavailable
+        exp_alerts:
+          - exp_labels: { service: api, severity: warning }
+            exp_annotations: { summary: "Durable ledger telemetry failed or became stale" }
+  - interval: 15s
+    input_series:
+      - series: 'probe_success{job="meridian-health",service="web",check="ready"}'
+        values: "1x12"
+      - series: 'meridian_ledger_sample_available{service="api"}'
+        values: "1x12"
+      - series: 'meridian_ledger_sample_timestamp_seconds{service="api",scope="persisted-ledger"}'
+        values: "0+15x12"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: MeridianHealthProbeUnavailable
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: MeridianLedgerSampleUnavailable
+        exp_alerts: []
+  - interval: 15s
+    input_series:
+      - series: 'meridian_ledger_sample_available{service="api"}'
+        values: "1x12"
+      - series: 'meridian_ledger_sample_timestamp_seconds{service="api",scope="persisted-ledger"}'
+        values: "0x12"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: MeridianLedgerSampleUnavailable
+        exp_alerts:
+          - exp_labels: { service: api, scope: persisted-ledger, severity: warning }
+            exp_annotations: { summary: "Durable ledger telemetry failed or became stale" }

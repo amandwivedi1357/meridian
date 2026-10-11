@@ -176,6 +176,7 @@ export function createStreamConnectionManager(
     });
 
     connection.on("open", () => {
+      if (!shouldReconnect || (connection !== socket && connection !== rotatingSocket)) return;
       if (connection === rotatingSocket) {
         promoteRotatingSocket(connection);
         return;

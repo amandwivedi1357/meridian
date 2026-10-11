@@ -1,5 +1,78 @@
 # Observability
 
+## Container Observability Checkpoint (2026-10-11)
+
+The three requested container items are implemented and locally verified:
+profile-aware Docker-DNS scrapes, application health probes/ledger sample failure
+coverage, and actual Grafana/Telegram verification. See `docs/containers.md`.
+`scripts/containers/observability-config.cjs` renders only selected active profiles;
+unselected Engine/Executor/feed are absent, never represented as healthy. The
+private [Prometheus Blackbox Exporter](https://github.com/prometheus/blackbox_exporter)
+probes both `/health/live` and `/health/ready`, including Web static-artifact
+readiness. Ephemeral Backtest jobs remain observed via API dispatcher and committed
+DB state, not a pretend worker daemon. Phase 6 MCP is not a current service target.
+
+Final isolated verification passes against actual API/feed/Web images and disposable
+Redis/Timescale: real runtime metrics, Web health, truthful feed readiness503 without
+upstream access, durable ledger/job and dispatcher metrics, sixteen evaluated rules,
+four provisioned Grafana dashboards/34 panels and browser screenshots. Stopping only
+disposable Redis triggers the existing production dependency rule through a separate
+Alertmanager to two real Telegram API-accepted firing/resolved notifications, zero
+failed notifications. Actual human receipt/read is not proven. Engine/Executor
+trading loops and real exchange credentials are not activated for these checks.
+
+Evidence: `logs/verification/phase-5/meridian-observability-a93195b8b4174de984228dfe10078408/result.json`.
+All fixture containers/anonymous volumes/networks and temporary private config were
+removed before success. Two earlier port-exposure setup failures sent no Telegram
+messages and are retained as failures, not passes. Monitoring tools alone had an
+egress attachment; exchange-capable application fixtures stayed internal. Shared
+services, storage, safety state and host scraper configuration were not changed.
+Local Grafana's file provider can discover the new dashboard automatically; its
+container panels need the container scraper deployment, not the legacy host targets.
+
+Regression:29 health/dispatcher tests pass,two opt-in DB tests skipped in that run;
+six profile/routing tests and all three Promtool fixture suites pass. Latest image
+regression: nine checks including eight Linux entrypoint tests pass, evidence
+`logs/verification/phase-5/meridian-images-2ed2dd42a19f45b2ad9b6c9b4b0a96f5/result.json`.
+Full every-service/TRD/production-scale telemetry and real deployed trading/exchange
+acceptance remain broader gates; this checkpoint does not complete Phase 5.
+
+## Actual Executor Chaos Checkpoint (2026-10-11)
+
+`scripts/verify-executor-chaos.cjs` now exercises the actual Executor entrypoint
+and full service loop on an isolated internal Docker network with real Redis AOF
+and Timescale. Production REST signing/parsing, real user-data WebSocket, risk,
+write-ahead, reconciliation, diagnostics and signal consumer are used. Only exchange
+construction/destination is substituted at build time for a fake-credential local
+simulator; no real exchange or shared project state is accessed.
+
+Eight checks pass: startup/readiness, duplicate signal one-send behavior, WS duplicate
+fills/older-event protection, SIGKILL after exchange accept/before ACK with stale
+reclaim/no resend, Redis blackhole/readiness/kill/cancellation/recovery, Redis process
+kill/AOF restart, runtime network isolation/recovery and Linux SIGTERM cleanup.
+Final evidence: two simulated orders, one send each, one fill, one cancellation,
+zero pending signals/write-ahead violations/unexpected requests, durable kill engaged.
+SIGTERM exits0 in 797ms including Docker command/poll overhead. Ownership cleanup
+completes before success evidence is written under
+`logs/verification/phase-5/executor-chaos-5d2aa7e4051142d381a77dd1cb0e1fe1/result.json`.
+
+The full loop exposed a real Redis network-blackhole issue: blocking XREADGROUP
+could wait indefinitely, starving subsequent safety ticks. Executor's default Redis
+transport now bounds every command to 5s and destroys the socket on timeout, rejecting
+other queued commands and allowing fail-closed cancellation/reconnect. Production
+XREADGROUP's 1s block fits this deadline. Timeout means unknown Redis outcome; it
+does not authorize a new order or bypass query-before-retry/write-ahead protection.
+Readiness may fail sooner through its separate timeout. Earlier setup/reservation
+fixture failures and the pre-fix blackhole failure are retained, not counted as passes.
+
+This checkpoint is NOT an unmodified deployed image or actual Binance/Testnet
+fault acceptance; full deployment/chaos, performance and long-run gates stay open.
+No public-feed/API/Engine/Executor process is refreshed by this verification.
+Final Executor regression: 156 tests / 24 passing files; 14 opt-in infrastructure
+tests skipped in this invocation. Nine deadline tests cover socket destruction,
+queued-command rejection, late completion and timer cleanup. Build/typecheck and
+affected lint pass; shared orders/fills remain 0/0, kill engaged, public feed ready200.
+
 Phase 5 is in progress. This first slice implements private diagnostics for the API,
 continuous public dashboard feed, Engine and Executor. The backtest worker is a
 short-lived job process, not a permanently running service; its diagnostics and
@@ -83,20 +156,21 @@ initialization; a startup cancellation cannot start the runtime loop/dispatcher.
 
 ## Dashboards and Rules
 
-Three file-provisioned dashboards are available in Grafana's Meridian folder:
-Operations (15 panels), Trading and Risk (ten), and PnL and Drawdown (three).
+Four file-provisioned dashboards are available in Grafana's Meridian folder:
+Operations (15 panels), Trading and Risk (ten), PnL and Drawdown (three), and Containers (six).
 All use the stable `meridian-prometheus` datasource.
 Operations covers ingest, storage, bus lag and process/API health; Trading and Risk
 covers runtime loop telemetry and the existing Executor kill/rejection metrics.
 Engine/Executor remain intentionally stopped in local viewer setup, so they show
 unavailable/no telemetry. Unknown financial values remain absent, not invented zeroes.
 
-`infra/prometheus/rules/meridian.yml` contains fourteen evaluated rules: scraper down,
+`infra/prometheus/rules/meridian.yml` contains sixteen evaluated rules: scraper down,
 not-ready service, unavailable storage, stale/unobserved feed, reconnect burst,
 consumer lag/pending, ingest backlog, informational kill engagement, API rate
 limiting, stale storage sample, unavailable backtest dispatcher, recent Binance
 418/429 responses, validated drawdown reaching the effective executor limit and
-repeated risk rejections above a provisional threshold.
+repeated risk rejections above a provisional threshold, failed container health
+probes and failed/stale durable ledger samples.
 Operational thresholds are provisional, not effective trading
 risk limits. Reconnect burst uses the cumulative counter's five-minute increase, including
 process-reset handling. API HTTP 429 is not a Binance 429 signal.
@@ -115,7 +189,7 @@ rules read-only. Recreate/reload only observability containers when updating mou
 do not restart shared Redis/database as part of dashboard provisioning.
 
 Remaining full TRD instrumentation and production-scale telemetry acceptance,
-OpenTelemetry/Sentry, containers, chaos/throughput proof, backups and deployment
+OpenTelemetry/Sentry, deployed trading/exchange chaos/throughput proof, backups and deployment
 are still pending. Earlier long-run trading and ingest gates remain unchanged.
 
 ## Financial, Exchange And Worker Telemetry
@@ -149,6 +223,11 @@ populations**, not a lifecycle-transition counter; never use `rate()` on it.
 database rows, not inferred process results. Counts scan durable history and need
 production-size performance/retention acceptance. Failed, invalid or late samples
 clear series; dashboard queries require fresh timestamps and successful scrapes.
+`meridian_ledger_sample_available` starts at zero, becomes one only after validation,
+and returns to zero on failed/invalid/late samples. Its dedicated rule also checks
+timestamp staleness, so a cleared or stalled financial snapshot cannot silently
+remove the operational warning. Containers panels gate old probe/sample values by
+successful scrapes and freshness; absent metrics do not become invented zeroes.
 
 `order_fill_latency_ms{quantile}` exposes p50/p95/p99 over the latest 1,000
 persisted execution rows, using exchange event time minus local order creation.

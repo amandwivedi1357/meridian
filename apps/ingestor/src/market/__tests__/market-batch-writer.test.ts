@@ -4,6 +4,90 @@ import { writeMarketEventBatch } from "../market-batch-writer.js";
 import type { NormalizedMarketEvent } from "../market-events.js";
 
 describe("writeMarketEventBatch", () => {
+  const mixed: NormalizedMarketEvent[] = [
+    {
+      kind: "trade",
+      symbol: "BTCUSDT",
+      eventId: "1",
+      occurredAtMs: 1,
+      trade: {
+        symbol: "BTCUSDT",
+        tradeId: "1",
+        eventTimeMs: 1,
+        price: new Decimal(100),
+        quantity: new Decimal(1),
+        isBuyerMaker: false
+      }
+    },
+    {
+      kind: "kline",
+      symbol: "BTCUSDT",
+      eventId: "1m:0",
+      occurredAtMs: 1,
+      candle: {
+        symbol: "BTCUSDT",
+        interval: "1m",
+        openTimeMs: 0,
+        closeTimeMs: 59999,
+        open: new Decimal(100),
+        high: new Decimal(100),
+        low: new Decimal(100),
+        close: new Decimal(100),
+        volume: new Decimal(1),
+        closed: true
+      }
+    }
+  ];
+  it("starts independent mixed writes together and waits for both", async () => {
+    let releaseTrade!: () => void;
+    let releaseKline!: () => void;
+    const upsertTrades = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseTrade = resolve;
+        })
+    );
+    const upsertKlines = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseKline = resolve;
+        })
+    );
+    const work = writeMarketEventBatch(mixed, { upsertTrades, upsertKlines, parallelWrites: true });
+    const finished = vi.fn();
+    void work.then(finished);
+    expect(upsertTrades).toHaveBeenCalledOnce();
+    expect(upsertKlines).toHaveBeenCalledOnce();
+    releaseTrade();
+    await Promise.resolve();
+    expect(finished).not.toHaveBeenCalled();
+    releaseKline();
+    await expect(work).resolves.toEqual({
+      tradesWritten: 1,
+      klinesWritten: 1,
+      duplicatesSkipped: 0
+    });
+  });
+  it("drains the other write before reporting failure", async () => {
+    let release!: () => void;
+    const work = writeMarketEventBatch(mixed, {
+      parallelWrites: true,
+      upsertTrades: async () => {
+        throw new Error("write failed");
+      },
+      upsertKlines: () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        })
+    });
+    const rejected = vi.fn();
+    void work.catch(rejected);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(rejected).not.toHaveBeenCalled();
+    release();
+    await expect(work).rejects.toThrow("write failed");
+  });
   it("deduplicates trade events by symbol and eventId before upserting", async () => {
     const trade: NormalizedMarketEvent = {
       kind: "trade",

@@ -1,0 +1,109 @@
+# Overlay for infra/docker-compose.yml. No .env file is mounted into any image.
+x-node: &node
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:size=64m,uid=1000,gid=1000
+    - /app/logs:size=16m,uid=1000,gid=1000
+    - /app/reports:size=64m,uid=1000,gid=1000
+  stop_grace_period: 20s
+  depends_on:
+    redis: { condition: service_healthy }
+    timescaledb: { condition: service_healthy }
+x-env: &env
+  DATABASE_URL: postgres://meridian:meridian@timescaledb:5432/meridian
+  REDIS_URL: redis://redis:6379
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+  DIAGNOSTICS_HOST: 0.0.0.0
+  BINANCE_ENV: testnet
+services:
+  prometheus:
+    volumes:
+      - ./prometheus/.local/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      api: { condition: service_started }
+      blackbox: { condition: service_started }
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.0@sha256:9613f2884689b6fad9f1939f6a3b0388c93a022cfaededb19545b329b5c83dea
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes: ["./prometheus/blackbox.yml:/etc/blackbox/blackbox.yml:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  api:
+    <<: *node
+    image: meridian/api:local
+    build:
+      context: ..
+      dockerfile: infra/containers/Dockerfile.node
+      target: service
+      args: { SERVICE: api }
+    environment:
+      <<: *env
+      API_HOST: 0.0.0.0
+      API_VIEWER_TOKEN: ${API_VIEWER_TOKEN:?Set API_VIEWER_TOKEN}
+      API_OPERATOR_TOKEN: ${API_OPERATOR_TOKEN:-}
+      API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:?Set explicit HTTPS origins}
+  web:
+    image: meridian/web:local
+    build: { context: .., dockerfile: infra/containers/Dockerfile.web }
+    ports: ["127.0.0.1:8080:8080"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=32m,uid=101,gid=101"]
+    depends_on: [api]
+    restart: unless-stopped
+  ingestor:
+    <<: *node
+    profiles: [market]
+    image: meridian/ingestor:local
+    build:
+      context: ..
+      dockerfile: infra/containers/Dockerfile.node
+      target: service
+      args: { SERVICE: ingestor }
+    environment: *env
+  engine:
+    <<: *node
+    profiles: [trading]
+    image: meridian/engine:local
+    build:
+      context: ..
+      dockerfile: infra/containers/Dockerfile.node
+      target: service
+      args: { SERVICE: engine }
+    environment:
+      <<: *env
+      MERIDIAN_ENABLE_TRADING: ${MERIDIAN_ENABLE_TRADING:-blocked}
+      BINANCE_API_KEY: ${BINANCE_API_KEY:-}
+      BINANCE_API_SECRET: ${BINANCE_API_SECRET:-}
+  executor:
+    <<: *node
+    profiles: [trading]
+    image: meridian/executor:local
+    build:
+      context: ..
+      dockerfile: infra/containers/Dockerfile.node
+      target: service
+      args: { SERVICE: executor }
+    environment:
+      <<: *env
+      MERIDIAN_ENABLE_TRADING: ${MERIDIAN_ENABLE_TRADING:-blocked}
+      BINANCE_API_KEY: ${BINANCE_API_KEY:-}
+      BINANCE_API_SECRET: ${BINANCE_API_SECRET:-}
+  backtest-worker:
+    <<: *node
+    profiles: [jobs]
+    image: meridian/backtest-worker:local
+    restart: "no"
+    build:
+      context: ..
+      dockerfile: infra/containers/Dockerfile.node
+      target: cli
+      args: { SERVICE: backtest-worker }
+    environment: *env
+    command: [list]

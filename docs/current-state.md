@@ -15,6 +15,196 @@ This file is the quick resume point for the project. Use it with `docs/implement
 
 ## New Chat Handoff
 
+Latest container observability slice (2026-10-11): completed the three requested
+items locally—profile-aware Docker-DNS runtime scrapes,missing Web/probe/ledger
+failure coverage,and actual Grafana/Telegram verification. New generator:
+scripts/containers/observability-config.cjs;respect identical COMPOSE_PROFILES in
+generation/Compose. API/Web default;market adds feed,trading adds Engine/Executor;
+unselected services omitted,not green. Backtest remains ephemeral with API/DB
+dispatcher/job telemetry. Six-panel Containers dashboard brings total34 panels/four
+dashboards;two rules bring total16. Web static readiness and ledger validity gauge
+implemented;stale/down scrape values are gated from healthy-looking panels.
+
+Actual isolated API/feed/Web image metrics,all rules and dashboard browser queries
+pass. Own Redis stop/restore triggers production dependency rule through isolated
+Alertmanager to two Telegram API-accepted firing/resolved messages,zero failures.
+Not proof of human receipt or live trading/upstream;Engine/Executor not activated.
+All fixtures/anonymous volumes/networks/temporary private config cleaned.
+Evidence logs/verification/phase-5/meridian-observability-a93195b8b4174de984228dfe10078408/result.json;
+screenshots alongside. Earlier two monitoring-port setup failures retained,no sends.
+Regression29 health/dispatcher tests pass(two opt-in skips),six profile/routing
+tests,three Promtool suites,nine current-image checks(including8 Linux entrypoint
+tests) pass. API/Web images rebuilt;shared API/feed/storage/control/host scraper
+unchanged. Existing Grafana provider may load new dashboard but container panels
+need deliberate container-stack deployment. Usage/scope:docs/containers.md.
+
+Next recommended work:nightly DB backup with actual disposable restore verification;
+HTTPS/provider secret-store deployment and CD afterward. Full TRD/every-service/
+production-size telemetry,tracing/Sentry,deployed exchange chaos,dedicated-host
+performance and previous long-run gates remain pending. No Phase5 completion claim.
+
+Latest Phase5 Docker image checkpoint (2026-10-11): multi-stage, digest-pinned
+non-root images implemented for API, Web, Ingestor, Engine, Executor and Backtest
+Worker. Production-only workspace packaging, .dockerignore secret-file exclusions,
+SSE-aware NGINX static/proxy config and opt-in hardened Compose overlay added.
+API_HOST is configurable with IP/port validation; local default stays loopback.
+Trading images refuse startup without explicit Testnet confirmation and always
+refuse production; entrypoint preserves child failures/signal deaths rather than
+reporting false graceful success. Durable kill state is never reset.
+
+Final verification: nine isolated image checkpoints pass,22 API regression tests
+and8 Linux entrypoint tests pass; backend images243-282MiB,Web78MiB under the
+512MiB packaging sanity ceiling. Actual API/Web health,authenticated proxy and
+account SSE,Backtest CLI migration/listing and absent-claim job-child loading,
+Ingestor liveness with truthful unavailable-upstream readiness503,and SIGTERM
+exit0 verified. Evidence logs/verification/phase-5/meridian-images-0ca10569129f401ba0430ff012b1e886/result.json;
+ownership-checked containers/anonymous volumes/network removed. No real keys,
+exchange orders,shared data migration,service restart or trading activation.
+Affected lint/formatting and whitespace checks pass;user API-main edit preserved.
+
+Docker image plan item complete,not full Phase5. HTTPS/Secure-cookie browser
+deployment,provider secret store,CD,backups,tracing/Sentry,full metric coverage,
+real deployed/exchange chaos and dedicated-host performance remain separate.
+Standalone Backtest Worker remains a CLI,not a fake permanent health daemon;
+MCP image is deferred to Phase6. Usage/scope:docs/containers.md.
+
+Latest Phase5 Executor full-runtime safety checkpoint (2026-10-11): added
+scripts/verify-executor-chaos.cjs with actual production entrypoint/service loop,
+real Redis AOF/Timescale,actual signed REST/user-data WS and risk/storage/recovery.
+Build-only adapter uses local fake-credential exchange on internal UUID Docker
+network,no published ports/.env/shared data. Eight checks pass:startup,duplicate
+signals/fills+older updates,actual SIGKILL after accept/beforeACK without resend,
+Redis network blackhole/kill/restart,durable kill+cancel,reconnect and SIGTERM exit0.
+Final:two simulated orders/one send each,one fill/one cancellation,zero pending,
+zero write-ahead violations/unexpected requests,kill=true;cleanup verified.
+Evidence executor-chaos-5d2aa7e4051142d381a77dd1cb0e1fe1/result.json under ignored
+logs/verification/phase-5. SIGTERM797ms including Docker overhead.
+Real bug found/fixed:stuck Redis XREADGROUP starved safety ticks on network blackhole.
+Default Executor Redis commands now have5s deadline/socket destroy on expiry,
+unblocking queued work;normal read BLOCK1000ms fits. Does NOT authorize resend.
+Production code edited only Executor transport;no shared service restart/trading
+activation/kill reset or new performance experiment. Full deployed-image/real
+exchange chaos remains open. Method/details:docs/observability.md,scripts/README.md.
+
+Final verification:156 Executor tests across24 passing files,14 opt-in skips;
+new deadline suite9 tests includes queued safety-command rejection/late reply/timer
+cleanup. Build/typecheck and affected lint pass. All test containers/networks removed.
+Read-only shared orders/fills0/0,kill=true;existing public feed ready HTTP200.
+No commit or shared process refresh. Unrelated user edits (including API main) preserved.
+
+Performance investigation stopped on this laptop by user instruction (2026-10-11).
+Status unresolved; host/session conditions uncontrolled, no cross-session code
+causality or guaranteed targets. No further local tuning, ablation, soak or writer
+refactor. One future controlled campaign is planned (not launched): quiet Linux
+2vCPU/2GiB VM, one explicitly labeled warm-up and five measured runs at actual
+WebSocket receipt/publish boundaries, with per-run p95/p99/ranges/accounting and
+all-service resource evidence. Details in docs/benchmark.md. Warm-up is retained
+but excluded from aggregates; historical first-run failures are NOT discarded.
+Separate-writer ADR deferred pending repeatable dedicated-host full failures and
+clear within-session DB-off improvement. Production ingest unchanged. Resume Phase5
+operational hardening and executor/risk verification; no authorization to activate
+trading or mutate shared kill/allocation state is implied.
+
+Return-to-safety verification:80 credential-free tests across8 files pass for
+signal execution/write-ahead/recovery,kill switch,risk engine/runtime gate,
+UNKNOWN operator resolution,startup reconciliation/runtime factory and shutdown.
+No new production edits or exchange calls; this is a focused regression checkpoint,
+not full deployed Executor/exchange chaos acceptance. Next scoped Phase5 safety
+work is isolated full-runtime chaos coverage; production trading remains off.
+
+Latest ablation checkpoint (2026-10-11): user withdrew the unapproved sustained2k
+<20ms proposal; TRD retains original active targets and the unapproved normal250/s
+<10ms proposal. Three interleaved 60s mixed2k runs EACH of full/no-db/no-redis/
+normalize-only completed. Full real-publish p95 median2.81ms(range2.80-29.24), p99
+median9.23ms(7.67-140.04); first full run480 refusals, later two none. Null-DB
+real-publish p95 median2.80ms(2.79-2.86), p99 median6.15ms(5.97-6.68); all zero
+refusals. Redis-stub/normalize checkpoints are NOT real Redis latency; respective
+medians1.12/0.300ms. All12 accepted-event/store/stub checks and cleanups verified,
+zero unscheduled; first full fixture failure retained, coordinator exit1 deliberate.
+Two later unmodified full runs are fast: DB bottleneck/decoupling fix NOT proven.
+Shared-host variability/cold-warm scheduling remains unresolved; strict acceptance
+pending. TRD4.4 currently has inline DB batching plus disk retry shedding intent,
+NOT a prescribed separate market-data consumer writer. Any future split requires
+lag/retention/crash/idempotency safety, not just XACK. No production changes or live
+feed restarts. New diagnostic runner and three summary unit tests pass; affected
+lint/format pass. Evidence/method/full percentile ranges: docs/benchmark.md and
+ablation-2553c27b-942d-4d12-acf4-f90f1df087fe/summary.json under ignored logs.
+Earlier checkpoints below are historical and do not override this withdrawal.
+
+Latest repeatability/depth-safety follow-up (2026-10-11): user explicitly keeps
+normal250/s <10ms and mixed2k/s <20ms targets as a proposal, not approved replacements.
+TRD section10 has a clearly unapproved proposal and exact receipt-boundary notes;
+original targets and old pass/fail evidence remain intact. Three sequential identical
+Linux 2k mixed runs: bus p95 25.11/22.32/18.34ms, p99 78.58/101.78/77.35ms.
+Per-run p95 median22.32ms (range18.34-25.11), p99 median78.58ms (77.35-101.78).
+Two accept all offered events; third refuses160 at bounded capacity (k6 exit99).
+No unscheduled work; accepted Redis/DB counts and cleanup match every trial. Neither
+original <10ms nor proposed <20ms/no-refusal combined gate passes any of the three.
+Repeat runner retains all failures, exits1 intentionally and writes summary.json
+under repeat-ef5bb232-7f7f-400c-b09d-f616439c971f. No guarantee from a single run.
+
+Separate single Windows normal250/s mixed BTCUSDT HTTP-fixture run accepts all15000,
+zero refusals/unscheduled, exact Redis/DB counts, bus p95 6.62ms/p99 8.96ms,
+clean shutdown/cleanup. Not three-symbol/live-WebSocket/target-host acceptance.
+HTTP bus timer excludes HTTP request transit/response delivery and includes feeder
+generation; WebSocket callback starts after JSON parsing. Keep scope explicit.
+
+Depth-overflow regression now exercises the actual production connection manager
+and buffered ingestor with controlled fake socket/storage IO: depth1001 refused,
+socket closed/readiness false,1000 accepted diffs drained, late messages ignored,
+fresh attempt accepts1002. It exposed and fixed a closed-socket late-open timer leak;
+open now requires reconnect enabled and current/rotating socket identity. Independent
+real test-owned Redis/API1000->1002 gap detection, SSE resync, snapshot bridging and
+browser atomic book clearing/fresh-bootstrap regressions pass. Not a real-exchange
+TCP overload or timed supervisor-daemon recovery experiment. No trading approval.
+
+Latest verification:1161 service tests across158 passing files (8 opt-in skips),
+22 browser library regressions and2 Node repeat-summary tests pass. Binance-client
+and ingestor builds, ingestor typecheck and affected lint pass. Full prior gates,
+representative-host/actual-WebSocket load, deployed exchange chaos and long runs
+remain open. Details and evidence in docs/benchmark.md. Older checkpoints below
+are historical. No commit, new soak or Engine/Executor activation.
+
+Final live check after loading the late-open fix: public task ready HTTP200,
+trade/depth/kline counters701/81/160, backlog0/rejections0, upstream age102ms.
+Shared orders/fills remain0/0 and global kill engaged; benchmark containers and
+networks fully removed. Final affected lint/formatting/whitespace checks pass.
+
+Latest performance follow-up (2026-10-11): public buffer now 128 rows/1ms, still
+1,000 events and ordered batches. Trade/candle writes within a batch run concurrently
+and both settle before acknowledgement/failure; two regressions cover success/drain.
+The Windows final 60s mixed 2k offered run accepts all 120,020 events with zero
+refusals or unscheduled iterations and exact Redis entries-added/DB counts.
+Receipt-to-bus p95 12.45ms, durable p95 35.92ms, RSS 213.27MiB, backlog 256.
+This is NOT <10ms acceptance or a dedicated 2-vCPU/2GiB host result. The first Linux
+128/1 run also accepts all offered events, p95 17.61ms; alternate CPU/GC tuning
+regresses, so those settings are not promoted. See docs/benchmark.md.
+
+Local 20k mixed burst safety now passes: grouped 200-event feeder, 60s, all 1.2M
+offered with zero scheduling drops; 307,400 accepted / 892,600 explicitly refused
+at the bounded ingress queue, backlog capped 1,000, RSS 120.68MiB, no OOM/failure.
+All accepted per-topic Redis entries-added match, as do durable trade/candle rows.
+Accepted throughput is 5,110.13/s, NOT 20k/s processing. Clean exit/cleanup complete;
+evidence linux-20k-burst-grouped/result.json. Dedicated-host sustained/latency,
+bus-to-strategy/submission, deployed exchange chaos and long-run gates remain open.
+Failed earlier feeder/XINFO assertions do not count. No trading/commit/soak approval
+is inferred from this follow-up. Older checkpoints below are historical.
+
+Final verification for this follow-up: 1,159 tests across 158 passing files, eight
+opt-in crash tests skipped (previous separately opted-in run passed all eight).
+Ingestor typecheck/build, affected lint, formatting and whitespace checks pass.
+Public-only task refreshed to PID11796, private readiness HTTP200, backlog/rejections
+zero and processed counters advancing. Task Scheduler requires waiting until the
+old instance is Ready before starting; the first immediate stop/start raced and was
+corrected without deleting the ownership lease. Shared orders/fills0/0, kill=true;
+no benchmark containers/networks remain. No Engine/Executor activation or commit.
+
+Profiling/pipelining follow-up (2026-10-11): user authorized Codex implementation and performance profiling. Measured serial queue wait p95 41.66ms, Redis 5.13ms, DB 8.78ms; implemented opt-in bounded public-only ingestion (1000 events, 64-row/5ms DB batches, one DB batch in flight, overlapped Redis publication), per-event durable acknowledgement, latest/closed-candle coalescing, failure latch, accepted-work drain and explicit backpressure rejection counter. Serial recorder/legacy modes are unchanged. Profiled four-VU trade baseline -> optimized: 133.94 -> 256.41/s, bus p95 46.75 -> 5.59ms. Larger 64-VU trade run: 3043.67/s, 182673 matching rows, zero errors, bus p95 13.07ms (does not pass <10ms at that load).
+
+Full mixed 2k capacity is NOT complete: Windows offered probe ~1931/s; Linux combined service quotas 2 CPU/2GiB probe 1811.06/s, bus p95 29.77ms, unscheduled iterations. Grouped profiler-off Linux probe 1968.20/s, bus p95 17.66ms, capacity refusals and 60 unscheduled events, explicitly passed:false/k6 exit99. Accepted rows match, all three histories bounded/nonempty, max backlog999, sampled RSS111.66MiB, no OOM and clean drain/cleanup. Dedicated host, 20k burst, actual deployed Executor/exchange chaos and long-run gates remain open. Profiling artifacts and exact methods in docs/benchmark.md; failed attempts/probes are not acceptance. No benchmark changes loosen durability/risk or activate trading.
+
+Final affected regressions: 1,157 tests across 158 passing files, eight opt-in skipped in that broad invocation and separately all eight execution-container crash/recovery tests pass. Tests cover production signal-processing children/real storage with simulated exchange, not full deployed service/real exchange acceptance. Ingestor build, Executor typecheck, affected lint pass. Shared orders/fills verified 0/0, global kill engaged. Public-only scheduled feed refreshed to load the optimization; after ownership lease expiry/retry, backlog zero, upstream age 159ms and the new rejection counter zero. API/Engine/Executor are not restarted or activated by this task. No long soak or commit performed.
+
 Final follow-up verification: 1,146 tests across 157 passing files pass (eight opt-in execution-container tests skipped); affected lint and API/Engine/Executor/Ingestor/backtest builds pass. Final seven-group chaos rerun additionally verifies explicit cancellation reasons (including worker_shutdown), cleanup complete and hung fixture exit polling 3,002ms. API PID 32652/public feed PID 18248 are ready; backlog zero and upstream age 86ms at final read. Both new metric series are actually scraped by Prometheus. A live two-minute receipt-to-bus p95 sample reached ~3.87s during this workload period, distinct from the isolated 42.45ms baseline; queue wait is included and this is not production latency acceptance. Shared orders/fills remain zero, global kill engaged and Engine/Executor off. No leftover chaos/benchmark containers; no commit or long-run completion.
 
 Shutdown/ingest metrics/benchmark follow-up (2026-10-11): bounded cancellation now covers standalone backtest CLI, API job child and legacy ingestor. Replay yields to OS signals, cancelled jobs roll back publication and record worker_shutdown, standalone saved results commit atomically, live smoke stops new input and drains accepted writes. API/Engine/Executor guards register before async startup; real isolated Linux API/backtest/ingestor startup/job cancellation and existing seven-group safety chaos pass. Engine/Executor startup cancellation is mocked with zero storage/trading calls, not actual deployed exchange acceptance. Receipt-to-bus histogram includes local queue/normalization/recording but excludes DB; ws_reconnects_total survives supervisor retries, resets on process restart and counts error/close pairs once. Reset-aware alert/rule fixtures pass. Public-only feed task refreshed, actual trade/depth/kline metrics and readiness verified; API refreshed to PID 32652 and readiness healthy. No trading activation or shared storage reset.

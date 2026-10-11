@@ -171,7 +171,7 @@ describe.skipIf(!process.env.API_TEST_DATABASE_URL || !process.env.API_TEST_REDI
       await source.open(account, first.cursor);
       expect((await source.read(account, first.cursor)).events).toHaveLength(1);
     });
-    it("detects a book sequence gap across separate emitted batches", async () => {
+    it("requires resync when a depth diff is absent between pre-overflow and recovered batches", async () => {
       const topic: StreamTopic = { kind: "market", symbol: "ETHUSDT", interval: "15m" };
       const start = await source.open(topic);
       const key = `${namespace}:market.book.ETHUSDT`;
@@ -183,10 +183,10 @@ describe.skipIf(!process.env.API_TEST_DATABASE_URL || !process.env.API_TEST_REDI
           occurredAtMs: 1,
           depth: { firstUpdateId: id, finalUpdateId: id, bids: [], asks: [] }
         });
-      await redis.xadd(key, "*", "payload", delta(1));
+      await redis.xadd(key, "*", "payload", delta(1000));
       const first = await source.read(topic, start);
       expect(first.events).toHaveLength(1);
-      await redis.xadd(key, "*", "payload", delta(3));
+      await redis.xadd(key, "*", "payload", delta(1002));
       await expect(source.read(topic, first.cursor)).rejects.toThrow("book_gap");
     });
     it("bounds account replay history and requires resync after an old cursor is trimmed", async () => {

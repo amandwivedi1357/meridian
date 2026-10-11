@@ -16,3 +16,4 @@ infra/alertmanager/.local/
 
 # Local Obsidian notes/vault
 # meridian-vault/
+infra/prometheus/.local/

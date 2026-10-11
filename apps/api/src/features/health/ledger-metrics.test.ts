@@ -24,9 +24,11 @@ describe("durable ledger telemetry", () => {
     let now = 100000;
     const read = vi.fn(async () => empty());
     const refresh = createLedgerMetrics(registry, read, () => now);
+    expect(await registry.metrics()).toContain("meridian_ledger_sample_available 0");
     await refresh();
     await refresh();
     expect(read).toHaveBeenCalledTimes(1);
+    expect(await registry.metrics()).toContain("meridian_ledger_sample_available 1");
     expect(await registry.metrics()).toContain('orders_total{status="FILLED"} 0');
     expect(await registry.metrics()).not.toMatch(/order_fill_latency_ms\{quantile/);
     now += 30001;
@@ -34,6 +36,10 @@ describe("durable ledger telemetry", () => {
     await refresh();
     expect(await registry.metrics()).not.toMatch(/orders_total\{status/);
     expect(await registry.metrics()).not.toContain("db-secret");
+    expect(await registry.metrics()).toContain("meridian_ledger_sample_available 0");
+    now += 30001;
+    await refresh();
+    expect(await registry.metrics()).toContain("meridian_ledger_sample_available 1");
   });
   it("exports committed state populations and scoped fill quantiles without IDs", async () => {
     const registry = new Registry();

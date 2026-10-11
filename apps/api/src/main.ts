@@ -4,6 +4,7 @@ import { createClient } from "redis";
 import { fileURLToPath } from "node:url";
 import { loadEnvFile } from "node:process";
 import { loadApiAuthConfig } from "./app/auth.js";
+import { apiListenAddress } from "./app/listen-address.js";
 import { registerApiRoutes } from "./app/register-routes.js";
 import { configureGateway } from "./app/gateway.js";
 import { registerSessions } from "./app/session.js";
@@ -250,7 +251,7 @@ server.get("/health/ready", async (_request, reply) => {
   return reply.code(ready ? 200 : 503).send({ status: ready ? "ok" : "unavailable" });
 });
 
-const port = Number(process.env.API_PORT ?? 3000);
+const listenAddress = apiListenAddress(process.env);
 closeOnStop = () => {
   diagnostics.stopping();
   void server
@@ -265,7 +266,7 @@ closeOnStop = () => {
 try {
   if (stopping) throw new Error("API startup cancelled");
   await diagnostics.listen(diagnosticsConfig);
-  await server.listen({ host: "127.0.0.1", port });
+  await server.listen(listenAddress);
 } catch (error) {
   await server.close();
   shutdown.finish();

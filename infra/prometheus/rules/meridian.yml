@@ -97,3 +97,17 @@ groups:
           severity: warning
         annotations:
           summary: "Repeated risk rejections above prototype threshold; execution policy unchanged"
+      - alert: MeridianHealthProbeUnavailable
+        expr: probe_success{job="meridian-health"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Expected container health endpoint unavailable"
+      - alert: MeridianLedgerSampleUnavailable
+        expr: meridian_ledger_sample_available == 0 or time() - meridian_ledger_sample_timestamp_seconds > 45
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Durable ledger telemetry failed or became stale"

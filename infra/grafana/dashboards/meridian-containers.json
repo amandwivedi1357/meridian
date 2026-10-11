@@ -1,0 +1,139 @@
+{
+  "uid": "meridian-containers",
+  "title": "Meridian / Containers",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "15s",
+  "tags": ["meridian", "phase-5"],
+  "timezone": "utc",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Container liveness and readiness",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_success{job=\"meridian-health\"} and on(job,instance) (up == 1)",
+          "legendFormat": "{{service}} / {{check}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "noValue": "No sample",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Only configured active profiles are probed. Scraper up alone does not imply target readiness."
+    },
+    {
+      "id": 2,
+      "title": "Container runtime scrape availability",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{deployment=\"container\",job!=\"meridian-health\"}",
+          "legendFormat": "{{job}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "min": 0, "max": 1, "noValue": "Not monitored" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "Health probe duration",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_duration_seconds{job=\"meridian-health\"}",
+          "legendFormat": "{{service}} / {{check}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "min": 0, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Validated durable ledger sample",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "meridian_ledger_sample_available and on(job,instance) (time() - meridian_ledger_sample_timestamp_seconds < 45) and on(job,instance) (up == 1)",
+          "legendFormat": "{{service}} sample valid",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "min": 0, "max": 1, "noValue": "Not reported" },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Committed backtest job states",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 13, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "meridian_backtest_jobs_by_state and on(job,instance) (meridian_ledger_sample_available == 1) and on(job,instance) (time() - meridian_ledger_sample_timestamp_seconds < 45) and on(job,instance) (up == 1)",
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "min": 0, "noValue": "Not reported" }, "overrides": [] },
+      "description": "Short-lived workers are observed via committed DB state, not a fake permanent worker scrape."
+    },
+    {
+      "id": 6,
+      "title": "Backtest dispatcher and active children",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 13, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "meridian-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "meridian_backtest_dispatcher_ready",
+          "legendFormat": "dispatcher ready"
+        },
+        {
+          "refId": "B",
+          "expr": "meridian_backtest_active_children",
+          "legendFormat": "active children"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "min": 0, "max": 1, "noValue": "Not reported" },
+        "overrides": []
+      }
+    }
+  ]
+}

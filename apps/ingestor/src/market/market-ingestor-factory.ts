@@ -8,19 +8,26 @@ import { writeMarketEventBatch } from "./market-batch-writer.js";
 import type { MarketBatchWriterDeps } from "./market-batch-writer.js";
 import { publishNormalizedMarketEvent, type MarketEventPublisherDeps } from "./market-publisher.js";
 import type { SessionRecorder } from "./session-recorder.js";
+import {
+  createBufferedMarketIngestor,
+  type IngestBufferOptions
+} from "./buffered-market-ingestor.js";
 
 export interface MarketIngestorFactoryDeps
   extends Pick<MarketEventPublisherDeps, "xadd">, MarketBatchWriterDeps {
   readonly codec?: EventCodec<MarketEventMessage>;
   readonly sessionRecorder?: SessionRecorder;
   readonly onPublished?: (kind: string, elapsedMs: number) => void;
+  readonly buffer?: IngestBufferOptions;
 }
 
 export interface MarketIngestor {
   readonly ingest: (input: unknown, receivedAtMs?: number) => Promise<MarketIngestResult>;
+  readonly drain?: () => Promise<void>;
 }
 
 export function createMarketIngestor(deps: MarketIngestorFactoryDeps): MarketIngestor {
+  if (deps.buffer) return createBufferedMarketIngestor(deps, deps.buffer);
   const codec = deps.codec ?? marketEventProtobufCodec;
 
   return {

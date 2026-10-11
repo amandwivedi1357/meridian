@@ -56,10 +56,10 @@ async function main() {
     alerts = rules.data.groups
       .flatMap((group) => group.rules)
       .filter((rule) => rule.name.startsWith("Meridian"));
-    if (alerts.length === 14 && alerts.every((rule) => rule.health === "ok")) break;
+    if (alerts.length === 16 && alerts.every((rule) => rule.health === "ok")) break;
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
-  assert.equal(alerts.length, 14);
+  assert.equal(alerts.length, 16);
   assert.ok(alerts.every((rule) => rule.health === "ok"));
   const evidence = {
     checkedAt: new Date().toISOString(),
@@ -87,7 +87,12 @@ async function main() {
       if (response.url().includes("/api/ds/query") && response.status() >= 400)
         errors.push(`Datasource HTTP ${response.status()}`);
     });
-    for (const uid of ["meridian-operations", "meridian-trading-risk", "meridian-pnl-risk"]) {
+    for (const uid of [
+      "meridian-operations",
+      "meridian-trading-risk",
+      "meridian-pnl-risk",
+      "meridian-containers"
+    ]) {
       const saved = await json(`${grafana}/api/dashboards/uid/${uid}`, { authorization });
       assert.equal(saved.meta.provisioned, true);
       assert.ok(saved.dashboard.panels.length > 0);

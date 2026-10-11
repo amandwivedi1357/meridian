@@ -69,6 +69,12 @@ export function createLedgerMetrics(
     labelNames: ["scope"],
     registers: [registry]
   });
+  const available = new Gauge({
+    name: "meridian_ledger_sample_available",
+    help: "Latest durable ledger sample validated successfully; zero on failed or unobserved sample",
+    registers: [registry]
+  });
+  available.set(0);
   let pending: Promise<void> | undefined;
   let lastAttempt = -Infinity;
   return () => {
@@ -97,7 +103,9 @@ export function createLedgerMetrics(
           if (value !== null) fills.set({ quantile }, value);
         samples.set({ scope: "latest-1000-persisted-fills" }, result.fills.count);
         timestamp.set({ scope: "persisted-ledger" }, now() / 1000);
+        available.set(1);
       } catch {
+        available.set(0);
         orders.reset();
         jobs.reset();
         fills.reset();

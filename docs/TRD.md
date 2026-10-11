@@ -497,6 +497,34 @@ CI gates: typecheck, lint, unit + integration, `buf breaking`, coverage threshol
 
 Publish benchmark method + results in the README.
 
+### Proposed workload-specific latency gates (not approved)
+
+The user requested on 2026-10-11 that these remain a proposal. The active targets
+above and historical pass/fail decisions are unchanged.
+
+| Proposed Workload                                    | Proposed Gate                                                                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Normal mixed market load, approximately 250 events/s | Local receipt to successful Redis publication p95 <10ms                                                                        |
+| Sustained 2,000 events/s mixed market load           | No replacement threshold proposed currently; measured p95 18.34-25.11ms on the shared Docker host; bottleneck not yet isolated |
+
+The earlier unapproved <20ms sustained-load suggestion was withdrawn on 2026-10-11.
+The original active <10ms target remains unchanged; the normal-load proposal is retained.
+
+Measure p99 as well, and publish median/range of per-run p95 and p99 across 3-5
+identical runs. A median of run percentiles is not a pooled-event percentile.
+Normal-load rates are synthetic test settings, not a guarantee of Binance traffic
+or proof of three-symbol capacity. Four closed-loop trade VUs are not a fixed-rate
+250/s mixed workload. Do not reinterpret old measurements as new-gate acceptance.
+
+The HTTP fixture starts the bus timer inside its server request callback: it includes
+generation, queue wait, normalization, protobuf and the Redis round trip, but not
+client-to-server HTTP transit or HTTP response delivery. HTTP handling can still
+compete for CPU. The public WebSocket path starts at the connection manager's
+message callback, after JSON parsing; neither benchmark proves exchange-to-bus
+network latency. Keep transport, symbol mix, batching and receipt boundary explicit
+when comparing results. Actual WebSocket-path load verification and representative
+target-host sizing are separate from these local fixture reports.
+
 ---
 
 ## 11. Deployment

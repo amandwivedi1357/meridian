@@ -6,6 +6,7 @@ export function createInstrumentedIngestor(
   metrics: IngestorMetrics
 ): MarketIngestor {
   return {
+    ...(ingestor.drain ? { drain: ingestor.drain } : {}),
     async ingest(input, receivedAtMs) {
       try {
         const result = await ingestor.ingest(input, receivedAtMs);

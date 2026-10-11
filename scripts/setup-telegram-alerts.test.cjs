@@ -16,6 +16,10 @@ test("routes suppress only intentionally inactive trading targets by default", (
   assert.equal(config.receivers[1].telegram_configs[0].send_resolved, true);
   assert.equal(config.route.repeat_interval, "4h");
   assert.deepEqual(config.route.routes[0].matchers, ['job=~"meridian-engine|meridian-executor"']);
+  assert.deepEqual(config.route.routes[1].matchers, [
+    'job="meridian-health"',
+    'service=~"engine|executor"'
+  ]);
   assert.deepEqual(configuration("fake:token", 123, true).route.routes, []);
 });
 test("transport errors and rejected responses never expose token/body", async () => {

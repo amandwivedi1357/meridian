@@ -172,7 +172,63 @@ for exact scope and remaining deployed trading-service signal acceptance. The ha
 also bundles actual API/backtest/legacy-ingestor/job entrypoints and signals them during
 controlled startup/read waits; these are simulation/public-data runtimes, not trading.
 
+## Actual Executor Runtime Chaos
+
+Run `node scripts/verify-executor-chaos.cjs` with Docker Desktop available.
+It bundles the production Executor entrypoint/service loop and real risk, storage,
+REST signing, user-data WebSocket and reconciliation components. A build-only
+adapter redirects the exchange to a local signed REST/WS simulator with fixed
+fake credentials. An internal UUID-labeled Docker network has no published ports;
+only generated bundles are mounted read-only, never the checkout/.env/project data.
+The simulator initializes only its new DB kill state and permits two active risk
+reservations for two 0.0001 BTC / 8.1 USDT synthetic LIMIT orders. Production defaults
+are unchanged. It asserts a durable UNKNOWN claim before every exchange send.
+
+Checks cover actual startup/readiness, duplicate signals, duplicate/older WS fills,
+SIGKILL after exchange acceptance before signal ACK and stale reclaim without resend,
+Redis network blackhole with durable kill/cancellation, Redis kill/AOF restart,
+Executor network isolation/reconnect, and bounded Linux SIGTERM cleanup. Redis commands
+in production Executor now have a 5s deadline; timeout destroys the socket so a stuck
+blocking read cannot starve safety ticks. This is not permission to blindly retry
+ambiguous submissions. Production XREADGROUP blocks for 1s, below that deadline.
+
+Evidence: unique `logs/verification/phase-5/executor-chaos-<uuid>/result.json` only
+after verified ownership cleanup; failed attempts retain failure.json. This is actual
+main/runtime wiring with a simulated exchange, not unmodified deployed-image or real
+Binance/Testnet outage acceptance, performance or soak. No trading service is launched
+against project storage; no shared kill/allocation mutation occurs.
+
 ## Isolated Ingestion Benchmark
+
+Run `node scripts/verify-ingest-ablation.cjs` for bottleneck diagnosis: three
+interleaved 60s Linux mixed 2k/s trials each of `full`, `no-db`, `no-redis` and
+`normalize-only`. Same feeder, batching and combined service quotas; inactive
+services keep their limits, with no CPU redistribution. Each trial uses fresh
+credential-free storage and ownership-checked cleanup. Summary/progress/logs are
+under `logs/verification/phase-5/ablation-<uuid>/`. Failed trials are retained;
+exit1 means at least one fixture failed, not that its measured results vanish.
+Individual trials accept `BENCHMARK_ABLATION` with those four values (default full).
+Normalization-only skips codec and batching as well as storage, so it is a CPU
+floor, not a like-for-like Redis transport measurement. Stub publication latency
+is NOT real Redis acknowledgement or TRD acceptance; diagnostic metrics may count
+simulated publications/persistence. Disabled stores must remain empty; enabled
+stores and stub counters must exactly match accepted events. Shared feed/trading
+state is untouched. Unit tests: `node --test scripts/verify-ingest-ablation.test.cjs
+scripts/verify-ingest-repeats.test.cjs`.
+
+Repeat the fixed Linux 2k mixed workload sequentially with
+`node scripts/verify-ingest-repeats.cjs`. `BENCHMARK_REPEATS` accepts3-5 (default3).
+Every trial gets a unique directory; `repeat-<uuid>/summary.json` reports per-run
+p95/p99 median/range, throughput, refusals and unscheduled events. Failing measured
+trials are included; missing/invalid reports are listed separately, not silently
+discarded. Exit1 means original local performance gates failed, not that results
+should be ignored. No exchange access, shared-data resets or trading activation.
+The helper's unit tests: `node --test scripts/verify-ingest-repeats.test.cjs`.
+
+For a separate fixed normal-load check use `BENCHMARK_RATE=250`,
+`BENCHMARK_TOPICS=mixed`, `BENCHMARK_BATCH=1`, `BENCHMARK_HOST=windows`,
+`BENCHMARK_PROFILE=0` and a unique `BENCHMARK_VARIANT`. This is one synthetic
+BTCUSDT HTTP-fixture workload, not a three-symbol/live-WebSocket traffic guarantee.
 
 Run `node scripts/verify-ingest-benchmark.cjs` with Docker Desktop available and
 `K6_BINARY` pointing to a local k6 executable. On this laptop the default is the
@@ -182,5 +238,56 @@ and Timescale containers on random loopback-only ports and uses four k6 VUs for 
 The fixture's HTTP listener is loopback-only. No `.env`, exchange/trading runtime,
 shared database/Redis keys or user-defined destinations are used.
 Count equality, protobuf decode, successful drain and ownership-checked cleanup are
-required before writing `logs/verification/phase-5/ingest-benchmark/result.json`.
+required before writing the named variant's `result.json` under `logs/verification/phase-5/`.
+Default is `profile-buffered`; select `BENCHMARK_MODE=serial` and a distinct
+`BENCHMARK_VARIANT` for comparison. `BENCHMARK_VUS=64` increases closed-loop trade
+load. Set `BENCHMARK_RATE=2000`, `BENCHMARK_TOPICS=mixed`, `BENCHMARK_HOST=linux`
+for the bounded Linux offered-load test; combined service CPU quotas are 2 and RAM
+limits 2GiB, excluding host/OS/k6. Storage ports are not published in Linux mode;
+only synthetic HTTP is published to loopback on a private Docker bridge. No exchange
+client or credentials are included. `BENCHMARK_BATCH=20` groups feeder transport,
+but every event's latency is sampled individually including generation/queue wait.
+`BENCHMARK_PROFILE=0` disables V8 sampling overhead for a separate named run.
+Profiled runs save `ingestor.cpuprofile`; stage samples cap at 100,000 observations.
+Reports distinguish fixture integrity (`passed`), target checks and unscheduled events.
+Use `BENCHMARK_RATE=20000`, `BENCHMARK_BATCH=200`, `BENCHMARK_TOPICS=mixed`,
+`BENCHMARK_HOST=linux`, `BENCHMARK_PROFILE=0`, `BENCHMARK_CPU_PERIOD=10000` and a
+unique variant for the 60s burst. Expected bounded-queue 503s are counted separately;
+all accepted events must match Redis entries-added and durable trade/candle counts.
+`targetChecks.burst20k` additionally requires no unscheduled events and all 1.2M
+offered events accounted for. It is overload tolerance, not 20k/s accepted throughput.
+CPU period can be 10000 or 100000 microseconds. Optional `BENCHMARK_REDIS_CPU`
+(0.125/0.25/0.5) keeps the total allocation at two CPU; default 0.25 is unchanged.
+`BENCHMARK_SEMI_SPACE=32` is an experimental V8 setting, not a recommended default.
+Measured tuning regressions are in `docs/benchmark.md`; do not promote failed runs.
+Nonzero k6 thresholds produce a failing report/exit rather than successful acceptance.
+Failed setup attempts are not evidence; coordinator keepalive covers fetch-only waits,
+and ownership-checked cleanup removes only that run's containers/network.
 See `docs/benchmark.md` for exact scope, numbers and unmet TRD targets.
+
+Executor crash tests (simulated exchange, disposable storage):
+
+```powershell
+$env:RUN_EXECUTION_INTEGRATION='1'
+node node_modules/vitest/vitest.mjs run apps/executor/src/execution-loop.integration.test.ts
+Remove-Item Env:RUN_EXECUTION_INTEGRATION
+```
+
+All eight pass on this laptop. They exercise the production signal-processing child,
+not the full deployed Executor or a real exchange outage. No live orders are sent.
+
+## Application Image Verification
+
+`node scripts/containers/observability-config.cjs` renders container scrapes/probes
+for `COMPOSE_PROFILES`; use exactly the same profiles when starting Compose.
+`node scripts/verify-container-observability.cjs` checks actual isolated API/feed/
+Web metrics and four provisioned Grafana dashboards,then verifies disposable Redis
+outage -> real Prometheus rule -> two Telegram firing/resolved sends. It uses the
+existing private destination,does not activate trading or touch shared storage,
+and removes its private config/fixtures. Results/screenshots are ignored logs.
+See `docs/containers.md` for full setup and acceptance scope.
+
+`node scripts/verify-containers.cjs` builds six non-root application images and
+verifies packaging/startup/proxy/SSE/shutdown on disposable internal storage,
+without real credentials, trading or shared service restarts. `--skip-build`
+rechecks existing image IDs. See `docs/containers.md` for scope and Compose usage.
