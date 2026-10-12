@@ -12,6 +12,7 @@ import {
   engageKillSwitch,
   getDashboard,
   getWorkspaceSummary,
+  type MarketInstrument,
   pauseStrategy,
   resumeStrategy
 } from "../../lib/api-client.js";
@@ -57,11 +58,17 @@ function Readings({ rows }: { rows: readonly (readonly [string, ReactNode])[] })
 export function WorkspacePage({
   view,
   timeframe,
-  onTimeframe
+  onTimeframe,
+  symbol,
+  instruments,
+  onSymbol
 }: {
   view: Exclude<PageId, "backtests">;
   timeframe: string;
   onTimeframe: (value: string) => void;
+  symbol: string;
+  instruments: readonly MarketInstrument[];
+  onSymbol: (value: string) => void;
 }) {
   const { account, market, health, principal, marketConnection, accountConnection, transport } =
     useTerminalStore();
@@ -142,7 +149,7 @@ export function WorkspacePage({
     setConfirmation("");
   }
   const control = account?.riskControl;
-  const position = account?.portfolio?.positions.find((p) => p.symbol === "BTCUSDT");
+  const position = account?.portfolio?.positions.find((p) => p.symbol === symbol);
   const strategy =
     account?.strategies.find((s) => s.strategyId === selected) ?? account?.strategies[0];
   const events = activity(account);
@@ -192,7 +199,7 @@ export function WorkspacePage({
           ["Updated", control ? formatTime(control.updatedAtMs) : "--"],
           ["Account feed", accountFresh ? accountConnection : "Stale"],
           ["Open orders (loaded)", account ? orders.length : "--"],
-          ["Managed BTC quantity", position?.quantity ?? "--"],
+          [`Managed ${symbol.replace(/USDT$/, "")} quantity`, position?.quantity ?? "--"],
           ["Mark / USDT", formatUsd(position?.markPrice)],
           ["Unrealized / USDT", formatSignedUsd(position?.unrealizedPnl)]
         ]}
@@ -211,7 +218,7 @@ export function WorkspacePage({
       {[
         ["Allocated equity / USDT", "Not reported"],
         ["Wallet equity / USDT", formatUsd(account?.portfolio?.equity)],
-        ["Managed BTC position", position?.quantity ?? "--"],
+        [`Managed ${symbol.replace(/USDT$/, "")} position`, position?.quantity ?? "--"],
         ["Open orders / loaded", account ? String(orders.length) : "--"],
         ["Recent fills / loaded", account ? String(account.fills.length) : "--"],
         ["Risk state", control ? (control.engaged ? "BLOCKED" : "DISENGAGED") : "UNKNOWN"]
@@ -250,7 +257,7 @@ export function WorkspacePage({
           [
             "Redis trade stream length",
             fresh
-              ? (health?.streams.find((s) => s.stream === "market.trade.BTCUSDT")?.length ?? "--")
+              ? (health?.streams.find((s) => s.stream === `market.trade.${symbol}`)?.length ?? "--")
               : "--"
           ],
           [
@@ -373,7 +380,7 @@ export function WorkspacePage({
       <header className="workspace-heading">
         <div>
           <h1>{pages.find((p) => p.id === view)!.label}</h1>
-          <span>{view === "market" ? "BTCUSDT / Binance Spot" : "Meridian / Testnet account"}</span>
+          <span>{view === "market" ? `${symbol} / Binance Spot` : "Meridian / Testnet account"}</span>
         </div>
         {status(
           view === "market"
@@ -398,7 +405,7 @@ export function WorkspacePage({
           {accountSummary}
           <div className="workspace-grid">
             <Section
-              title={`BTCUSDT / ${timeframe}`}
+              title={`${symbol} / ${timeframe}`}
               extra={formatUsd(market.trades.at(-1)?.price)}
             >
               <div className="overview-chart">
@@ -433,9 +440,19 @@ export function WorkspacePage({
           <div className="market-primary">
             <div className="chart-header">
               <div>
-                <h2>BTCUSDT</h2>
+                <h2>{symbol}</h2>
                 <strong>{formatUsd(market.trades.at(-1)?.price)}</strong>
               </div>
+              <label className="instrument-picker">
+                Instrument
+                <select value={symbol} onChange={(event) => onSymbol(event.target.value)}>
+                  {instruments.map((instrument) => (
+                    <option key={instrument.symbol} value={instrument.symbol}>
+                      {instrument.baseAsset} / {instrument.quoteAsset}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="timeframe-strip" role="group" aria-label="Candle interval">
                 {["1m", "15m", "1h"].map((t) => (
                   <button
@@ -451,7 +468,7 @@ export function WorkspacePage({
             </div>
             <div className="main-market-chart">
               <MarketChart
-                key={timeframe}
+                key={`${symbol}:${timeframe}`}
                 candles={market.candles.filter((c) => c.interval === timeframe)}
               />
             </div>
@@ -580,7 +597,7 @@ export function WorkspacePage({
           <Section title="Current exposure">
             <Readings
               rows={[
-                ["BTC managed position", position?.quantity ?? "--"],
+                [`${symbol.replace(/USDT$/, "")} managed position`, position?.quantity ?? "--"],
                 [
                   "Managed notional / USDT",
                   position?.quantity != null && position.markPrice != null
@@ -649,7 +666,7 @@ export function WorkspacePage({
                 ["Control status", strategy ? (strategy.paused ? "Paused" : "Not paused") : "--"],
                 ["Control updated", strategy ? formatTime(strategy.updatedAtMs) : "--"],
                 ["Control reason", strategy?.reason ?? "--"],
-                ["Symbol", strategy ? "Not reported" : "--"],
+                  ["Symbol", strategy ? symbol : "--"],
                 ["Interval", "Not reported"],
                 ["Last signal", "Not reported"],
                 ["Last run", "Not reported"],
@@ -721,7 +738,7 @@ export function WorkspacePage({
             <Section title="Runtime configuration">
               <Readings
                 rows={[
-                  ["Dashboard symbol", "BTCUSDT"],
+                  ["Dashboard symbol", symbol],
                   [
                     "Market environment / configured",
                     summary.data?.configuration.marketEnvironment ?? "Not reported"

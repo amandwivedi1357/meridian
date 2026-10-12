@@ -92,9 +92,9 @@ function levels(value: BookLevel[]): BookLevel[] {
   if (!Array.isArray(value) || value.length > 1000) throw new Error("invalid_book");
   return value.map((l) => ({ price: amount(l.price, false), quantity: amount(l.quantity) }));
 }
-function trade(value: MarketSnapshot["trades"][number]): DashboardTrade {
+function trade(value: MarketSnapshot["trades"][number], symbol = "BTCUSDT"): DashboardTrade {
   if (
-    value.symbol !== "BTCUSDT" ||
+    value.symbol !== symbol ||
     typeof value.tradeId !== "string" ||
     typeof value.isBuyerMaker !== "boolean"
   )
@@ -108,9 +108,9 @@ function trade(value: MarketSnapshot["trades"][number]): DashboardTrade {
     side: value.isBuyerMaker ? "sell" : "buy"
   };
 }
-function candle(value: MarketCandle, interval: string): MarketCandle {
+function candle(value: MarketCandle, interval: string, symbol = "BTCUSDT"): MarketCandle {
   if (
-    value.symbol !== "BTCUSDT" ||
+    value.symbol !== symbol ||
     value.interval !== interval ||
     typeof value.closed !== "boolean"
   )
@@ -151,11 +151,15 @@ function checkBook(book: NonNullable<MarketState["book"]>) {
   )
     throw new Error("book_resync_required");
 }
-export function marketFromSnapshot(snapshot: MarketSnapshot, interval: string): MarketState {
+export function marketFromSnapshot(
+  snapshot: MarketSnapshot,
+  interval: string,
+  symbol = "BTCUSDT"
+): MarketState {
   if (
-    snapshot.symbol !== "BTCUSDT" ||
+    snapshot.symbol !== symbol ||
     snapshot.interval !== interval ||
-    !snapshot.cursor ||
+    typeof snapshot.cursor !== "string" ||
     snapshot.trades.length > 200 ||
     snapshot.candles.length > 200
   )
@@ -174,13 +178,15 @@ export function marketFromSnapshot(snapshot: MarketSnapshot, interval: string): 
     trades: [
       ...new Map(
         snapshot.trades.map((t) => {
-          const row = trade(t);
+          const row = trade(t, symbol);
           return [row.id, row] as const;
         })
       ).values()
     ].slice(-200),
     candles: [
-      ...new Map(snapshot.candles.map((c) => [c.openTimeMs, candle(c, interval)] as const)).values()
+      ...new Map(
+        snapshot.candles.map((c) => [c.openTimeMs, candle(c, interval, symbol)] as const)
+      ).values()
     ].sort((a, b) => a.openTimeMs - b.openTimeMs)
   };
 }
@@ -188,6 +194,7 @@ export function reduceMarket(
   state: MarketState,
   events: MarketEvent[],
   interval: string,
+  symbol = "BTCUSDT",
   now = Date.now()
 ): MarketState {
   if (!Array.isArray(events) || events.length > 1000) throw new Error("invalid_batch");
@@ -195,16 +202,16 @@ export function reduceMarket(
   for (const event of events) {
     number(event.occurredAtMs);
     if (
-      event.symbol !== "BTCUSDT" ||
+      event.symbol !== symbol ||
       event.occurredAtMs > now + 5000 ||
       now - event.occurredAtMs > 15000
     )
       throw new Error("stale_market_batch");
     if (event.kind === "trade") {
-      const row = trade(event.trade);
+      const row = trade(event.trade, symbol);
       next.trades = [...next.trades.filter((t) => t.id !== row.id), row].slice(-200);
     } else if (event.kind === "kline") {
-      const row = candle(event.candle, interval);
+      const row = candle(event.candle, interval, symbol);
       next.candles = [...next.candles.filter((c) => c.openTimeMs !== row.openTimeMs), row]
         .sort((a, b) => a.openTimeMs - b.openTimeMs)
         .slice(-200);

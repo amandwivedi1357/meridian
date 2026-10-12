@@ -5,7 +5,14 @@ import { WorkspacePage } from "../features/workspace/WorkspacePage.js";
 import { NavigationRail } from "../components/terminal/NavigationRail.js";
 import { pageFromHash, pages } from "./navigation.js";
 import { BacktestsPage } from "../features/backtests/BacktestsPage.js";
-import { ApiError, getSession, login, logout } from "../lib/api-client.js";
+import {
+  ApiError,
+  getMarketInstruments,
+  getSession,
+  login,
+  logout,
+  type MarketInstrument
+} from "../lib/api-client.js";
 import { startLiveSession } from "../lib/live-session.js";
 import { useTerminalStore } from "../lib/terminal-store.js";
 import { LogIn, X } from "lucide-react";
@@ -20,6 +27,10 @@ export function AppShell() {
   const session = useTerminalStore((s) => s.session),
     principal = useTerminalStore((s) => s.principal);
   const [interval, setInterval] = useState("15m"),
+    [symbol, setSymbol] = useState("BTCUSDT"),
+    [instruments, setInstruments] = useState<readonly MarketInstrument[]>([
+      { symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT", status: "TRADING" }
+    ]),
     [loginOpen, setLoginOpen] = useState(false);
   const [credential, setCredential] = useState(""),
     [error, setError] = useState(""),
@@ -48,7 +59,7 @@ export function AppShell() {
   }, []);
   useEffect(() => {
     if (session !== "ready") return;
-    const stop = startLiveSession(interval);
+    const stop = startLiveSession(interval, symbol);
     const expiry = principal?.expiresAtMs;
     const timer = expiry
       ? setTimeout(
@@ -60,7 +71,20 @@ export function AppShell() {
       clearTimeout(timer);
       stop();
     };
-  }, [session, principal?.expiresAtMs, principal?.role, interval]);
+  }, [session, principal?.expiresAtMs, principal?.role, interval, symbol]);
+  useEffect(() => {
+    if (session !== "ready") return;
+    const controller = new AbortController();
+    void getMarketInstruments("USDT", controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setInstruments((current) => (result.instruments.length ? result.instruments : current));
+        if (!result.instruments.some((instrument) => instrument.symbol === symbol))
+          setSymbol(result.instruments[0]?.symbol ?? "BTCUSDT");
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [session, symbol]);
   async function signIn(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -125,7 +149,15 @@ export function AppShell() {
         view === "backtests" ? (
           <BacktestsPage />
         ) : (
-          <WorkspacePage key={view} view={view} timeframe={interval} onTimeframe={setInterval} />
+          <WorkspacePage
+            key={view}
+            view={view}
+            timeframe={interval}
+            onTimeframe={setInterval}
+            symbol={symbol}
+            instruments={instruments}
+            onSymbol={setSymbol}
+          />
         )
       ) : (
         <main className="session-state" role="status">

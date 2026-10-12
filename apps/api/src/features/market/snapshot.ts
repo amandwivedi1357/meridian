@@ -115,6 +115,28 @@ export function registerMarketSnapshot(
   >
 ) {
   const pending = new Map<string, Promise<unknown>>();
+  const fallbackSnapshot = async (
+    topic: StreamTopic,
+    recent: Awaited<ReturnType<NonNullable<typeof loadHistory>>>
+  ) => {
+    const depth = depthSchema.parse(await loadDepth(topic.symbol));
+    if (!Number.isSafeInteger(depth.lastUpdateId) || depth.lastUpdateId < 0)
+      throw new Error("invalid_book_snapshot");
+    return {
+      checkedAt: Date.now(),
+      symbol: topic.symbol,
+      interval: topic.interval,
+      cursor: "",
+      book: {
+        ...parseDepthResponse(topic.symbol, depth, Date.now()),
+        lastUpdateId: depth.lastUpdateId,
+        depthLimit: 100,
+        complete: false
+      },
+      trades: [],
+      candles: [...recent].sort((a, b) => a.openTimeMs - b.openTimeMs).slice(-200)
+    };
+  };
   server.withTypeProvider<ZodTypeProvider>().get(
     "/api/market/snapshot",
     {
@@ -152,7 +174,13 @@ export function registerMarketSnapshot(
             FROM klines WHERE symbol=$1 AND interval=$2 ORDER BY open_time DESC LIMIT 200`,
                   [topic.symbol, topic.interval]
                 );
-            const snapshot = await bootstrapMarket(source, topic, () => loadDepth(topic.symbol));
+            let snapshot: Awaited<ReturnType<typeof bootstrapMarket>>;
+            try {
+              snapshot = await bootstrapMarket(source, topic, () => loadDepth(topic.symbol));
+            } catch (error) {
+              if (!recent) throw error;
+              return fallbackSnapshot(topic, recent);
+            }
             const candles = new Map(
               history.rows.map((row) => [
                 Number(row.openTimeMs),

@@ -10,6 +10,11 @@ describe("terminal market reducer", () => {
     expect(next.book?.bids).toEqual([{ price: "99", quantity: "1" }]);
     expect(initial.book?.bids).toHaveLength(2);
   });
+  it("accepts REST-only snapshots that do not have a replay cursor yet", () => {
+    const data = snapshot();
+    data.cursor = "";
+    expect(marketFromSnapshot(data, "15m").book?.lastUpdateId).toBe(10);
+  });
   it("accepts overlapping depth ranges and skips duplicates", () => {
     const initial = marketFromSnapshot(snapshot(), "15m");
     const next = reduceMarket(initial, [depth(9, 11), depth(9, 11)], "15m");

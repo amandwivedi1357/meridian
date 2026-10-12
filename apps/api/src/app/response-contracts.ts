@@ -144,6 +144,20 @@ const success: Record<string, z.ZodTypeAny> = {
     interval: text,
     candles: z.array(candle).max(500)
   }),
+  "/api/market/instruments": z.object({
+    ...checked,
+    quoteAsset: text,
+    instruments: z
+      .array(
+        z.object({
+          symbol: text,
+          baseAsset: text,
+          quoteAsset: text,
+          status: text
+        })
+      )
+      .max(500)
+  }),
   "/api/market/snapshot": z.object({
     ...checked,
     symbol: text,

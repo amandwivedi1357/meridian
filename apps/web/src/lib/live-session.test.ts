@@ -192,7 +192,7 @@ describe("live session transport", () => {
     stop!();
     await settle();
     expect(useTerminalStore.getState().market.book).toBeNull();
-    expect(vi.mocked(deps.snapshot).mock.calls[0]![1].aborted).toBe(true);
+    expect(vi.mocked(deps.snapshot).mock.calls[0]![2].aborted).toBe(true);
   });
   it("invalid frames are bounded and trigger recovery", async () => {
     const { sources } = setup();

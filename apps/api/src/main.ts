@@ -12,6 +12,7 @@ import { createStreamSource } from "./features/streams/stream-source.js";
 import { registerStreams } from "./features/streams/streams.js";
 import { BinanceRestClient, createTestnetTradingClientFromEnv } from "@meridian/binance-client";
 import { registerMarketSnapshot } from "./features/market/snapshot.js";
+import { registerMarketInstrumentsRoutes } from "./features/market/instruments.js";
 import { createRecentHistoryLoader } from "./features/market/recent-history.js";
 import { createPortfolioReader } from "./features/account/portfolio.js";
 import { Decimal } from "@meridian/core";
@@ -166,6 +167,16 @@ const marketClient = new BinanceRestClient({
   environment: marketEnvironment,
   fetch: monitoredFetch
 });
+let marketMetadata: Awaited<ReturnType<typeof marketClient.getExchangeInfo>> | undefined;
+let marketMetadataTime = 0;
+async function loadMarketMetadata() {
+  if (!marketMetadata || Date.now() - marketMetadataTime > 300000) {
+    marketMetadata = await marketClient.getExchangeInfo(3000);
+    marketMetadataTime = Date.now();
+  }
+  return marketMetadata;
+}
+registerMarketInstrumentsRoutes(server, loadMarketMetadata);
 registerMarketSnapshot(
   server,
   pool,

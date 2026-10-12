@@ -24,7 +24,7 @@ interface Source {
   close(): void;
 }
 export interface LiveDependencies {
-  snapshot: (interval: string, signal: AbortSignal) => Promise<MarketSnapshot>;
+  snapshot: (symbol: string, interval: string, signal: AbortSignal) => Promise<MarketSnapshot>;
   account: (signal: AbortSignal) => Promise<TradingState>;
   session: () => Promise<{ principal: Principal }>;
   source: (url: string) => Source;
@@ -62,7 +62,13 @@ const defaults: LiveDependencies = {
     };
   }
 };
-export function startLiveSession(interval: string, deps: LiveDependencies = defaults) {
+export function startLiveSession(
+  interval: string,
+  symbolOrDeps: string | LiveDependencies = "BTCUSDT",
+  maybeDeps: LiveDependencies = defaults
+) {
+  const symbol = typeof symbolOrDeps === "string" ? symbolOrDeps : "BTCUSDT";
+  const deps = typeof symbolOrDeps === "string" ? maybeDeps : symbolOrDeps;
   const controller = new AbortController();
   let stopped = false;
   useTerminalStore.getState().reset();
@@ -156,7 +162,8 @@ export function startLiveSession(interval: string, deps: LiveDependencies = defa
             market: reduceMarket(
               useTerminalStore.getState().market,
               queued.flatMap((b) => b.events) as MarketEvent[],
-              interval
+              interval,
+              symbol
             )
           });
         else {
@@ -183,9 +190,9 @@ export function startLiveSession(interval: string, deps: LiveDependencies = defa
       try {
         if (!cursor) {
           if (kind === "market") {
-            const snapshot = await deps.snapshot(interval, controller.signal);
+            const snapshot = await deps.snapshot(symbol, interval, controller.signal);
             if (stopped || own !== epoch) return;
-            useTerminalStore.setState({ market: marketFromSnapshot(snapshot, interval) });
+            useTerminalStore.setState({ market: marketFromSnapshot(snapshot, interval, symbol) });
             cursor = snapshot.cursor;
           } else {
             const account = await deps.account(controller.signal);
@@ -195,7 +202,7 @@ export function startLiveSession(interval: string, deps: LiveDependencies = defa
         }
         if (stopped || own !== epoch) return;
         const opened = deps.source(
-          `/api/stream/${kind}?symbol=BTCUSDT&interval=${encodeURIComponent(interval)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`
+          `/api/stream/${kind}?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`
         );
         source = opened;
         const valid = () => !stopped && source === opened && own === epoch;

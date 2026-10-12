@@ -135,6 +135,39 @@ docker run --rm --entrypoint /bin/promtool --mount "type=bind,source=$((Resolve-
 This is rule logic/provisioning acceptance, not chaos testing, notification delivery,
 production throughput or long-run trading acceptance.
 
+## Database Backup And Restore Verification
+
+With the local Timescale Compose service running, create an ignored custom-format
+backup:
+
+```powershell
+pnpm db:backup
+```
+
+Verify it immediately by restoring into a temporary database inside the same
+Timescale service:
+
+```powershell
+pnpm db:backup:verify -- --file backups/<backup-file>.dump
+```
+
+The helper uses `docker compose exec -T timescaledb`, so host PostgreSQL client
+tools are not required. Verification checks that the dump restores and that core
+schema/migration tables are readable, then drops the temporary database. This is
+local restore proof, not a provider nightly schedule, offsite retention policy or
+point-in-time recovery setup. See `docs/backups.md`.
+
+For scheduler integration use:
+
+```powershell
+pnpm db:backup:scheduled
+```
+
+That command creates a timestamped dump, verifies a disposable restore, writes
+ignored evidence under `logs/verification/phase-5/backups/`, and prunes old local
+dumps while keeping seven by default. Configure the external scheduler/provider to
+alert on a nonzero exit and upload the verified dump to private durable storage.
+
 ## Telegram Alerts
 
 After setting `TELEGRAM_BOT_TOKEN` (or `MERIDO_BOT_TOKEN`) in ignored `.env` and

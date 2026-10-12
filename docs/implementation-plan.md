@@ -456,6 +456,7 @@ First implementation slice (2026-10-11): API, continuous public feed, Engine and
 - [ ] **P0** Deploy (Fly.io / Railway / VPS) with HTTPS and secrets via provider secret store
 - [ ] **P1** CD workflow: tag → build → deploy
 - [ ] **P1** Nightly DB backup
+  - Status 2026-10-12: local operator/scheduler backup tooling is implemented. `pnpm db:backup` creates an ignored PostgreSQL custom-format dump from the Compose Timescale service; `pnpm db:backup:verify -- --file <dump>` restores it into a disposable verification database and checks core schema/migration tables before cleanup; `pnpm db:backup:scheduled` combines backup + restore verification + evidence JSON + local retention pruning. Focused script tests pass and one local real backup/restore smoke passed. Keep this item open until it is scheduled in the deployment provider, writes to private durable/offsite storage, alerts on failure and has periodic restore evidence.
 
 **Exit criteria**
 

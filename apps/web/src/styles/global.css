@@ -251,12 +251,35 @@
   height: 100%;
 }
 .market-primary .chart-header {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 .market-primary .chart-header h2 {
   display: inline;
   font-size: 15px;
   margin-right: 12px;
+}
+.instrument-picker {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.instrument-picker select {
+  height: 30px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 28px 0 9px;
+  font: inherit;
+  font-size: 12px;
+  text-transform: none;
+}
+.instrument-picker select:focus-visible {
+  outline: 1px solid var(--green);
+  outline-offset: 2px;
 }
 .market-page-layout aside {
   min-width: 0;

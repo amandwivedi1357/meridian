@@ -12,6 +12,7 @@ pnpm-debug.log*
 Dockerfile.local
 sessions/
 logs/
+backups/
 infra/alertmanager/.local/
 
 # Local Obsidian notes/vault

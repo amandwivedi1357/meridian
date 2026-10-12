@@ -15,6 +15,24 @@ This file is the quick resume point for the project. Use it with `docs/implement
 
 ## New Chat Handoff
 
+Latest Phase5 backup/restore tooling slice (2026-10-12): added
+`scripts/db-backup.cjs` with root commands `pnpm db:backup`,
+`pnpm db:backup:verify -- --file <dump>` and `pnpm db:backup:scheduled`. The helper
+creates ignored PostgreSQL custom-format dumps from the local Compose Timescale
+service, verifies a dump by restoring it into a disposable
+`meridian_restore_verify_*` database inside the same service, checks core tables
+plus `schema_migrations`, writes scheduled-run evidence JSON under ignored
+`logs/verification/phase-5/backups/`, and prunes old local dumps while protecting
+the current verified dump. Focused Node tests cover command construction, argument
+parsing, safe output paths, retention selection and verification SQL shape. A real
+local smoke created `backups/phase5-local-smoke.dump` (11,178,128 bytes) and
+restore verification passed with migrationCount8. Documentation:
+`docs/backups.md`, `scripts/README.md`, `docs/containers.md`. This is local
+operator/scheduler tooling, not offsite retention, PITR, provider secret-store
+integration or deployment acceptance. Next Phase5 backup work is provider
+scheduling/private durable upload/remote retention/failure alert wiring around this
+runner.
+
 Latest container observability slice (2026-10-11): completed the three requested
 items locally—profile-aware Docker-DNS runtime scrapes,missing Web/probe/ledger
 failure coverage,and actual Grafana/Telegram verification. New generator:
@@ -38,8 +56,9 @@ tests) pass. API/Web images rebuilt;shared API/feed/storage/control/host scraper
 unchanged. Existing Grafana provider may load new dashboard but container panels
 need deliberate container-stack deployment. Usage/scope:docs/containers.md.
 
-Next recommended work:nightly DB backup with actual disposable restore verification;
-HTTPS/provider secret-store deployment and CD afterward. Full TRD/every-service/
+Next recommended work:provider scheduling/private durable upload/remote retention
+and failure alerting around the restore-verified backup runner;HTTPS/provider
+secret-store deployment and CD afterward. Full TRD/every-service/
 production-size telemetry,tracing/Sentry,deployed exchange chaos,dedicated-host
 performance and previous long-run gates remain pending. No Phase5 completion claim.
 

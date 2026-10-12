@@ -5,6 +5,11 @@ CD, backups, live trading acceptance and the unresolved dedicated-host latency g
 Node and NGINX base images are pinned by verified registry digest; update those
 digests deliberately and rerun image checks when taking security updates.
 
+Local backup/restore tooling now lives in `scripts/db-backup.cjs` and is documented
+in `docs/backups.md`. It proves a Compose Timescale dump can restore into a
+disposable database, but it does not replace a hosted nightly schedule, offsite
+retention, PITR, provider secret storage or deployment acceptance.
+
 ## Images
 
 `infra/containers/Dockerfile.node` builds API, Ingestor, Engine, Executor and the

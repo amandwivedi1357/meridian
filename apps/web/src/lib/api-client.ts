@@ -172,13 +172,34 @@ export async function logout(): Promise<unknown> {
   return postJson("/api/auth/logout", {});
 }
 export async function getMarketSnapshot(
+  symbol: string,
   interval: string,
   signal?: AbortSignal
 ): Promise<MarketSnapshot> {
   return getJson(
-    `/api/market/snapshot?symbol=BTCUSDT&interval=${encodeURIComponent(interval)}`,
+    `/api/market/snapshot?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`,
     signal
   );
+}
+
+export interface MarketInstrument {
+  readonly symbol: string;
+  readonly baseAsset: string;
+  readonly quoteAsset: string;
+  readonly status: string;
+}
+
+export interface MarketInstrumentsResponse {
+  readonly checkedAt: number;
+  readonly quoteAsset: string;
+  readonly instruments: readonly MarketInstrument[];
+}
+
+export async function getMarketInstruments(
+  quoteAsset = "USDT",
+  signal?: AbortSignal
+): Promise<MarketInstrumentsResponse> {
+  return getJson(`/api/market/instruments?quoteAsset=${encodeURIComponent(quoteAsset)}`, signal);
 }
 
 export interface MarketCandle {

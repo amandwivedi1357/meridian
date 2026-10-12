@@ -127,6 +127,45 @@ describe("market bootstrap", () => {
       await app.close();
     }
   });
+  it("falls back to a REST-only snapshot when public history exists but the stream is absent", async () => {
+    const app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    const feed = source();
+    vi.mocked(feed.captureMarket).mockRejectedValue(new Error("stream_unavailable"));
+    const query = vi.fn(async () => ({ rows: [] }));
+    const recent = vi.fn(async () => [
+      {
+        symbol: "ETHUSDT",
+        interval: "15m",
+        openTimeMs: 900000,
+        closeTimeMs: 1799999,
+        open: "3000",
+        high: "3020",
+        low: "2990",
+        close: "3010",
+        volume: "12.5",
+        closed: true
+      }
+    ]);
+    registerMarketSnapshot(app, { query } as unknown as Pool, feed, async () => depth, recent);
+    try {
+      const result = await app.inject("/api/market/snapshot?symbol=ETHUSDT&interval=15m");
+      expect(result.statusCode).toBe(200);
+      expect(result.json()).toMatchObject({
+        symbol: "ETHUSDT",
+        interval: "15m",
+        cursor: "",
+        trades: [],
+        candles: [{ symbol: "ETHUSDT", close: "3010" }],
+        book: { symbol: "ETHUSDT", lastUpdateId: 100 }
+      });
+      expect(query).not.toHaveBeenCalled();
+      expect(recent).toHaveBeenCalledWith("ETHUSDT", "15m");
+    } finally {
+      await app.close();
+    }
+  });
   it("returns stored candles, synchronized book and a cursor without placing orders", async () => {
     const app = Fastify();
     app.setValidatorCompiler(validatorCompiler);
