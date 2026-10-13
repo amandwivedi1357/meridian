@@ -32,6 +32,7 @@ export function createRiskEngine(options: {
   assertPortfolioPolicy?: () => Promise<void>;
   metricsRegistry?: Registry;
   metricsScope?: "allocated-testnet" | "full-wallet";
+  onMonitorError?: (error: unknown) => void;
 }) {
   const now = options.nowMs ?? Date.now;
   const metrics = options.metricsRegistry
@@ -114,8 +115,9 @@ export function createRiskEngine(options: {
         return reason;
       });
       if (reason !== undefined) await options.killSwitch.engage(reason);
-    } catch {
+    } catch (error) {
       metrics?.clear();
+      options.onMonitorError?.(error);
       await options.killSwitch.engage("risk-monitor-unavailable");
     }
   }

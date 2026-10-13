@@ -161,17 +161,18 @@ describe("live session transport", () => {
     expect(sources.at(-1)?.url).toContain("cursor=applied");
     expect(sources.at(-1)?.url).not.toContain("unapplied");
   });
-  it("gap and server resync clear stale data and obtain fresh bootstrap", async () => {
+  it("gap and server resync keep the last chart visible while obtaining fresh bootstrap", async () => {
     const { deps, sources } = setup();
     await settle();
+    const previous = useTerminalStore.getState().market;
     sources[0]!.emit("market", { events: [depth(20, 20)] });
     await vi.advanceTimersByTimeAsync(16);
-    expect(useTerminalStore.getState().market.book).toBeNull();
+    expect(useTerminalStore.getState().market).toEqual(previous);
     expect(sources[0]!.closed).toBe(true);
     await vi.advanceTimersByTimeAsync(1000);
     expect(deps.snapshot).toHaveBeenCalledTimes(2);
     sources.at(-1)!.emit("resync", { reason: "trimmed" });
-    expect(useTerminalStore.getState().market.book).toBeNull();
+    expect(useTerminalStore.getState().market.book).not.toBeNull();
   });
   it("session expiry closes both streams and clears private account state", async () => {
     const { deps, sources } = setup();
@@ -197,8 +198,9 @@ describe("live session transport", () => {
   it("invalid frames are bounded and trigger recovery", async () => {
     const { sources } = setup();
     await settle();
+    const previous = useTerminalStore.getState().market;
     sources[0]!.emit("market", { events: Array.from({ length: 1001 }, () => depth()) });
     expect(sources[0]!.closed).toBe(true);
-    expect(useTerminalStore.getState().market.book).toBeNull();
+    expect(useTerminalStore.getState().market).toEqual(previous);
   });
 });

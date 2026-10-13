@@ -1,5 +1,6 @@
 import {
   Activity,
+  BarChart3,
   CandlestickChart,
   FlaskConical,
   LayoutDashboard,
@@ -12,6 +13,7 @@ export const pages = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "market", label: "Market", icon: CandlestickChart },
   { id: "trading", label: "Trading", icon: ListOrdered },
+  { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "risk", label: "Risk", icon: ShieldAlert },
   { id: "strategies", label: "Strategies", icon: Workflow },
   { id: "backtests", label: "Backtests", icon: FlaskConical },

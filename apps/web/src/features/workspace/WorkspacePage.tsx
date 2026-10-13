@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Pause, Play, RefreshCw, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Pause, Play, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
 import { Decimal } from "decimal.js";
 import type { PageId } from "../../app/navigation.js";
 import { pages } from "../../app/navigation.js";
@@ -9,10 +9,14 @@ import { ConfirmDialog } from "../../components/terminal/ConfirmDialog.js";
 import { StatusBadge } from "../../components/terminal/StatusBadge.js";
 import {
   ApiError,
+  cancelOrder,
   engageKillSwitch,
+  getAccountSummary,
   getDashboard,
+  getTradingState,
   getWorkspaceSummary,
   type MarketInstrument,
+  type OrderRecord,
   pauseStrategy,
   resumeStrategy
 } from "../../lib/api-client.js";
@@ -21,9 +25,13 @@ import { formatTime, formatUsd, formatSignedUsd } from "../../lib/format.js";
 import { MarketChart } from "../dashboard/MarketChart.js";
 import { SystemHealthPanel } from "../dashboard/SystemHealthPanel.js";
 import { age, sampleFresh } from "../dashboard/health-model.js";
+import { ManualOrderTicket } from "./ManualOrderTicket.js";
 import { activity, openOrders, uncertainOrders } from "./workspace-model.js";
 
-type Action = { kind: "kill" } | { kind: "pause" | "resume"; strategyId: string };
+type Action =
+  | { kind: "kill" }
+  | { kind: "pause" | "resume"; strategyId: string }
+  | { kind: "cancel"; order: OrderRecord };
 function Section({
   title,
   children,
@@ -66,7 +74,7 @@ export function WorkspacePage({
   onRetryInstruments,
   onSymbol
 }: {
-  view: Exclude<PageId, "backtests">;
+  view: Exclude<PageId, "backtests" | "reports">;
   timeframe: string;
   onTimeframe: (value: string) => void;
   symbol: string;
@@ -137,15 +145,28 @@ export function WorkspacePage({
         !operator ||
         !action ||
         !reason.trim() ||
-        (action.kind !== "pause" && confirmation !== (action.kind === "kill" ? "STOP" : "RESUME"))
+        (action.kind !== "pause" &&
+          confirmation !==
+            (action.kind === "kill" ? "STOP" : action.kind === "resume" ? "RESUME" : "CANCEL"))
       )
         throw new Error("Confirmation required");
       if (action.kind === "kill") return engageKillSwitch(reason.trim());
+      if (action.kind === "cancel")
+        return cancelOrder(action.order.clientOrderId, {
+          reason: reason.trim(),
+          confirm: "CANCEL_ORDER"
+        });
       return action.kind === "pause"
         ? pauseStrategy(action.strategyId, reason.trim())
         : resumeStrategy(action.strategyId, reason.trim());
     },
-    onSuccess: () => setAction(null),
+    onSuccess: async () => {
+      if (action?.kind === "cancel") {
+        const [state, summary] = await Promise.all([getTradingState(), getAccountSummary()]);
+        useTerminalStore.setState({ account: { ...state, portfolio: summary.portfolio } });
+      }
+      setAction(null);
+    },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 401)
         useTerminalStore.getState().setSession(null, "required");
@@ -164,6 +185,24 @@ export function WorkspacePage({
   const events = activity(account);
   const orders = openOrders(account);
   const unknown = uncertainOrders(account);
+  const protectedPosition = account?.portfolio?.positions.find((p) => p.symbol === symbol);
+  const lastTradePrice = market.trades.at(-1)?.price ?? null;
+  const liveMarkPrice = protectedPosition?.markPrice ?? lastTradePrice;
+  const liveUnrealizedPnl =
+    protectedPosition?.unrealizedPnl ??
+    estimateSpotPnl(protectedPosition?.quantity, protectedPosition?.avgEntry, liveMarkPrice);
+  const liveReturnPct = estimateSpotReturn(protectedPosition?.avgEntry, liveMarkPrice);
+  const liveNotional = estimateNotional(protectedPosition?.quantity, liveMarkPrice);
+  const activeSymbolOrders = orders.filter((o) => o.symbol === symbol);
+  const recentSymbolFills = (account?.fills ?? [])
+    .filter((f) => f.symbol === symbol)
+    .slice()
+    .sort((a, b) => b.eventTimeMs - a.eventTimeMs)
+    .slice(0, 6);
+  const canCancel = (order: OrderRecord) =>
+    operator &&
+    !control?.engaged &&
+    (order.state === "NEW" || order.state === "PARTIALLY_FILLED" || order.state === "UNKNOWN");
   const status = (value: string, good = value === "available" || value === "live") => (
     <StatusBadge tone={good ? "green" : "amber"}>{value}</StatusBadge>
   );
@@ -316,7 +355,8 @@ export function WorkspacePage({
       "Executed",
       "Price",
       "State",
-      "Updated"
+      "Updated",
+      "Action"
     ];
     rows = (tab === "reconciliation" ? unknown : (account?.orders ?? [])).map((o) => [
       o.clientOrderId,
@@ -330,7 +370,19 @@ export function WorkspacePage({
       o.executedQuantity,
       formatUsd(o.limitPrice),
       o.state,
-      formatTime(o.updatedAtMs)
+      formatTime(o.updatedAtMs),
+      canCancel(o) ? (
+        <button
+          className="terminal-row-action danger"
+          type="button"
+          onClick={() => request({ kind: "cancel", order: o })}
+        >
+          <XCircle size={13} />
+          Cancel
+        </button>
+      ) : (
+        <span className="muted">--</span>
+      )
     ]);
   } else if (tab === "fills") {
     columns = [
@@ -420,7 +472,11 @@ export function WorkspacePage({
               extra={formatUsd(market.trades.at(-1)?.price)}
             >
               <div className="overview-chart">
-                <MarketChart candles={market.candles} baseAsset={baseAsset} />
+                <MarketChart
+                  candles={market.candles}
+                  baseAsset={baseAsset}
+                  fills={(account?.fills ?? []).filter((fill) => fill.symbol === symbol)}
+                />
               </div>
             </Section>
             <Section title="Active strategies">
@@ -500,6 +556,7 @@ export function WorkspacePage({
                 key={`${symbol}:${timeframe}`}
                 baseAsset={baseAsset}
                 candles={market.candles.filter((c) => c.interval === timeframe)}
+                fills={(account?.fills ?? []).filter((fill) => fill.symbol === symbol)}
               />
             </div>
             <Section title="Market data health" extra={refresh}>
@@ -507,6 +564,17 @@ export function WorkspacePage({
             </Section>
           </div>
           <aside>
+            <ManualOrderTicket
+              compact
+              symbol={symbol}
+              baseAsset={baseAsset}
+              quoteAsset={quoteAsset}
+              instruments={instruments}
+              onSymbol={onSymbol}
+              operator={operator}
+              riskEngaged={control?.engaged ?? false}
+              lastPrice={market.trades.at(-1)?.price}
+            />
             <Section title="Order book depth" extra={<small>Limited depth</small>}>
               <DataTable
                 columns={["Side", `Price / ${quoteAsset}`, baseAsset]}
@@ -561,6 +629,168 @@ export function WorkspacePage({
       )}
       {view === "trading" && (
         <>
+          <div className="trading-control-grid">
+            <ManualOrderTicket
+              symbol={symbol}
+              baseAsset={baseAsset}
+              quoteAsset={quoteAsset}
+              instruments={instruments}
+              onSymbol={onSymbol}
+              operator={operator}
+              riskEngaged={control?.engaged ?? false}
+              lastPrice={market.trades.at(-1)?.price}
+            />
+            <section className="protective-order-panel" aria-labelledby="protective-orders-title">
+              <div className="manual-trade-head">
+                <div>
+                  <h2 id="protective-orders-title">Protective orders</h2>
+                  <p>Stop-loss / take-profit automation is not armed yet.</p>
+                </div>
+                <StatusBadge tone="amber">Designing</StatusBadge>
+              </div>
+              <Readings
+                rows={[
+                  ["Symbol", symbol],
+                  [`Managed ${baseAsset}`, protectedPosition?.quantity ?? "--"],
+                  ["Average entry", formatUsd(protectedPosition?.avgEntry)],
+                  ["Mark", formatUsd(liveMarkPrice)],
+                  ["Required before arming", "cancel + reconciliation + trigger monitor"]
+                ]}
+              />
+              <div className="protective-draft-grid">
+                <label className="manual-field">
+                  Stop-loss / {quoteAsset}
+                  <input disabled placeholder="Next slice" />
+                </label>
+                <label className="manual-field">
+                  Take-profit / {quoteAsset}
+                  <input disabled placeholder="Next slice" />
+                </label>
+              </div>
+              <p className="workspace-footnote">
+                For now, close the position manually with an opposite market order. Brackets will be
+                enabled only after durable trigger handling is implemented.
+              </p>
+            </section>
+          </div>
+          <section className="live-trading-cockpit" aria-labelledby="live-trading-title">
+            <div className="live-cockpit-hero">
+              <div>
+                <span className="eyebrow">Live position</span>
+                <h2 id="live-trading-title">{symbol}</h2>
+                <p>
+                  {protectedPosition?.status ?? "No managed position"} /{" "}
+                  {accountFresh ? "account feed live" : "account feed stale"}
+                </p>
+              </div>
+              <div className="live-pnl-stack">
+                <span>Unrealized PnL / {quoteAsset}</span>
+                <strong className={toneForNumber(liveUnrealizedPnl)}>
+                  {formatSignedUsd(liveUnrealizedPnl)}
+                </strong>
+                <em className={toneForNumber(liveReturnPct)}>
+                  {formatSignedPercent(liveReturnPct)} at {formatUsd(liveMarkPrice)}
+                </em>
+              </div>
+            </div>
+            <div className="live-cockpit-grid">
+              <div>
+                <span>Quantity / {baseAsset}</span>
+                <strong>{protectedPosition?.quantity ?? "--"}</strong>
+              </div>
+              <div>
+                <span>Average entry</span>
+                <strong>{formatUsd(protectedPosition?.avgEntry)}</strong>
+              </div>
+              <div>
+                <span>Mark price</span>
+                <strong>{formatUsd(liveMarkPrice)}</strong>
+              </div>
+              <div>
+                <span>Position notional</span>
+                <strong>{formatUsd(liveNotional)}</strong>
+              </div>
+              <div>
+                <span>Realized PnL</span>
+                <strong className={toneForNumber(protectedPosition?.realizedPnl)}>
+                  {formatSignedUsd(protectedPosition?.realizedPnl)}
+                </strong>
+              </div>
+              <div>
+                <span>Working orders</span>
+                <strong>{activeSymbolOrders.length}</strong>
+              </div>
+            </div>
+            <div className="live-cockpit-lanes">
+              <div>
+                <div className="lane-title">
+                  <strong>Working orders</strong>
+                  <small>{activeSymbolOrders.length} active</small>
+                </div>
+                <div className="working-order-stack">
+                  {activeSymbolOrders.length ? (
+                    activeSymbolOrders.slice(0, 5).map((order) => (
+                      <div className="working-order-card" key={order.clientOrderId}>
+                        <div>
+                          <strong className={order.side === "BUY" ? "positive" : "negative"}>
+                            {order.side} {order.type}
+                          </strong>
+                          <span>{order.quantity} requested</span>
+                        </div>
+                        <div>
+                          <span>{order.state}</span>
+                          <strong>{order.executedQuantity} filled</strong>
+                        </div>
+                        <div>
+                          <span>Limit</span>
+                          <strong>{formatUsd(order.limitPrice)}</strong>
+                        </div>
+                        {canCancel(order) ? (
+                          <button
+                            className="terminal-row-action danger"
+                            type="button"
+                            onClick={() => request({ kind: "cancel", order })}
+                          >
+                            <XCircle size={13} />
+                            Cancel
+                          </button>
+                        ) : (
+                          <span className="muted">No action</span>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="terminal-empty compact">No working orders for {symbol}</div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="lane-title">
+                  <strong>Recent fills</strong>
+                  <small>{recentSymbolFills.length} shown</small>
+                </div>
+                <div className="recent-fill-stack">
+                  {recentSymbolFills.length ? (
+                    recentSymbolFills.map((fill) => (
+                      <div
+                        className="recent-fill-row"
+                        key={`${fill.clientOrderId}:${fill.tradeId}`}
+                      >
+                        <time>{formatTime(fill.eventTimeMs)}</time>
+                        <strong className={fill.side === "BUY" ? "positive" : "negative"}>
+                          {fill.side}
+                        </strong>
+                        <span>{fill.quantity}</span>
+                        <span>{formatUsd(fill.price)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="terminal-empty compact">No fills for {symbol}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
           <div className="overview-metrics">
             <div>
               <span>Open orders / loaded</span>
@@ -814,31 +1044,38 @@ export function WorkspacePage({
         title={
           action?.kind === "kill"
             ? "Engage global kill switch"
-            : action?.kind === "resume"
-              ? "Confirm strategy resume"
-              : "Pause strategy"
+            : action?.kind === "cancel"
+              ? "Cancel open order"
+              : action?.kind === "resume"
+                ? "Confirm strategy resume"
+                : "Pause strategy"
         }
         description={
           action?.kind === "resume"
             ? "Strategy execution may resume. The global kill switch remains unchanged."
-            : action?.kind === "kill"
-              ? "Block new execution globally. Existing orders follow executor cancellation handling."
-              : "Pause this strategy."
+            : action?.kind === "cancel"
+              ? "Cancel this exchange order. The order will move through PENDING_CANCEL until Binance/user-data confirms the terminal state."
+              : action?.kind === "kill"
+                ? "Block new execution globally. Existing orders follow executor cancellation handling."
+                : "Pause this strategy."
         }
         confirmLabel={
           action?.kind === "resume"
             ? "Confirm resume"
-            : action?.kind === "kill"
-              ? "Engage kill switch"
-              : "Confirm pause"
+            : action?.kind === "cancel"
+              ? "Cancel order"
+              : action?.kind === "kill"
+                ? "Engage kill switch"
+                : "Confirm pause"
         }
-        tone={action?.kind === "kill" ? "danger" : "primary"}
+        tone={action?.kind === "kill" || action?.kind === "cancel" ? "danger" : "primary"}
         busy={mutation.isPending}
         disabled={
           !operator ||
           !reason.trim() ||
           (action?.kind !== "pause" &&
-            confirmation !== (action?.kind === "kill" ? "STOP" : "RESUME"))
+            confirmation !==
+              (action?.kind === "kill" ? "STOP" : action?.kind === "resume" ? "RESUME" : "CANCEL"))
         }
         onCancel={() => setAction(null)}
         onConfirm={() => mutation.mutate()}
@@ -855,7 +1092,9 @@ export function WorkspacePage({
         </label>
         {action?.kind !== "pause" && (
           <label className="dialog-field">
-            Type {action?.kind === "kill" ? "STOP" : "RESUME"} to confirm
+            Type{" "}
+            {action?.kind === "kill" ? "STOP" : action?.kind === "resume" ? "RESUME" : "CANCEL"} to
+            confirm
             <input
               autoComplete="off"
               value={confirmation}
@@ -872,4 +1111,64 @@ export function WorkspacePage({
       </ConfirmDialog>
     </main>
   );
+}
+
+function estimateSpotPnl(
+  quantity: string | null | undefined,
+  avgEntry: string | null | undefined,
+  markPrice: string | null | undefined
+) {
+  if (!quantity || !avgEntry || !markPrice) return null;
+  try {
+    const qty = new Decimal(quantity);
+    if (qty.isZero()) return "0";
+    return new Decimal(markPrice).minus(avgEntry).mul(qty).toFixed(8);
+  } catch {
+    return null;
+  }
+}
+
+function estimateSpotReturn(
+  avgEntry: string | null | undefined,
+  markPrice: string | null | undefined
+) {
+  if (!avgEntry || !markPrice) return null;
+  try {
+    const entry = new Decimal(avgEntry);
+    if (entry.lte(0)) return null;
+    return new Decimal(markPrice).minus(entry).div(entry).mul(100).toFixed(4);
+  } catch {
+    return null;
+  }
+}
+
+function estimateNotional(
+  quantity: string | null | undefined,
+  markPrice: string | null | undefined
+) {
+  if (!quantity || !markPrice) return null;
+  try {
+    return new Decimal(quantity).abs().mul(markPrice).toFixed(8);
+  } catch {
+    return null;
+  }
+}
+
+function toneForNumber(value: string | null | undefined) {
+  if (!value) return "muted";
+  try {
+    return new Decimal(value).lt(0) ? "negative" : "positive";
+  } catch {
+    return "muted";
+  }
+}
+
+function formatSignedPercent(value: string | null | undefined) {
+  if (!value) return "--";
+  try {
+    const percent = new Decimal(value);
+    return `${percent.gte(0) ? "+" : ""}${percent.toFixed(2)}%`;
+  } catch {
+    return "--";
+  }
 }

@@ -140,11 +140,7 @@ export function startLiveSession(
       });
       if (fresh) {
         cursor = "";
-        useTerminalStore.setState(
-          kind === "market"
-            ? { market: { candles: [], trades: [], book: null, updatedAt: null } }
-            : { account: null }
-        );
+        if (kind === "account") useTerminalStore.setState({ account: null });
       }
       timer = setTimeout(
         () => {

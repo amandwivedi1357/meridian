@@ -290,6 +290,54 @@ export async function getOrders(
   return getJson(`/api/orders?limit=${limit}`, signal);
 }
 
+export interface ManualOrderRequest {
+  readonly symbol: string;
+  readonly side: "BUY" | "SELL";
+  readonly type: "MARKET" | "LIMIT";
+  readonly quantity: string;
+  readonly limitPrice?: string;
+  readonly reason: string;
+  readonly confirm: "QUEUE_MANUAL_ORDER";
+}
+
+export interface ManualOrderResponse {
+  readonly checkedAt: number;
+  readonly stream: "signals";
+  readonly streamId: string;
+  readonly signalId: string;
+  readonly strategyId: "manual";
+  readonly status: "queued";
+}
+
+export async function queueManualOrder(order: ManualOrderRequest): Promise<ManualOrderResponse> {
+  return postJson("/api/orders/manual", order);
+}
+
+export interface CancelOrderRequest {
+  readonly reason: string;
+  readonly confirm: "CANCEL_ORDER";
+}
+
+export interface CancelOrderResponse {
+  readonly checkedAt: number;
+  readonly status: "cancel-requested";
+  readonly order: {
+    readonly clientOrderId: string;
+    readonly symbol: string;
+    readonly state: string;
+    readonly exchangeOrderId: string;
+    readonly executedQuantity: string;
+    readonly cumulativeQuoteQuantity: string;
+  };
+}
+
+export async function cancelOrder(
+  clientOrderId: string,
+  request: CancelOrderRequest
+): Promise<CancelOrderResponse> {
+  return postJson(`/api/orders/${encodeURIComponent(clientOrderId)}/cancel`, request);
+}
+
 export async function getFills(
   limit = 50,
   signal?: AbortSignal

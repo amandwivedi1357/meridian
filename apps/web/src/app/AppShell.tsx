@@ -5,6 +5,7 @@ import { WorkspacePage } from "../features/workspace/WorkspacePage.js";
 import { NavigationRail } from "../components/terminal/NavigationRail.js";
 import { pageFromHash, pages } from "./navigation.js";
 import { BacktestsPage } from "../features/backtests/BacktestsPage.js";
+import { ReportsPage } from "../features/reports/ReportsPage.js";
 import {
   ApiError,
   getMarketInstruments,
@@ -170,6 +171,8 @@ export function AppShell() {
       {session === "ready" ? (
         view === "backtests" ? (
           <BacktestsPage />
+        ) : view === "reports" ? (
+          <ReportsPage />
         ) : (
           <WorkspacePage
             key={view}

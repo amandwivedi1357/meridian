@@ -26,6 +26,10 @@ export function TopBar({
   const stale = market.updatedAt === null || now - market.updatedAt > 15000;
   const connected = !stale && marketConnection === "live" && accountConnection === "live";
   const pnl = account?.portfolio?.totals.find((t) => t.quoteAsset === "USDT")?.realizedPnl;
+  const walletUsdt = account?.portfolio?.wallet?.assets.find((asset) => asset.asset === "USDT");
+  const freeUsdt = walletUsdt?.total ?? null;
+  const equity = account?.portfolio?.equity ?? walletUsdt?.value ?? walletUsdt?.total ?? null;
+  const openBtc = account?.portfolio?.positions.find((position) => position.symbol === "BTCUSDT");
   return (
     <header className="terminal-topbar">
       <div className="topbar-brand">
@@ -40,8 +44,10 @@ export function TopBar({
         </span>
       </div>
       <div className="account-strip">
-        <MetricBadge label="Wallet equity / USDT" value={formatUsd(account?.portfolio?.equity)} />
-        <MetricBadge label="Ledger realized / USDT" value={formatSignedUsd(pnl)} />
+        <MetricBadge label="Equity / USDT" value={formatUsd(equity)} />
+        <MetricBadge label="Free USDT" value={formatUsd(freeUsdt)} />
+        <MetricBadge label="Open BTC" value={openBtc?.quantity ?? "--"} />
+        <MetricBadge label="Realized P/L" value={formatSignedUsd(pnl)} />
       </div>
       <div className={connected ? "connection connected" : "connection disconnected"}>
         <Radio size={14} />

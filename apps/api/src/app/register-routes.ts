@@ -7,6 +7,8 @@ import { registerAccountSummaryRoutes } from "../features/account/account-summar
 import { registerDashboard } from "../features/dashboard/dashboard.js";
 import { registerFillsRoutes } from "../features/fills/fills.js";
 import { registerMarketCandlesRoutes } from "../features/market/candles.js";
+import { registerCancelOrderRoute } from "../features/orders/cancel-order.js";
+import { registerManualOrderRoute } from "../features/orders/manual-order.js";
 import { registerOrdersRoutes } from "../features/orders/orders.js";
 import { registerPositionsRoutes } from "../features/positions/positions.js";
 import { registerRiskControlRoutes } from "../features/risk/risk-control.js";
@@ -48,6 +50,8 @@ export function registerApiRoutes(
   registerMarketCandlesRoutes(server, deps.pool);
   registerTradingState(server, deps.pool);
   registerOrdersRoutes(server, deps.pool);
+  registerCancelOrderRoute(server, deps.pool);
+  registerManualOrderRoute(server, deps.pool, deps.redis);
   registerFillsRoutes(server, deps.pool);
   registerRiskEventsRoutes(server, deps.pool);
   registerRiskStateRoutes(server, deps.pool);

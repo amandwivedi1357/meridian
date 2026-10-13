@@ -192,6 +192,9 @@ export async function runCliMain(): Promise<ExecutorMainResult> {
       config: riskConfig,
       snapshot,
       assertPortfolioPolicy,
+      onMonitorError(error) {
+        logger.error({ err: error }, "risk monitor unavailable; execution blocked");
+      },
       async assertReady() {
         if (tracker === undefined) throw new Error("User-data tracker is not configured");
         await tracker.assertReady();

@@ -96,6 +96,26 @@ const success: Record<string, z.ZodTypeAny> = {
   }),
   "/api/auth/logout": z.object({ loggedOut: z.literal(true) }),
   "/api/orders": z.object({ ...checked, orders: z.array(order).max(100) }),
+  "/api/orders/manual": z.object({
+    ...checked,
+    stream: z.literal("signals"),
+    streamId: text,
+    signalId: text,
+    strategyId: z.literal("manual"),
+    status: z.literal("queued")
+  }),
+  "/api/orders/:clientOrderId/cancel": z.object({
+    ...checked,
+    status: z.literal("cancel-requested"),
+    order: z.object({
+      clientOrderId: text,
+      symbol: text,
+      state: text,
+      exchangeOrderId: text,
+      executedQuantity: amount,
+      cumulativeQuoteQuantity: amount
+    })
+  }),
   "/api/fills": z.object({ ...checked, fills: z.array(fill).max(100) }),
   "/api/risk/events": z.object({ ...checked, events: z.array(event).max(100) }),
   "/api/strategies": z.object({ ...checked, strategies: z.array(strategy).max(100) }),

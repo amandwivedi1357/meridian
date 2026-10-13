@@ -15,17 +15,20 @@ import {
   createChart,
   type IChartApi,
   type ISeriesApi,
+  type SeriesMarker,
   type UTCTimestamp
 } from "lightweight-charts";
-import type { MarketCandle } from "../../lib/api-client.js";
+import type { FillRecord, MarketCandle } from "../../lib/api-client.js";
 import { formatUsd } from "../../lib/format.js";
 
 export function MarketChart({
   candles,
-  baseAsset = "BTC"
+  baseAsset = "BTC",
+  fills = []
 }: {
   candles: readonly MarketCandle[];
   baseAsset?: string;
+  fills?: readonly FillRecord[];
 }) {
   const shell = useRef<HTMLDivElement>(null),
     container = useRef<HTMLDivElement>(null),
@@ -166,6 +169,9 @@ export function MarketChart({
       setHovered(candles.find((c) => c.openTimeMs === hoveredTime.current));
   }, [candles]);
   useEffect(() => {
+    series.current?.setMarkers(executionMarkers(candles, fills));
+  }, [candles, fills]);
+  useEffect(() => {
     series.current?.applyOptions({ visible: mode === "candles" });
     line.current?.applyOptions({ visible: mode === "line" });
   }, [mode]);
@@ -293,5 +299,43 @@ export function MarketChart({
         </div>
       )}
     </div>
+  );
+}
+
+function executionMarkers(
+  candles: readonly MarketCandle[],
+  fills: readonly FillRecord[]
+): SeriesMarker<UTCTimestamp>[] {
+  if (!candles.length || !fills.length) return [];
+  const first = candles[0]!;
+  const last = candles[candles.length - 1]!;
+  const symbol = last.symbol;
+  return fills
+    .filter(
+      (fill) =>
+        fill.symbol === symbol &&
+        fill.eventTimeMs >= first.openTimeMs &&
+        fill.eventTimeMs <= last.closeTimeMs
+    )
+    .map((fill) => {
+      const candle =
+        candles.find(
+          (item) => fill.eventTimeMs >= item.openTimeMs && fill.eventTimeMs <= item.closeTimeMs
+        ) ?? nearestCandle(candles, fill.eventTimeMs);
+      const marker: SeriesMarker<UTCTimestamp> = {
+        time: Math.floor(candle.openTimeMs / 1000) as UTCTimestamp,
+        position: fill.side === "BUY" ? "belowBar" : "aboveBar",
+        color: fill.side === "BUY" ? "#00c896" : "#ff4d6d",
+        shape: fill.side === "BUY" ? "arrowUp" : "arrowDown",
+        text: `${fill.side} ${fill.quantity} @ ${formatUsd(fill.price)}`
+      };
+      return marker;
+    })
+    .sort((a, b) => Number(a.time) - Number(b.time));
+}
+
+function nearestCandle(candles: readonly MarketCandle[], timeMs: number) {
+  return candles.reduce((nearest, candle) =>
+    Math.abs(candle.openTimeMs - timeMs) < Math.abs(nearest.openTimeMs - timeMs) ? candle : nearest
   );
 }
