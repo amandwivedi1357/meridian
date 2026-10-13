@@ -1,5 +1,42 @@
 # Observability
 
+## Local Health And Safety Checkpoint (2026-10-12)
+
+Run `node scripts/verify-local-health.cjs` with API, Vite, public feed, Docker
+storage/Prometheus and the local verified backup available. It reads diagnostics
+and Prometheus without trading mutations, accepting only fresh, finite observed
+storage/ledger/feed/dispatcher/scrape samples, all-active connection readiness,
+successful publication/persistence observations, healthy rule evaluations and
+the current backup due-window state. Evidence is
+`logs/verification/phase-5/local-health.json`. It does not activate intentionally
+stopped Engine/Executor or infer trading permission from readiness. Missing
+optional trading metrics remain unavailable, not zero-filled. This is a
+point-in-time local check, not throughput, soak or full TRD acceptance.
+
+Multi-instrument feed exports `meridian_market_connections` and per-active-symbol
+`meridian_market_connection_ready` / `meridian_market_connection_age_seconds`.
+An invalid/unobserved age is -1. Aggregate `ws_last_message_age_seconds` now uses
+the worst active connection, so the existing stale-data rule covers selected
+instruments, not just BTC. Readiness requires all active sockets OPEN and <=15s
+old plus a valid publisher lease. No-progress detection covers every connection;
+new sockets get 60s before the periodic recovery check. Retired symbol labels are
+removed; retry/shutdown clears active series. Current simultaneous symbols stay
+bounded at four, but historical Prometheus cardinality across user selections is
+subject to its own retention. The current-manager reconnect gauge is summed;
+the existing process-lifetime reconnect counter is unchanged.
+
+Actual viewer BTC/ETH/SOL/BNB charts/live tape/active health and mobile layout pass.
+The local Prometheus initially had only 14 rules loaded; monitoring-only HUP loads
+the existing 16. Three Promtool suites pass. No database or trading service restart.
+274 ingestion/Executor/diagnostics regressions and three verifier tests pass;
+14 opt-in infrastructure tests skipped in that regression invocation.
+Separately, actual isolated Executor simulator chaos passes all eight checks,
+with verified cleanup and no real exchange access:
+`logs/verification/phase-5/executor-chaos-9a8eb5d5a4dd47369502b09656948887/result.json`.
+Shared orders/fills remain zero, durable kill engaged. Full production metrics,
+tracing/error visibility, deployed-image/real exchange faults and long-run gates
+remain distinct. Offsite/cloud work stays user-deferred.
+
 ## Container Observability Checkpoint (2026-10-11)
 
 The three requested container items are implemented and locally verified:

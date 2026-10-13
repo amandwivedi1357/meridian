@@ -28,6 +28,49 @@ async function fixture(
   return server;
 }
 describe("SSE transport", () => {
+  it("releases a market lease if cursor opening fails", async () => {
+    const lease = { refresh: vi.fn(async () => {}), release: vi.fn(async () => {}) };
+    const source = {
+      open: vi.fn(async () => {
+        throw new Error("stream_unavailable");
+      }),
+      read: vi.fn(),
+      close: vi.fn(async () => {})
+    };
+    const claim = vi.fn(async () => lease);
+    const server = await fixture(source, {}, { marketDemand: claim });
+    try {
+      const response = await fetch(`${server.listeningOrigin}/api/stream/market?symbol=ETHUSDT`);
+      expect(response.status).toBe(503);
+      expect(claim).toHaveBeenCalledWith("ETHUSDT");
+      expect(lease.release).toHaveBeenCalledOnce();
+    } finally {
+      await server.close();
+    }
+  });
+  it("renews market demand and releases once after client disconnect", async () => {
+    const lease = { refresh: vi.fn(async () => {}), release: vi.fn(async () => {}) };
+    const source = {
+      open: vi.fn(async () => cursor),
+      read: vi.fn(async () => ({ cursor, events: [] })),
+      close: vi.fn(async () => {})
+    };
+    const server = await fixture(source, {}, { marketDemand: async () => lease });
+    const controller = new AbortController();
+    try {
+      const response = await fetch(`${server.listeningOrigin}/api/stream/market`, {
+        signal: controller.signal
+      });
+      await response.body!.getReader().read();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(lease.refresh).toHaveBeenCalled();
+      controller.abort();
+    } finally {
+      controller.abort();
+      await server.close();
+    }
+    expect(lease.release).toHaveBeenCalledOnce();
+  });
   it("pushes health and visible heartbeats without changing resumable event cursors", async () => {
     const source = {
       open: vi.fn(async () => cursor),

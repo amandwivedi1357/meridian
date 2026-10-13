@@ -77,27 +77,28 @@ export function registerMarketInstrumentsRoutes(
       }
     },
     async (request, reply) => {
-    reply.header("Cache-Control", "no-store");
-    const query = request.query as Record<string, unknown>;
-    const quoteAsset =
-      typeof query.quoteAsset === "string" && /^[A-Z0-9]{2,12}$/.test(query.quoteAsset)
-        ? query.quoteAsset
-        : "USDT";
-    const limit =
-      typeof query.limit === "string" && Number.isSafeInteger(Number(query.limit))
-        ? Number(query.limit)
-        : 200;
-    try {
-      return {
-        checkedAt: Date.now(),
-        quoteAsset: quoteAsset.toUpperCase(),
-        instruments: listSpotInstruments(await loadExchangeInfo(), { quoteAsset, limit })
-      };
-    } catch {
-      return reply.code(503).send({
-        error: "instruments_unavailable",
-        message: "Market instruments are unavailable"
-      });
+      reply.header("Cache-Control", "no-store");
+      const query = request.query as Record<string, unknown>;
+      const quoteAsset =
+        typeof query.quoteAsset === "string" && /^[A-Z0-9]{2,12}$/.test(query.quoteAsset)
+          ? query.quoteAsset
+          : "USDT";
+      const limit =
+        typeof query.limit === "string" && Number.isSafeInteger(Number(query.limit))
+          ? Number(query.limit)
+          : 200;
+      try {
+        return {
+          checkedAt: Date.now(),
+          quoteAsset: quoteAsset.toUpperCase(),
+          instruments: listSpotInstruments(await loadExchangeInfo(), { quoteAsset, limit })
+        };
+      } catch {
+        return reply.code(503).send({
+          error: "instruments_unavailable",
+          message: "Market instruments are unavailable"
+        });
+      }
     }
-  });
+  );
 }

@@ -14,6 +14,7 @@ import {
   type MarketInstrument
 } from "../lib/api-client.js";
 import { startLiveSession } from "../lib/live-session.js";
+import { instrumentCatalog } from "../lib/instrument-catalog.js";
 import { useTerminalStore } from "../lib/terminal-store.js";
 import { LogIn, X } from "lucide-react";
 
@@ -35,6 +36,9 @@ export function AppShell() {
   const [credential, setCredential] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [instrumentError, setInstrumentError] = useState<string | null>(null);
+  const [instrumentsLoading, setInstrumentsLoading] = useState(false);
+  const [instrumentRevision, setInstrumentRevision] = useState(0);
   async function check() {
     const result = await getSession();
     useTerminalStore.getState().setSession(result.principal, "ready");
@@ -75,16 +79,30 @@ export function AppShell() {
   useEffect(() => {
     if (session !== "ready") return;
     const controller = new AbortController();
+    setInstrumentsLoading(true);
+    setInstrumentError(null);
     void getMarketInstruments("USDT", controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
-        setInstruments((current) => (result.instruments.length ? result.instruments : current));
-        if (!result.instruments.some((instrument) => instrument.symbol === symbol))
-          setSymbol(result.instruments[0]?.symbol ?? "BTCUSDT");
+        const catalog = instrumentCatalog(result);
+        setInstruments(catalog);
+        setSymbol((current) =>
+          catalog.some((item) => item.symbol === current) ? current : catalog[0]!.symbol
+        );
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          setInstrumentError(
+            error instanceof ApiError && error.status === 404
+              ? "Instrument catalog unavailable: API update required"
+              : "Instrument list unavailable"
+          );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setInstrumentsLoading(false);
+      });
     return () => controller.abort();
-  }, [session, symbol]);
+  }, [session, instrumentRevision]);
   async function signIn(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -135,6 +153,10 @@ export function AppShell() {
     <div className="terminal-shell">
       <NavigationRail view={view} />
       <TopBar
+        instrumentLabel={(() => {
+          const item = instruments.find((entry) => entry.symbol === symbol);
+          return item ? `${item.baseAsset}/${item.quoteAsset}` : symbol;
+        })()}
         onSignIn={() => {
           setError("");
           setLoginOpen(true);
@@ -156,6 +178,9 @@ export function AppShell() {
             onTimeframe={setInterval}
             symbol={symbol}
             instruments={instruments}
+            instrumentError={instrumentError}
+            instrumentsLoading={instrumentsLoading}
+            onRetryInstruments={() => setInstrumentRevision((value) => value + 1)}
             onSymbol={setSymbol}
           />
         )

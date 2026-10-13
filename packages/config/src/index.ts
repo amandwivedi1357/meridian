@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+export * from "./market-demand.js";
 
 const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3000),

@@ -62,6 +62,7 @@ When progress is reported:
   - Make the monitoring dashboard/API stream selection and soak recording/log paths configurable rather than fixed to BTCUSDT and the Phase 1.5 session.
   - Acceptance: a second supported symbol can run through the same feed, strategy, broker, CLI, and monitoring code with correct assets and filters, without editing production source. Add focused tests for symbol selection, metadata validation, and asset isolation.
   - Fixed BTCUSDT test fixtures may remain; the finishing work concerns production restrictions and duplicated configuration.
+  - Public dashboard subset addressed 2026-10-12: catalog lists200 production USDT spot instruments;authenticated viewer demand opens bounded extra trade/depth/kline subscriptions through the public ingestor. Metadata-based ticker/volume/book/tape labels and visible catalog error/retry implemented;real BTC/ETH/SOL/BNB desktop/mobile live checks pass. This does not generalize Engine/Executor risk or Backtest CLI;those restrictions remain. Legacy storage-count monitor remains explicitly BTCUSDT;per-symbol system-health snapshots and inactive stream/DB retention cleanup remain finishing work.
 
 - [ ] **`observability` / `prototype-gap`: Dashboard is useful for Phase 1.5 monitoring but is hard-coded to BTCUSDT soak paths.**
   - Recorded: 2026-10-05. The dashboard currently reads `market.trade.BTCUSDT`, `sessions/soak/phase-1-5-events.ndjson`, and fixed soak log paths. This is acceptable for the prototype monitor, but not for the eventual Phase 4 dashboard.

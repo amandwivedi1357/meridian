@@ -20,7 +20,10 @@ const mocks = vi.hoisted(() => ({
   reconnect: undefined as undefined | (() => void),
   useRealManager: false,
   sockets: [] as (EventEmitter & { close: () => void })[],
-  socketUrls: [] as string[]
+  socketUrls: [] as string[],
+  subscriptions: [] as string[][],
+  symbolAges: {} as Record<string, number | undefined>,
+  symbolStates: {} as Record<string, string>
 }));
 vi.mock("pg", () => ({
   Pool: class {
@@ -55,6 +58,7 @@ vi.mock("@meridian/binance-client", async (importOriginal) => {
     createStreamConnectionManager: (
       options: Parameters<typeof actual.createStreamConnectionManager>[0]
     ) => {
+      mocks.subscriptions.push(options.subscriptions.map((entry) => entry.streamName));
       if (mocks.useRealManager)
         return actual.createStreamConnectionManager({
           ...options,
@@ -66,6 +70,7 @@ vi.mock("@meridian/binance-client", async (importOriginal) => {
           }
         });
       mocks.reconnect = options.onReconnect;
+      const symbol = options.subscriptions[0]!.streamName.split("@")[0]!.toUpperCase();
       return {
         connect: mocks.socketConnect,
         close: mocks.socketClose,
@@ -75,8 +80,9 @@ vi.mock("@meridian/binance-client", async (importOriginal) => {
         onStateChange: (handler: typeof mocks.state) => {
           mocks.state = handler;
         },
-        getState: () => "OPEN",
-        getLastMessageAgeMs: () => mocks.ageMs,
+        getState: () => mocks.symbolStates[symbol] ?? "OPEN",
+        getLastMessageAgeMs: () =>
+          symbol in mocks.symbolAges ? mocks.symbolAges[symbol] : mocks.ageMs,
         getReconnectCount: () => 0
       };
     }
@@ -85,6 +91,25 @@ vi.mock("@meridian/binance-client", async (importOriginal) => {
 import { dashboardFeedDuration, runDashboardFeed } from "./dashboard-feed.js";
 
 describe("public dashboard feed", () => {
+  it("opens demanded symbols without restarting BTC and closes them after viewers leave", async () => {
+    const controller = new AbortController();
+    let members = ["00000000-0000-0000-0000-000000000000|ETHUSDT"];
+    mocks.command.mockImplementation(async (args: string[]) =>
+      args[3] === "meridian:dashboard:market-demand" ? members : args[0] === "SET" ? "OK" : 1
+    );
+    const run = runDashboardFeed({ signal: controller.signal, log: vi.fn() });
+    await vi.advanceTimersByTimeAsync(2001);
+    expect(mocks.subscriptions).toHaveLength(2);
+    expect(mocks.subscriptions[1]).toContain("ethusdt@trade");
+    expect(mocks.socketConnect).toHaveBeenCalledTimes(2);
+    expect(mocks.socketClose).not.toHaveBeenCalled();
+    members = [];
+    await vi.advanceTimersByTimeAsync(12000);
+    expect(mocks.socketClose).toHaveBeenCalledTimes(1);
+    controller.abort();
+    await run;
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("retains cumulative reconnect counts across supervisor attempts", async () => {
     const registry = new Registry();
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -102,7 +127,9 @@ describe("public dashboard feed", () => {
     expect(await registry.metrics()).toContain("ws_reconnects_total 2");
   });
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance"]
+    });
     vi.clearAllMocks();
     vi.stubEnv("MARKET_DATA_ENV", "production");
     mocks.message = undefined;
@@ -110,7 +137,12 @@ describe("public dashboard feed", () => {
     mocks.useRealManager = false;
     mocks.sockets = [];
     mocks.socketUrls = [];
-    mocks.command.mockImplementation(async (args: string[]) => (args[0] === "SET" ? "OK" : 1));
+    mocks.subscriptions = [];
+    mocks.symbolAges = {};
+    mocks.symbolStates = {};
+    mocks.command.mockImplementation(async (args: string[]) =>
+      args[3] === "meridian:dashboard:market-demand" ? [] : args[0] === "SET" ? "OK" : 1
+    );
     mocks.connect.mockResolvedValue(undefined);
     mocks.close.mockResolvedValue(undefined);
     mocks.start.mockResolvedValue(undefined);
@@ -160,6 +192,69 @@ describe("public dashboard feed", () => {
     expect(onReady).toHaveBeenLastCalledWith(false);
     expect(vi.getTimerCount()).toBe(0);
   });
+  it("cannot hide a stalled selected instrument behind healthy BTC; retires metric labels", async () => {
+    const controller = new AbortController();
+    const registry = new Registry();
+    const onReady = vi.fn();
+    let members = ["00000000-0000-0000-0000-000000000000|ETHUSDT"];
+    mocks.command.mockImplementation(async (args: string[]) =>
+      args[3] === "meridian:dashboard:market-demand" ? members : args[0] === "SET" ? "OK" : 1
+    );
+    mocks.symbolAges.ETHUSDT = 16000;
+    const run = runDashboardFeed({
+      signal: controller.signal,
+      log: vi.fn(),
+      metricsRegistry: registry,
+      onReady
+    });
+    await vi.advanceTimersByTimeAsync(2001);
+    expect(onReady).toHaveBeenLastCalledWith(false);
+    let output = await registry.metrics();
+    expect(output).toContain('meridian_market_connection_ready{symbol="ETHUSDT"} 0');
+    expect(output).toContain("ws_last_message_age_seconds 16");
+    expect(output).toContain("meridian_market_connections 2");
+    mocks.symbolAges.ETHUSDT = 2;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(onReady).toHaveBeenLastCalledWith(true);
+    mocks.symbolStates.ETHUSDT = "BACKOFF";
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(onReady).toHaveBeenLastCalledWith(false);
+    members = [];
+    await vi.advanceTimersByTimeAsync(12000);
+    output = await registry.metrics();
+    expect(output).not.toContain('symbol="ETHUSDT"');
+    expect(output).toContain("meridian_market_connections 1");
+    controller.abort();
+    await run;
+    expect(await registry.metrics()).toContain("meridian_market_connections 0");
+    expect(await registry.metrics()).not.toContain('symbol="BTCUSDT"');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("recovers the entire feed if a demanded socket never makes progress", async () => {
+    mocks.symbolAges.ETHUSDT = undefined;
+    mocks.command.mockImplementation(async (args: string[]) =>
+      args[3] === "meridian:dashboard:market-demand"
+        ? ["00000000-0000-0000-0000-000000000000|ETHUSDT"]
+        : args[0] === "SET"
+          ? "OK"
+          : 1
+    );
+    const registry = new Registry();
+    const run = runDashboardFeed({
+      signal: new AbortController().signal,
+      log: vi.fn(),
+      metricsRegistry: registry
+    });
+    const result = expect(run).rejects.toThrow("no_progress");
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(await registry.metrics()).toContain(
+      'meridian_market_connection_age_seconds{symbol="ETHUSDT"} -1'
+    );
+    await vi.advanceTimersByTimeAsync(115000);
+    await result;
+    expect(mocks.socketClose).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
   it("retains a bounded explicit preview", async () => {
     const run = runDashboardFeed({
@@ -189,7 +284,9 @@ describe("public dashboard feed", () => {
     const run = runDashboardFeed({ signal: new AbortController().signal, log: vi.fn() });
     const result = expect(run).rejects.toThrow("lease_lost");
     await vi.advanceTimersByTimeAsync(1);
-    mocks.command.mockResolvedValue(0);
+    mocks.command.mockImplementation(async (args: string[]) =>
+      args[3] === "meridian:dashboard:market-demand" ? [] : 0
+    );
     await vi.advanceTimersByTimeAsync(10000);
     await result;
     mocks.message?.({ data: "ignored" });

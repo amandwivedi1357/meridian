@@ -20,7 +20,13 @@ import {
 import type { MarketCandle } from "../../lib/api-client.js";
 import { formatUsd } from "../../lib/format.js";
 
-export function MarketChart({ candles }: { candles: readonly MarketCandle[] }) {
+export function MarketChart({
+  candles,
+  baseAsset = "BTC"
+}: {
+  candles: readonly MarketCandle[];
+  baseAsset?: string;
+}) {
   const shell = useRef<HTMLDivElement>(null),
     container = useRef<HTMLDivElement>(null),
     chartRef = useRef<IChartApi>();
@@ -264,7 +270,7 @@ export function MarketChart({ candles }: { candles: readonly MarketCandle[] }) {
           {current?.volume
             ? Number(current.volume).toLocaleString("en-US", { maximumFractionDigits: 3 })
             : "--"}
-          <small>BTC</small>
+          <small>{baseAsset}</small>
         </span>
         <time>
           {current

@@ -266,6 +266,22 @@
   font-size: 10px;
   text-transform: uppercase;
 }
+.instrument-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px;
+  color: var(--red);
+  font-size: 12px;
+}
+.instrument-error button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
 .instrument-picker select {
   height: 30px;
   color: var(--text);
@@ -420,6 +436,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .market-primary .chart-header {
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     padding: 8px 4px;
   }

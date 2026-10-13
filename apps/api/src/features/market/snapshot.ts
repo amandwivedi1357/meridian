@@ -146,7 +146,7 @@ export function registerMarketSnapshot(
           .object({
             symbol: z
               .string()
-              .regex(/^[A-Z0-9]{3,20}$/)
+              .regex(/^[A-Z0-9]{3,30}$/)
               .default("BTCUSDT"),
             interval: z.enum(["1m", "5m", "15m", "1h"]).default("15m")
           })

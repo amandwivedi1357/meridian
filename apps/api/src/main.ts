@@ -13,6 +13,7 @@ import { registerStreams } from "./features/streams/streams.js";
 import { BinanceRestClient, createTestnetTradingClientFromEnv } from "@meridian/binance-client";
 import { registerMarketSnapshot } from "./features/market/snapshot.js";
 import { registerMarketInstrumentsRoutes } from "./features/market/instruments.js";
+import { createMarketDemand } from "./features/market/demand.js";
 import { createRecentHistoryLoader } from "./features/market/recent-history.js";
 import { createPortfolioReader } from "./features/account/portfolio.js";
 import { Decimal } from "@meridian/core";
@@ -217,7 +218,20 @@ const diagnostics = createServiceDiagnostics({
   }
 });
 registerSystemHealth(server, health);
-registerStreams(server, streamSource, { health });
+registerStreams(server, streamSource, {
+  health,
+  marketDemand: createMarketDemand(
+    (args) => redis.withAbortSignal(AbortSignal.timeout(2000)).sendCommand([...args]),
+    async (symbol) =>
+      (await loadMarketMetadata()).symbols.some(
+        (entry) =>
+          entry.symbol === symbol &&
+          entry.status === "TRADING" &&
+          entry.isSpotTradingAllowed &&
+          entry.quoteAsset === "USDT"
+      )
+  )
+});
 const jobPool = new Pool({
   connectionString:
     process.env.DATABASE_URL ?? "postgres://meridian:meridian@localhost:5432/meridian",

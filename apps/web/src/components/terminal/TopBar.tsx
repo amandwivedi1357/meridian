@@ -8,12 +8,14 @@ export function TopBar({
   onSignIn,
   onSignOut,
   busy,
-  pageLabel
+  pageLabel,
+  instrumentLabel = "BTC/USDT"
 }: {
   onSignIn: () => void;
   onSignOut: () => void;
   busy: boolean;
   pageLabel: string;
+  instrumentLabel?: string;
 }) {
   const { principal, market, account, marketConnection, accountConnection } = useTerminalStore();
   const [now, setNow] = useState(Date.now());
@@ -33,7 +35,7 @@ export function TopBar({
       <span className="topbar-page">{pageLabel}</span>
       <div className="ticker-strip">
         <span>
-          <b>BTC/USDT</b>
+          <b>{instrumentLabel}</b>
           {formatUsd(market.trades.at(-1)?.price)}
         </span>
       </div>

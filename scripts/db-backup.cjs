@@ -1,9 +1,11 @@
 /* global __dirname */
-const { createReadStream, createWriteStream } = require("node:fs");
+const { createReadStream } = require("node:fs");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
+const { pipeline, finished } = require("node:stream/promises");
+const { setTimeout, clearTimeout } = require("node:timers");
 
 const root = path.resolve(__dirname, "..");
 const defaults = {
@@ -54,12 +56,17 @@ function parseArgs(argv) {
 }
 
 function parsePositiveInteger(value, name) {
-  if (!/^[1-9]\d*$/.test(value)) throw new Error(`${name} must be a positive integer`);
+  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) > 365)
+    throw new Error(`${name} must be a positive integer no greater than 365`);
   return Number(value);
 }
 
 function stamp(date = new Date()) {
-  return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(/\.\d{3}/, "");
+  return date
+    .toISOString()
+    .replaceAll("-", "")
+    .replaceAll(":", "")
+    .replace(/\.\d{3}/, "");
 }
 
 function defaultBackupPath(repoRoot = root, date = new Date()) {
@@ -67,7 +74,14 @@ function defaultBackupPath(repoRoot = root, date = new Date()) {
 }
 
 function defaultManifestPath(repoRoot = root, date = new Date()) {
-  return path.join(repoRoot, "logs", "verification", "phase-5", "backups", `backup-${stamp(date)}.json`);
+  return path.join(
+    repoRoot,
+    "logs",
+    "verification",
+    "phase-5",
+    "backups",
+    `backup-${stamp(date)}.json`
+  );
 }
 
 function resolveBackupPath(repoRoot, input) {
@@ -122,7 +136,38 @@ function buildRestoreCommand({ composeFile, service, user, database }) {
 function buildSimpleDbCommand({ composeFile, service, user, command, database }) {
   return [
     "docker",
-    [...buildComposePrefix({ composeFile }), service, command, "-U", user, database]
+    [
+      ...buildComposePrefix({ composeFile }),
+      service,
+      command,
+      ...(command === "dropdb" ? ["--force"] : []),
+      "-U",
+      user,
+      database
+    ]
+  ];
+}
+
+function buildRestoreStageCommand({ composeFile, service, user, database }, stage) {
+  const sql =
+    stage === "prepare"
+      ? "CREATE EXTENSION IF NOT EXISTS timescaledb; SELECT timescaledb_pre_restore();"
+      : "SELECT timescaledb_post_restore();";
+  return [
+    "docker",
+    [
+      ...buildComposePrefix({ composeFile }),
+      service,
+      "psql",
+      "-U",
+      user,
+      "-d",
+      database,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-Atc",
+      sql
+    ]
   ];
 }
 
@@ -141,7 +186,13 @@ function buildSqlCheckCommand({ composeFile, service, user, database }) {
     SELECT json_build_object(
       'requiredTablesPresent', bool_and(present),
       'missingTables', coalesce(json_agg(name) FILTER (WHERE NOT present), '[]'::json),
-      'migrationCount', (SELECT count(*) FROM public.schema_migrations)
+      'migrationCount', (SELECT count(*) FROM public.schema_migrations),
+      'restoredCounts', json_build_object(
+        'trades', (SELECT count(*) FROM public.trades),
+        'klines', (SELECT count(*) FROM public.klines),
+        'orders', (SELECT count(*) FROM public.orders),
+        'fills', (SELECT count(*) FROM public.order_fills)
+      )
     )::text
     FROM required_tables;
   `;
@@ -164,10 +215,15 @@ function buildSqlCheckCommand({ composeFile, service, user, database }) {
 }
 
 function safeRestoreDatabaseName(prefix, token = randomUUID()) {
-  if (!/^[a-z_][a-z0-9_]*$/.test(prefix)) throw new Error("Restore database prefix must be a safe SQL identifier");
-  const suffix = token.replaceAll(/[^a-zA-Z0-9]/g, "").slice(0, 24).toLowerCase();
+  if (!/^[a-z_][a-z0-9_]*$/.test(prefix))
+    throw new Error("Restore database prefix must be a safe SQL identifier");
+  const suffix = token
+    .replaceAll(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 24)
+    .toLowerCase();
   const name = `${prefix}_${suffix}`;
-  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(name)) throw new Error("Restore database name must be a safe SQL identifier");
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(name))
+    throw new Error("Restore database name must be a safe SQL identifier");
   return name;
 }
 
@@ -180,32 +236,53 @@ function selectPrunableBackups(entries, keep, protectedPath) {
     .filter((file) => path.resolve(file) !== path.resolve(protectedPath));
 }
 
-function run(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+async function run(command, args, options = {}) {
+  let child;
+  let stderr = "",
+    stdout = "",
+    timedOut = false;
+  const timeout = options.timeoutMs ?? 600000;
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 600000)
+    throw new Error("Invalid backup command deadline");
+  const exit = new Promise((resolve, reject) => {
+    child = spawn(command, args, {
       cwd: root,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"]
     });
-    let stderr = "";
-    let stdout = "";
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      stderr = (stderr + chunk.toString()).slice(-65536);
     });
-    if (options.stdin) options.stdin.pipe(child.stdin);
-    else child.stdin.end();
-    if (options.stdout) child.stdout.pipe(options.stdout);
-    else {
+    if (!options.stdout) {
       child.stdout.on("data", (chunk) => {
-        stdout += chunk.toString();
+        stdout = (stdout + chunk.toString()).slice(-65536);
       });
     }
     child.on("error", reject);
     child.on("close", (code) => {
-      if (code === 0) resolve(stdout.trim());
+      if (timedOut) reject(new Error("Backup command timed out"));
+      else if (code === 0) resolve(stdout.trim());
       else reject(new Error(stderr.trim() || `${command} ${args.join(" ")} exited ${code}`));
     });
   });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    child.kill();
+  }, timeout);
+  const pipes = [];
+  if (options.stdin) pipes.push(pipeline(options.stdin, child.stdin));
+  else child.stdin.end();
+  if (options.stdout) pipes.push(pipeline(child.stdout, options.stdout));
+  try {
+    const values = await Promise.all([exit, ...pipes]);
+    return values[0];
+  } catch (error) {
+    child.kill();
+    await Promise.allSettled([exit, ...pipes]);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function backup(options) {
@@ -222,27 +299,25 @@ async function backup(options) {
       if (error.code !== "ENOENT") throw error;
     });
   const partial = `${output}.partial`;
-  await fs.rm(partial, { force: true });
-  const stream = createWriteStream(partial, { flags: "wx" });
-  const finished = new Promise((resolve, reject) => {
-    stream.on("finish", resolve);
-    stream.on("error", reject);
-  });
+  const handle = await fs.open(partial, "wx", 0o600);
+  const stream = handle.createWriteStream();
   const [command, args] = buildBackupCommand(options);
   try {
     await run(command, args, { stdout: stream });
-    await finished;
-    await fs.rename(partial, output);
+    // Publish without overwriting another writer's completed backup.
+    await fs.link(partial, output);
+    await fs.unlink(partial);
     const stat = await fs.stat(output);
     return { backup: path.relative(root, output), bytes: stat.size, format: "pg_dump-custom" };
   } catch (error) {
     stream.destroy();
+    await finished(stream).catch(() => {});
     await fs.rm(partial, { force: true });
     throw error;
   }
 }
 
-async function verify(options) {
+async function verify(options, execute = run) {
   const file = resolveBackupPath(root, options.file);
   await fs.access(file);
   const restoreDb = safeRestoreDatabaseName("meridian_restore_verify");
@@ -258,36 +333,53 @@ async function verify(options) {
   });
   let cleanup = false;
   try {
-    await run(...create);
+    await execute(...create);
     cleanup = true;
-    await run(...buildRestoreCommand({ ...options, database: restoreDb }), {
+    await execute(...buildRestoreStageCommand({ ...options, database: restoreDb }, "prepare"));
+    await execute(...buildRestoreCommand({ ...options, database: restoreDb }), {
       stdin: createReadStream(file)
     });
-    const raw = await run(...buildSqlCheckCommand({ ...options, database: restoreDb }));
+    await execute(...buildRestoreStageCommand({ ...options, database: restoreDb }, "finish"));
+    const raw = await execute(...buildSqlCheckCommand({ ...options, database: restoreDb }));
     const checks = JSON.parse(raw);
-    if (!checks.requiredTablesPresent) {
-      throw new Error(`Restore verification missing tables: ${checks.missingTables.join(", ")}`);
+    if (
+      !checks.requiredTablesPresent ||
+      !Number.isSafeInteger(Number(checks.migrationCount)) ||
+      Number(checks.migrationCount) < 1
+    ) {
+      throw new Error("Restore verification requires core tables and migration metadata");
     }
     return {
       backup: path.relative(root, file),
       restoreDatabase: restoreDb,
       migrationCount: Number(checks.migrationCount),
-      requiredTablesPresent: true
+      requiredTablesPresent: true,
+      restoredCounts: checks.restoredCounts
     };
   } finally {
     if (cleanup) {
-      await run(...drop).catch(() => {});
+      // Failed cleanup is a failed verification, never a successful backup milestone.
+      await execute(...drop);
     }
   }
 }
 
 async function pruneLocalBackups(directory, keep, protectedPath) {
+  const relative = path.relative(path.join(root, "backups"), path.resolve(directory));
+  if (relative.startsWith("..") || path.isAbsolute(relative))
+    throw new Error("Retention must stay inside backups");
+  const realRelative = path.relative(
+    await fs.realpath(path.join(root, "backups")),
+    await fs.realpath(directory)
+  );
+  if (realRelative.startsWith("..") || path.isAbsolute(realRelative))
+    throw new Error("Retention directory resolves outside backups");
   const entries = await fs
     .readdir(directory, { withFileTypes: true })
     .then(async (items) =>
       Promise.all(
         items
-          .filter((item) => item.isFile())
+          .filter((item) => item.isFile() && /^meridian-\d{8}T\d{6}Z\.dump$/.test(item.name))
           .map(async (item) => {
             const fullPath = path.join(directory, item.name);
             const stat = await fs.stat(fullPath);
@@ -320,6 +412,7 @@ async function scheduled(options) {
     format: backupResult.format,
     restoreVerified: verifyResult.requiredTablesPresent,
     migrationCount: verifyResult.migrationCount,
+    restoredCounts: verifyResult.restoredCounts,
     keepLocal: options.keepLocal,
     pruned
   };
@@ -351,7 +444,13 @@ module.exports = {
   parseArgs,
   resolveBackupPath,
   safeRestoreDatabaseName,
-  selectPrunableBackups
+  selectPrunableBackups,
+  scheduled,
+  verify,
+  run,
+  buildRestoreStageCommand,
+  buildSimpleDbCommand,
+  pruneLocalBackups
 };
 
 if (require.main === module) {

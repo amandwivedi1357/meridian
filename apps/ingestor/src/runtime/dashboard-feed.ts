@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { demandedMarketSymbols, marketDemandKey, readMarketDemandScript } from "@meridian/config";
 import { Pool } from "pg";
 import { createClient } from "redis";
 import {
@@ -86,6 +87,32 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
       help: "Reconnect attempts in the current upstream connection manager (resets per retry)",
       registers: [registry]
     });
+  const symbolAge =
+    (registry.getSingleMetric("meridian_market_connection_age_seconds") as Gauge | undefined) ??
+    new Gauge({
+      name: "meridian_market_connection_age_seconds",
+      help: "Latest upstream message age per active public instrument; -1 means unobserved",
+      labelNames: ["symbol"],
+      registers: [registry]
+    });
+  const symbolReady =
+    (registry.getSingleMetric("meridian_market_connection_ready") as Gauge | undefined) ??
+    new Gauge({
+      name: "meridian_market_connection_ready",
+      help: "Active public connection is OPEN with a message age no greater than 15 seconds",
+      labelNames: ["symbol"],
+      registers: [registry]
+    });
+  const activeConnections =
+    (registry.getSingleMetric("meridian_market_connections") as Gauge | undefined) ??
+    new Gauge({
+      name: "meridian_market_connections",
+      help: "Current public-feed connections; at most four, not a historical symbol count",
+      registers: [registry]
+    });
+  symbolAge.reset();
+  symbolReady.reset();
+  activeConnections.set(0);
   const latency =
     (registry.getSingleMetric("ingestor_operation_duration_ms") as Histogram | undefined) ??
     new Histogram({
@@ -103,21 +130,47 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
   const done = new Promise<void>((resolve) => {
     finish = resolve;
   });
-  const manager = createStreamConnectionManager({
-    onReconnect: () => reconnectTotal.inc(),
-    environment: "production",
-    subscriptions: [
-      tradeStream("BTCUSDT"),
-      depthStream("BTCUSDT"),
-      ...(["1m", "5m", "15m", "1h"] as const).map((interval) => klineStream("BTCUSDT", interval))
-    ]
-  });
+  const makeManager = (symbol: string) =>
+    createStreamConnectionManager({
+      onReconnect: () => reconnectTotal.inc(),
+      environment: "production",
+      subscriptions: [
+        tradeStream(symbol),
+        depthStream(symbol),
+        ...(["1m", "5m", "15m", "1h"] as const).map((interval) => klineStream(symbol, interval))
+      ]
+    });
+  const manager = makeManager("BTCUSDT");
+  const managers = new Map([["BTCUSDT", manager]]);
+  const connectionStartedAt = new Map([["BTCUSDT", performance.now()]]);
+  const lastDemand = new Map<string, number>();
+  function sample() {
+    let ready = !stopping && performance.now() < leaseDeadline;
+    let worstAge = 0;
+    let unobserved = false;
+    let attempts = 0;
+    for (const [symbol, connection] of managers) {
+      const lastAge = connection.getLastMessageAgeMs();
+      const validAge = lastAge !== undefined && Number.isFinite(lastAge) && lastAge >= 0;
+      const connectionReady = validAge && lastAge <= 15000 && connection.getState() === "OPEN";
+      symbolAge.set({ symbol }, validAge ? lastAge / 1000 : -1);
+      symbolReady.set({ symbol }, stopping ? 0 : Number(connectionReady));
+      ready &&= connectionReady;
+      unobserved ||= !validAge;
+      if (validAge) worstAge = Math.max(worstAge, lastAge);
+      attempts += connection.getReconnectCount();
+    }
+    age.set(unobserved ? -1 : worstAge / 1000);
+    reconnects.set(attempts);
+    activeConnections.set(stopping ? 0 : managers.size);
+    options.onReady?.(ready);
+  }
   function stop(reason?: string) {
     if (stopping) return;
     stopping = true;
     failure = reason;
     options.onReady?.(false);
-    manager.close();
+    for (const connection of managers.values()) connection.close();
     finish();
   }
   const redis = createClient({
@@ -163,6 +216,8 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
   let progressTimer: NodeJS.Timeout | undefined;
   let durationTimer: NodeJS.Timeout | undefined;
   let metricsTimer: NodeJS.Timeout | undefined;
+  let demandTimer: NodeJS.Timeout | undefined;
+  let checkingDemand = false;
   const counts = { trade: 0, depth: 0, kline: 0 };
   const abort = () => stop();
   options.signal.addEventListener("abort", abort, { once: true });
@@ -191,47 +246,82 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
     }, 10000);
     await app.start();
     if (options.signal.aborted || stopping) return;
-    manager.onMessage((message) => {
-      const receivedAtMs = performance.now();
-      if (stopping) return;
-      if (performance.now() >= leaseDeadline) {
-        stop("dashboard_feed_lease_expired");
-        return;
-      }
-      if (backlog >= 1000) {
-        rejected.inc();
-        stop("dashboard_feed_backlog_capacity");
-        return;
-      }
-      backlog++;
-      queue.set(backlog);
-      const work = app
-        .ingest(message.data, receivedAtMs)
-        .then((result) => {
-          latency.observe(performance.now() - receivedAtMs);
-          counts[result.event.kind]++;
-        })
-        .catch(() => stop("dashboard_feed_ingest_failed"))
-        .finally(() => {
-          backlog--;
-          queue.set(backlog);
-          pending.delete(work);
+    const watch = (symbol: string, connection: typeof manager) => {
+      if (symbol !== "BTCUSDT")
+        connection.onStateChange((event) => {
+          if (managers.get(symbol) !== connection) return;
+          if (event.state !== "OPEN") options.onReady?.(false);
+          if (event.state === "STALE") stop("dashboard_feed_stale");
         });
-      pending.add(work);
-    });
-    manager.connect();
-    const sample = () => {
-      const lastAge = manager.getLastMessageAgeMs();
-      age.set(lastAge === undefined ? -1 : lastAge / 1000);
-      reconnects.set(manager.getReconnectCount());
-      options.onReady?.(
-        !stopping &&
-          manager.getState() === "OPEN" &&
-          lastAge !== undefined &&
-          lastAge <= 15000 &&
-          performance.now() < leaseDeadline
-      );
+      connection.onMessage((message) => {
+        const receivedAtMs = performance.now();
+        if (stopping || managers.get(symbol) !== connection) return;
+        if (performance.now() >= leaseDeadline) {
+          stop("dashboard_feed_lease_expired");
+          return;
+        }
+        if (backlog >= 1000) {
+          rejected.inc();
+          stop("dashboard_feed_backlog_capacity");
+          return;
+        }
+        backlog++;
+        queue.set(backlog);
+        const work = app
+          .ingest(message.data, receivedAtMs)
+          .then((result) => {
+            latency.observe(performance.now() - receivedAtMs);
+            counts[result.event.kind]++;
+          })
+          .catch(() => stop("dashboard_feed_ingest_failed"))
+          .finally(() => {
+            backlog--;
+            queue.set(backlog);
+            pending.delete(work);
+          });
+        pending.add(work);
+      });
     };
+    watch("BTCUSDT", manager);
+    manager.connect();
+    demandTimer = setInterval(() => {
+      if (stopping || checkingDemand) return;
+      checkingDemand = true;
+      void command(["EVAL", readMarketDemandScript, "1", marketDemandKey])
+        .then((value) => {
+          if (stopping) return;
+          const wanted = demandedMarketSymbols(value);
+          const missing = wanted.filter((symbol) => !managers.has(symbol)).length;
+          for (const symbol of wanted) lastDemand.set(symbol, performance.now());
+          for (const [symbol, connection] of managers)
+            if (!wanted.includes(symbol)) {
+              if (
+                managers.size + missing <= 4 &&
+                performance.now() - (lastDemand.get(symbol) ?? 0) < 10000
+              )
+                continue;
+              managers.delete(symbol);
+              connectionStartedAt.delete(symbol);
+              lastDemand.delete(symbol);
+              symbolAge.remove({ symbol });
+              symbolReady.remove({ symbol });
+              connection.close();
+            }
+          for (const symbol of wanted)
+            if (!managers.has(symbol)) {
+              const connection = makeManager(symbol);
+              managers.set(symbol, connection);
+              connectionStartedAt.set(symbol, performance.now());
+              watch(symbol, connection);
+              connection.connect();
+            }
+          sample();
+        })
+        .catch(() => stop("dashboard_feed_demand_failed"))
+        .finally(() => {
+          checkingDemand = false;
+        });
+    }, 2000);
     sample();
     metricsTimer = setInterval(sample, 5000);
     if (durationMs !== undefined) durationTimer = setTimeout(() => stop(), durationMs);
@@ -244,11 +334,15 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
         ageMs: manager.getLastMessageAgeMs(),
         reconnects: manager.getReconnectCount()
       });
-      if (
-        manager.getLastMessageAgeMs() === undefined ||
-        (manager.getLastMessageAgeMs() ?? 0) > 60000
-      )
-        stop("dashboard_feed_no_progress");
+      for (const [symbol, connection] of managers) {
+        const lastAge = connection.getLastMessageAgeMs();
+        if (
+          (lastAge === undefined &&
+            performance.now() - connectionStartedAt.get(symbol)! >= 60000) ||
+          (lastAge !== undefined && (!Number.isFinite(lastAge) || lastAge < 0 || lastAge > 60000))
+        )
+          stop("dashboard_feed_no_progress");
+      }
     }, 60000);
     log({
       kind: "public_dashboard_feed_started",
@@ -260,10 +354,16 @@ export async function runDashboardFeed(options: DashboardFeedOptions): Promise<v
     await done;
   } finally {
     stop();
+    symbolAge.reset();
+    symbolReady.reset();
+    activeConnections.set(0);
+    age.set(-1);
+    reconnects.set(0);
     options.signal.removeEventListener("abort", abort);
     clearInterval(leaseTimer);
     clearInterval(progressTimer);
     clearInterval(metricsTimer);
+    clearInterval(demandTimer);
     clearTimeout(durationTimer);
     await Promise.allSettled([...pending]);
     await app.drain?.().catch(() => {

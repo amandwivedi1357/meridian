@@ -4,6 +4,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { currentPrincipal } from "../../app/auth.js";
 import type { StreamSource, StreamTopic } from "./stream-source.js";
 import type { HealthReader } from "../health/system-health.js";
+import type { MarketDemandLease } from "../market/demand.js";
 
 export function registerStreams(
   server: FastifyInstance,
@@ -15,6 +16,7 @@ export function registerStreams(
     maxBufferedBytes?: number;
     health?: HealthReader;
     healthIntervalMs?: number;
+    marketDemand?: (symbol: string) => Promise<MarketDemandLease>;
   } = {}
 ) {
   const app = server.withTypeProvider<ZodTypeProvider>();
@@ -56,13 +58,16 @@ export function registerStreams(
           interval: request.query.interval
         };
         let cursor: string;
+        let demand: MarketDemandLease | undefined;
         opening++;
         try {
+          if (kind === "market") demand = await options.marketDemand?.(topic.symbol);
           cursor = await source.open(
             topic,
             request.headers["last-event-id"] ?? request.query.cursor
           );
         } catch (error) {
+          await demand?.release().catch(() => {});
           const reason = error instanceof Error ? error.message : "stream_unavailable";
           return reply
             .code(reason.includes("cursor") ? 409 : 503)
@@ -70,7 +75,10 @@ export function registerStreams(
         } finally {
           opening--;
         }
-        if (request.raw.destroyed) return;
+        if (request.raw.destroyed) {
+          await demand?.release().catch(() => {});
+          return;
+        }
         reply.hijack();
         const raw = reply.raw;
         raw.writeHead(200, {
@@ -89,6 +97,7 @@ export function registerStreams(
           clearTimeout(timer);
           clearInterval(heartbeat);
           clearInterval(healthTimer);
+          void demand?.release().catch(() => {});
           clients.delete(close);
           raw.off("close", close);
           raw.off("error", close);
@@ -114,7 +123,10 @@ export function registerStreams(
         const expiresAt = currentPrincipal(request)?.expiresAtMs;
         heartbeat = setInterval(() => {
           if (expiresAt && Date.now() >= expiresAt) close();
-          else write(`event: heartbeat\ndata: {"checkedAt":${Date.now()}}\n\n`);
+          else {
+            void demand?.refresh().catch(() => close());
+            write(`event: heartbeat\ndata: {"checkedAt":${Date.now()}}\n\n`);
+          }
         }, options.heartbeatMs ?? 15000);
         if (kind === "account" && options.health) {
           let sampling = false;

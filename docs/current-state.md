@@ -15,6 +15,107 @@ This file is the quick resume point for the project. Use it with `docs/implement
 
 ## New Chat Handoff
 
+User scope decision (2026-10-12): keep the project local-first for now. Cloud/VPS
+deployment,public HTTPS/provider secret stores,deploy-CD and provider/offsite backup
+integration are deferred,not completed and not prerequisites for a local prototype
+milestone. Do not provision cloud resources or revive deployment work unless the
+user asks. Windows nightly backup scheduling plus failure alerts are now locally
+verified (checkpoint below). Next: remaining local health/metrics and isolated
+safety verification. Local tracing/error visibility can follow. Original
+performance targets,long-run gates and dedicated-host evidence remain unchanged;
+do not resume laptop tuning or claim full Phase5 production acceptance. Earlier
+provider/deployment "next work" entries below are historical and superseded here.
+
+Local health/metrics and safety checkpoint (2026-10-12): fixed a multi-instrument
+blind spot in the public feed. Aggregate message age now reflects the worst active
+connection (unobserved/invalid age is -1); readiness requires every active connection
+OPEN/fresh plus the ownership deadline. Per-active-symbol age/readiness and current
+connection count are exported, retired labels removed and retry/shutdown gauges
+cleared. A demanded socket with no progress gets bounded supervisor recovery;
+new connections get a 60s grace before the periodic no-progress check. Maximum
+four active connections remains unchanged; Prometheus historical series retention
+is separate and symbol switching is not a global lifetime-cardinality guarantee.
+
+Verification: 274 tests across 56 passing files (14 opt-in infrastructure tests
+skipped in that invocation), plus three local-health verifier tests pass; ingestor
+build/typecheck and affected lint pass. Actual isolated full Executor chaos rerun
+passes eight checks: duplicate-send/fill protection, write-ahead, crash recovery,
+Redis/network fail-closed, durable kill/cancellation and SIGTERM. Two simulated
+orders, one send each, one fill/cancellation, zero unexpected requests/write-ahead
+violations; cleanup complete. Evidence:
+`logs/verification/phase-5/executor-chaos-9a8eb5d5a4dd47369502b09656948887/result.json`.
+No real exchange/trading activation; shared DB orders/fills=0/0, global kill=true.
+
+New read-only `node scripts/verify-local-health.cjs` passes actual API/feed live+ready,
+Web, Redis/Timescale availability, fresh storage/ledger/scrape data, dispatcher,
+observed bus/persistence samples, active connection metrics and verified backup
+due window. Existing Prometheus was still evaluating 14 rules; monitoring-only HUP
+loads all 16, now healthy, and all three Promtool suites pass. Initial missing-rule
+verification failure was not a pass. Feed task alone refreshed (Windows termination
+is not graceful SIGTERM evidence); API/trading/storage unchanged. Evidence:
+`logs/verification/phase-5/local-health.json`. Real viewer browser BTC/ETH/SOL/BNB
+switching, active connection readiness, live tape, nonblank charts and mobile layout
+pass with zero trading mutations; `logs/verification/instruments/browser.json`.
+Engine/Executor targets intentionally down are reported unavailable, not green.
+
+This completes this local health/safety checkpoint, not all Phase5/TRD coverage,
+production performance, unmodified deployed-image/real-exchange faults or long-run
+gates. Next local work is tracing/error visibility (OpenTelemetry/Sentry scope),
+with external destinations/credentials requiring separate configuration. Cloud and
+offsite deployment stay deferred; no more laptop performance tuning.
+
+Local nightly backup checkpoint (2026-10-12): installed current-user Windows tasks
+`Meridian Nightly Database Backup` (03:00 Dubai plus login catch-up; three 5-minute
+failure retries) and `Meridian Backup Health Check` (30-minute checks plus login).
+No password stored, wake timer, cloud provisioning or trading activation. Runner
+uses exclusive locks, atomic durable status/outbox, same-window skip, latest dump
+header/size checks and seven timestamped-dump retention; manual archives untouched.
+Timescale pre/post-restore hooks run only in generated disposable databases;
+cleanup failure fails verification. Interrupted/failed/missed runs alert directly
+through private Telegram config, independently of Docker. Missed window grace is
+two hours; repeated unchanged failures are quiet, failed delivery retries later.
+
+Verification: 18 focused Node tests; two actual local dumps restored with 8
+migrations and approximately 832k trades. Truncated archive rejected, disposable
+database cleanup checked, exactly two labeled Telegram test messages API-accepted
+(failure/recovery, not proof of human receipt). Installed scheduled first run exit
+0: 10,234,741-byte dump, 832,613 trades, 4,900 candles, zero orders/fills. Evidence:
+`logs/verification/phase-5/backups/check-d850cada-b8b7-4aaf-a902-85a6286becde/result.json`
+and `logs/verification/phase-5/backups/local/status.json`. No real due-night window
+or laptop-outage recovery claimed; laptop must be awake/logged in, Docker ready.
+Stale locks require operator review; see `docs/backups.md`. Source DB is only read,
+temporary restore DBs consume local IO/disk. Offsite/PITR/provider deployment and
+full Phase5 production acceptance remain deferred/pending, not passed.
+
+Instrument picker/live-feed fix (2026-10-12): actual running API returned404 for
+/api/market/instruments despite committed source route;compiled API was stale.
+Rebuilt/refreshed only idle API and public-feed scheduled task;Vite stays5173.
+Catalog now returns200 actual production USDT spot instruments. UI exposes failed/
+empty catalog with retry instead of silently leaving BTC-only fallback. Selected
+asset metadata drives ticker,chart volume,book and tape units;mobile picker fits.
+
+Public-only on-demand subscriptions use authenticated SSE viewer leases in Redis,
+validated against exchange metadata. Shared Lua protocol uses Redis TIME,45s
+renewal expiry,600 viewer cap and maximum3 extra symbols plus permanentBTC.
+Ingestor reconciles every2s,shares existing1000-event queue/2000-per-stream retention;
+idle sockets get up to10s handoff grace and are evicted sooner for capacity.
+Disconnect releases only its viewer lease;server/process failure expires demand.
+No Engine/Executor/trading allocation changes,order placement or recording enabled.
+
+Verification:69 targeted tests pass;real disposable Redis capacity/shared-viewer/
+renewal/release/expiry checks pass. Real viewer browser verifies failure->retry,
+200 instruments,BTC/ETH/SOL/BNB switching,live trades,nonblank desktop charts and
+390px layout;screenshots/reports under logs/verification/instruments. Zero trading
+control mutations;public-feed readiness200. API/ingestor/Web builds and affected
+lint pass. Harnesses:verify-market-demand.cjs and web/scripts/verify-instruments.cjs.
+Trading/backtesting remain BTC prototype scope;multi-asset trading not implemented.
+Legacy storage-count monitor explicitly labels BTCUSDT;selected-symbol stream
+counts may be unavailable in the fixed system-health snapshot. Idle Redis/DB
+retention cleanup remains separate finishing work;bounded active sockets/per-stream
+history do not imply a global memory bound. No commit requested/made. Existing
+restore-verified backup checkpoint and next provider-scheduling/deployment work
+below remain unchanged;this was a user-requested public-instrument detour.
+
 Latest Phase5 backup/restore tooling slice (2026-10-12): added
 `scripts/db-backup.cjs` with root commands `pnpm db:backup`,
 `pnpm db:backup:verify -- --file <dump>` and `pnpm db:backup:scheduled`. The helper

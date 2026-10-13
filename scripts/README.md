@@ -11,6 +11,22 @@ Binance API keys. Sessions expire after 15 minutes; no trading services are star
 
 ## Continuous Dashboard Market Feed (Windows)
 
+Instrument support (2026-10-12): public catalog returns up to200 production USDT
+spot instruments. Selected-symbol SSE viewers acquire validated expiring Redis
+leases. Ingestor keeps BTC and at most3 extra symbols with trade/depth/1m/5m/15m/1h
+streams;refresh2s,idle grace<=10s,lease expiry45s. This is public market data only,
+not multi-asset trading/backtesting. Active connections/queue/per-stream history
+are bounded;inactive stored-stream/DB cleanup is a separate retention concern.
+
+`node scripts/verify-market-demand.cjs` tests atomic Lua capacity/shared-viewer/
+renewal/release/expiry in disposable Redis and removes only its labeled fixture.
+With API/Vite/feed running,`node apps/web/scripts/verify-instruments.cjs` checks
+visible catalog error/retry,real BTC/ETH/SOL/BNB live switching,chart pixels and
+desktop/mobile layout as viewer. No trading controls/orders;reports/screenshots
+are under ignored logs/verification/instruments. If committed API routes return404,
+rebuild API and restart its idle process;building alone does not replace running
+JavaScript. Refresh public-feed task after ingestor builds,not a second producer.
+
 Normal dashboard ingestion no longer has a one-hour lifetime. It uses public production
 BTCUSDT trades, depth and 1m/5m/15m/1h candles; it never starts the trading engine,
 executor or session recorder. Redis streams retain approximately 2,000 entries each;
@@ -116,6 +132,26 @@ The current UI has Overview, Market, Trading, Risk, Strategies, Backtests and Sy
 
 ## Phase 5 Observability Verification
 
+Read-only local health/metric acceptance (does not start trading services):
+
+```powershell
+node scripts/verify-local-health.cjs
+node --test scripts/verify-local-health.test.cjs
+```
+
+Checks API/feed diagnostics, Web, actual fresh Prometheus storage/ledger/dispatcher/
+active-instrument metrics, loaded rules and current restore-verified backup state.
+Requires local dependencies and a recent backup; not a soak/performance or full
+TRD gate. Evidence: `logs/verification/phase-5/local-health.json`. Intentionally
+inactive Engine/Executor remain unavailable, not green. See `docs/observability.md`.
+
+Local backup automation: `pnpm db:backup:install` installs current-user hidden
+Windows tasks (03:00 Dubai backup and 30-minute health checks, both with login
+catch-up). `pnpm db:backup:local`, `pnpm db:backup:check`, and
+`pnpm db:backup:status` operate the durable local runner. Details, prerequisites,
+task removal, stale-lock recovery and bounded Telegram verification:
+`docs/backups.md`. No cloud deployment, offsite upload or trading is enabled.
+
 With the API, public feed, Prometheus and Grafana running, set `GRAFANA_VERIFY_PASSWORD`
 in the verification shell (and optionally `GRAFANA_VERIFY_USER`, default `admin`) and
 run `node scripts/verify-observability.cjs`. It checks actual active API/feed scraper
@@ -165,8 +201,8 @@ pnpm db:backup:scheduled
 
 That command creates a timestamped dump, verifies a disposable restore, writes
 ignored evidence under `logs/verification/phase-5/backups/`, and prunes old local
-dumps while keeping seven by default. Configure the external scheduler/provider to
-alert on a nonzero exit and upload the verified dump to private durable storage.
+dumps while keeping seven by default. The local Windows wrapper adds failure
+alerts; provider/offsite upload and retention remain deferred with deployment.
 
 ## Telegram Alerts
 
