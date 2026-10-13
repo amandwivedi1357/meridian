@@ -172,7 +172,7 @@ export function AppShell() {
         view === "backtests" ? (
           <BacktestsPage />
         ) : view === "reports" ? (
-          <ReportsPage />
+          <ReportsPage symbol={symbol} />
         ) : (
           <WorkspacePage
             key={view}

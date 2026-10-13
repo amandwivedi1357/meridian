@@ -129,6 +129,11 @@ export function createRiskEngine(options: {
       let breaker = false;
       try {
         if (await options.killSwitch.check()) reason = "kill-switch-engaged";
+        else if (
+          options.config.allowedStrategies &&
+          !options.config.allowedStrategies.includes(signal.strategyId)
+        )
+          reason = "strategy-not-enabled";
         else {
           await options.assertReady();
           const snapshot = await options.snapshot();

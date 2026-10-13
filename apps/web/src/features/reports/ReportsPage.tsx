@@ -2,66 +2,75 @@ import { Decimal } from "decimal.js";
 import { Activity, ArrowDownRight, ArrowUpRight, CircleDollarSign, Wallet } from "lucide-react";
 import { DataTable } from "../../components/terminal/DataTable.js";
 import { StatusBadge } from "../../components/terminal/StatusBadge.js";
-import type { FillRecord } from "../../lib/api-client.js";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getFillReport } from "../../lib/api-client.js";
+import {
+  STARTING_BALANCE,
+  QUOTE_ASSET,
+  buildBalanceReport,
+  reportMarks,
+  type BalancePoint
+} from "./report-model.js";
 import { formatSignedUsd, formatTime, formatUsd } from "../../lib/format.js";
 import { useTerminalStore } from "../../lib/terminal-store.js";
 
-const STARTING_BALANCE = new Decimal(100);
-const QUOTE_ASSET = "USDT";
-
-interface BalancePoint {
-  readonly id: string;
-  readonly time: number;
-  readonly symbol: string;
-  readonly side: "BUY" | "SELL";
-  readonly quantity: string;
-  readonly price: string;
-  readonly cash: string;
-  readonly positionValue: string;
-  readonly equity: string;
-  readonly pnl: string;
-  readonly fee: string;
-  readonly feeAsset: string;
-}
-
-interface ReportModel {
-  readonly points: readonly BalancePoint[];
-  readonly cash: string;
-  readonly positionValue: string;
-  readonly equity: string;
-  readonly pnl: string;
-  readonly returnPct: string | null;
-  readonly holdings: readonly [string, string][];
-}
-
-export function ReportsPage() {
-  const { account, market, accountConnection, transport } = useTerminalStore();
+export function ReportsPage({ symbol }: { symbol: string }) {
+  const { account, market, accountConnection, transport, session } = useTerminalStore();
+  const cache = useQueryClient();
+  const history = useQuery({
+    queryKey: ["fill-report"],
+    queryFn: ({ signal }) => getFillReport(signal),
+    enabled: session === "ready",
+    refetchInterval: 30000
+  });
+  const latestFill = account?.fills[0]?.executionId;
+  useEffect(() => {
+    if (latestFill) void cache.invalidateQueries({ queryKey: ["fill-report"] });
+  }, [latestFill, cache]);
   const accountFresh =
     !!account &&
     transport.account.lastReceivedAt !== null &&
     Date.now() - transport.account.lastReceivedAt <= 45000;
-  const selectedSymbol =
-    account?.portfolio?.positions.find((position) => position.symbol)?.symbol ??
-    account?.fills[0]?.symbol ??
-    "BTCUSDT";
-  const markPrices = new Map<string, string>();
-  const selectedPosition = account?.portfolio?.positions.find(
-    (position) => position.symbol === selectedSymbol
+  const latestTrade =
+    market.candles.at(-1)?.symbol === symbol &&
+    transport.market.lastReceivedAt !== null &&
+    Date.now() - transport.market.lastReceivedAt <= 15000
+      ? market.trades.at(-1)
+      : undefined;
+  const markPrices = reportMarks(
+    accountFresh ? (account?.portfolio?.positions ?? []) : [],
+    latestTrade ? { symbol, price: latestTrade.price } : undefined
   );
-  const latestTrade = market.trades.at(-1);
-  if (selectedPosition?.markPrice) markPrices.set(selectedSymbol, selectedPosition.markPrice);
-  if (latestTrade?.price) markPrices.set(selectedSymbol, latestTrade.price);
-  const report = buildBalanceReport(account?.fills ?? [], markPrices);
+  const report =
+    history.data && !history.isError && Date.now() - history.data.checkedAt <= 45000
+      ? buildBalanceReport(history.data.fills, markPrices, history.data.complete)
+      : null;
+  if (!report)
+    return (
+      <main className="reports-page">
+        <header className="reports-heading">
+          <h1>Trading report</h1>
+          <StatusBadge tone="amber">Unavailable</StatusBadge>
+        </header>
+        <p role="status">
+          {history.isPending
+            ? "Loading ledger"
+            : "Complete fill history, opening balances and current prices are required. No equity or P/L is inferred from the recent-fill window."}
+        </p>
+      </main>
+    );
   const lastPoint = report.points.at(-1);
   return (
     <main className="reports-page">
       <header className="reports-heading">
         <div>
-          <span>Performance / live ledger</span>
+          <span>Complete fill ledger / hypothetical baseline</span>
           <h1>Trading report</h1>
           <p>
             Running equity from {STARTING_BALANCE.toFixed(2)} {QUOTE_ASSET} start capital,
-            reconstructed from persisted fills and live mark prices.
+            reconstructed from complete persisted fills and current mark prices. This 100 USDT model
+            is not exchange-wallet or allocated equity.
           </p>
         </div>
         <StatusBadge tone={accountFresh && accountConnection === "live" ? "green" : "amber"}>
@@ -204,87 +213,6 @@ export function ReportsPage() {
       </section>
     </main>
   );
-}
-
-function buildBalanceReport(
-  fills: readonly FillRecord[],
-  liveMarkPrices: ReadonlyMap<string, string>
-): ReportModel {
-  let cash = STARTING_BALANCE;
-  const holdings = new Map<string, Decimal>();
-  const marks = new Map(liveMarkPrices);
-  const points: BalancePoint[] = [];
-  const ordered = fills.slice().sort((a, b) => a.eventTimeMs - b.eventTimeMs);
-  for (const fill of ordered) {
-    const quantity = new Decimal(fill.quantity);
-    const price = new Decimal(fill.price);
-    const gross = quantity.mul(price);
-    const baseAsset = baseAssetFromSymbol(fill.symbol);
-    const fee = new Decimal(fill.fee || "0");
-    const previousQty = holdings.get(fill.symbol) ?? new Decimal(0);
-    if (fill.side === "BUY") {
-      cash = cash.minus(gross);
-      holdings.set(
-        fill.symbol,
-        previousQty.plus(quantity).minus(fill.feeAsset === baseAsset ? fee : 0)
-      );
-      if (fill.feeAsset === QUOTE_ASSET) cash = cash.minus(fee);
-    } else {
-      cash = cash.plus(gross);
-      holdings.set(
-        fill.symbol,
-        previousQty.minus(quantity).minus(fill.feeAsset === baseAsset ? fee : 0)
-      );
-      if (fill.feeAsset === QUOTE_ASSET) cash = cash.minus(fee);
-    }
-    marks.set(fill.symbol, fill.price);
-    const positionValue = valueHoldings(holdings, marks);
-    const equity = cash.plus(positionValue);
-    points.push({
-      id: `${fill.clientOrderId}:${fill.tradeId}:${fill.eventTimeMs}`,
-      time: fill.eventTimeMs,
-      symbol: fill.symbol,
-      side: fill.side,
-      quantity: fill.quantity,
-      price: fill.price,
-      cash: cash.toFixed(8),
-      positionValue: positionValue.toFixed(8),
-      equity: equity.toFixed(8),
-      pnl: equity.minus(STARTING_BALANCE).toFixed(8),
-      fee: fill.fee,
-      feeAsset: fill.feeAsset
-    });
-  }
-  for (const [symbol, mark] of liveMarkPrices) {
-    if (mark) marks.set(symbol, mark);
-  }
-  const positionValue = valueHoldings(holdings, marks);
-  const equity = cash.plus(positionValue);
-  const pnl = equity.minus(STARTING_BALANCE);
-  return {
-    points,
-    cash: cash.toFixed(8),
-    positionValue: positionValue.toFixed(8),
-    equity: equity.toFixed(8),
-    pnl: pnl.toFixed(8),
-    returnPct: STARTING_BALANCE.gt(0) ? pnl.div(STARTING_BALANCE).mul(100).toFixed(4) : null,
-    holdings: [...holdings.entries()]
-      .filter(([, quantity]) => quantity.abs().gt(0))
-      .map(([symbol, quantity]) => [symbol, quantity.toFixed(8)])
-  };
-}
-
-function valueHoldings(holdings: ReadonlyMap<string, Decimal>, marks: ReadonlyMap<string, string>) {
-  let total = new Decimal(0);
-  for (const [symbol, quantity] of holdings) {
-    const mark = marks.get(symbol);
-    if (mark) total = total.plus(quantity.mul(mark));
-  }
-  return total;
-}
-
-function baseAssetFromSymbol(symbol: string) {
-  return symbol.endsWith(QUOTE_ASSET) ? symbol.slice(0, -QUOTE_ASSET.length) : symbol;
 }
 
 function BalanceCurve({ points }: { points: readonly BalancePoint[] }) {

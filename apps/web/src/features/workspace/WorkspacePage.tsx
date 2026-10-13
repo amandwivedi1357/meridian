@@ -26,6 +26,8 @@ import { MarketChart } from "../dashboard/MarketChart.js";
 import { SystemHealthPanel } from "../dashboard/SystemHealthPanel.js";
 import { age, sampleFresh } from "../dashboard/health-model.js";
 import { ManualOrderTicket } from "./ManualOrderTicket.js";
+import { MarketPanels } from "./MarketPanels.js";
+import { TradeDrawer } from "./TradeDrawer.js";
 import { activity, openOrders, uncertainOrders } from "./workspace-model.js";
 
 type Action =
@@ -202,7 +204,10 @@ export function WorkspacePage({
   const canCancel = (order: OrderRecord) =>
     operator &&
     !control?.engaged &&
-    (order.state === "NEW" || order.state === "PARTIALLY_FILLED" || order.state === "UNKNOWN");
+    (order.state === "NEW" ||
+      order.state === "PARTIALLY_FILLED" ||
+      order.state === "UNKNOWN" ||
+      order.state === "PENDING_CANCEL");
   const status = (value: string, good = value === "available" || value === "live") => (
     <StatusBadge tone={good ? "green" : "amber"}>{value}</StatusBadge>
   );
@@ -445,15 +450,29 @@ export function WorkspacePage({
             {view === "market" ? `${symbol} / Binance Spot` : "Meridian / Testnet account"}
           </span>
         </div>
-        {status(
-          view === "market"
-            ? marketFresh
-              ? marketConnection
-              : "Market stale"
-            : accountFresh
-              ? accountConnection
-              : "Account stale"
-        )}
+        <div className="workspace-header-actions">
+          {status(
+            view === "market"
+              ? marketFresh
+                ? marketConnection
+                : "Market stale"
+              : accountFresh
+                ? accountConnection
+                : "Account stale"
+          )}
+          {view === "market" && (
+            <TradeDrawer
+              symbol={symbol}
+              baseAsset={baseAsset}
+              quoteAsset={quoteAsset}
+              instruments={instruments}
+              onSymbol={onSymbol}
+              operator={operator}
+              riskEngaged={control?.engaged ?? false}
+              lastPrice={market.trades.at(-1)?.price}
+            />
+          )}
+        </div>
       </header>
       {view === "overview" && (
         <>
@@ -559,72 +578,20 @@ export function WorkspacePage({
                 fills={(account?.fills ?? []).filter((fill) => fill.symbol === symbol)}
               />
             </div>
+          </div>
+          <aside className="market-microstructure">
+            <MarketPanels
+              book={market.book}
+              trades={market.trades}
+              baseAsset={baseAsset}
+              quoteAsset={quoteAsset}
+            />
+          </aside>
+          <div className="market-secondary">
             <Section title="Market data health" extra={refresh}>
               {marketHealth}
             </Section>
           </div>
-          <aside>
-            <ManualOrderTicket
-              compact
-              symbol={symbol}
-              baseAsset={baseAsset}
-              quoteAsset={quoteAsset}
-              instruments={instruments}
-              onSymbol={onSymbol}
-              operator={operator}
-              riskEngaged={control?.engaged ?? false}
-              lastPrice={market.trades.at(-1)?.price}
-            />
-            <Section title="Order book depth" extra={<small>Limited depth</small>}>
-              <DataTable
-                columns={["Side", `Price / ${quoteAsset}`, baseAsset]}
-                rows={
-                  market.book
-                    ? [
-                        ...market.book.asks
-                          .slice(0, 10)
-                          .reverse()
-                          .map((l) => [
-                            <span className="negative">Ask</span>,
-                            formatUsd(l.price),
-                            l.quantity
-                          ]),
-                        [
-                          "Spread",
-                          new Decimal(market.book.asks[0]!.price)
-                            .minus(market.book.bids[0]!.price)
-                            .toFixed(2),
-                          "USDT"
-                        ],
-                        ...market.book.bids
-                          .slice(0, 10)
-                          .map((l) => [
-                            <span className="positive">Bid</span>,
-                            formatUsd(l.price),
-                            l.quantity
-                          ])
-                      ]
-                    : []
-                }
-                emptyLabel="Book unavailable"
-              />
-            </Section>
-            <Section title="Recent trade tape">
-              <DataTable
-                columns={["Time", "Side", baseAsset, "Price"]}
-                rows={market.trades
-                  .slice(-20)
-                  .reverse()
-                  .map((t) => [
-                    formatTime(t.time),
-                    <span className={t.side === "buy" ? "positive" : "negative"}>{t.side}</span>,
-                    t.quantity,
-                    formatUsd(t.price)
-                  ])}
-                emptyLabel="No recent trades"
-              />
-            </Section>
-          </aside>
         </div>
       )}
       {view === "trading" && (

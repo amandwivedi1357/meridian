@@ -16,6 +16,23 @@ interface FillRow {
 }
 
 export function registerFillsRoutes(server: FastifyInstance, pool: Pool): void {
+  server.get("/api/fills/report", async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    try {
+      const result = await pool.query<FillRow>(`SELECT f.client_order_id, o.strategy_id,
+        f.execution_id, f.trade_id, f.symbol, f.side, f.quantity::text, f.price::text,
+        f.fee::text, f.fee_asset, f.event_time_ms::text
+        FROM order_fills f JOIN orders o USING (client_order_id)
+        ORDER BY f.event_time_ms, f.client_order_id, f.execution_id LIMIT 10001`);
+      return {
+        checkedAt: Date.now(),
+        complete: result.rows.length <= 10000,
+        fills: result.rows.length <= 10000 ? result.rows.map(toFill) : []
+      };
+    } catch {
+      return reply.code(503).send({ error: "fill_report_unavailable" });
+    }
+  });
   server.get("/api/fills", async (request, reply) => {
     reply.header("Cache-Control", "no-store");
     const limit = readLimit(request.query);

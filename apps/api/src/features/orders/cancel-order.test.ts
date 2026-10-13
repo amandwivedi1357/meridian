@@ -21,6 +21,7 @@ describe("cancel order API", () => {
       return { rows: [], rowCount: 1 };
     });
     const client: CancelOrderClient = {
+      queryOrder: vi.fn(async () => ({ ...cancelResponse(), status: "NEW" as const })),
       cancelOrder: vi.fn(async () => {
         if (options.failCancel) throw new Error("exchange unavailable");
         return cancelResponse();
@@ -152,6 +153,29 @@ describe("cancel order API", () => {
       expect(response.body).not.toContain("exchange unavailable");
     } finally {
       await server.close();
+    }
+  });
+  it("retries pending cancellation and queries before retrying; a terminal order is not canceled again", async () => {
+    const f = setup({ claimRows: [{ ...claimRow(), state: "PENDING_CANCEL" }] });
+    const cancel = vi.mocked(f.client.cancelOrder);
+    cancel.mockRejectedValueOnce(new Error("ambiguous"));
+    const post = () =>
+      f.server.inject({
+        method: "POST",
+        url: `/api/orders/${clientOrderId}/cancel`,
+        headers: { authorization: `Bearer ${operatorToken}` },
+        payload: cancelPayload()
+      });
+    try {
+      expect((await post()).statusCode).toBe(503);
+      expect((await post()).statusCode).toBe(200);
+      expect(cancel).toHaveBeenCalledTimes(2);
+      vi.mocked(f.client.queryOrder).mockResolvedValue(cancelResponse());
+      expect((await post()).statusCode).toBe(200);
+      expect(cancel).toHaveBeenCalledTimes(2);
+      expect(f.query.mock.calls[0]?.[0]).toContain("'PENDING_CANCEL'");
+    } finally {
+      await f.server.close();
     }
   });
 });

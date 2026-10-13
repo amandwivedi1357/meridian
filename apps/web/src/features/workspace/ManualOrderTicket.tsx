@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Decimal } from "decimal.js";
 import { Send } from "lucide-react";
@@ -6,6 +6,12 @@ import { Send } from "lucide-react";
 import { ApiError, queueManualOrder, type MarketInstrument } from "../../lib/api-client.js";
 import { useTerminalStore } from "../../lib/terminal-store.js";
 import { StatusBadge } from "../../components/terminal/StatusBadge.js";
+import { ConfirmDialog } from "../../components/terminal/ConfirmDialog.js";
+import {
+  readManualRetry,
+  saveManualRetry,
+  clearManualRetry
+} from "../../lib/manual-order-retry.js";
 
 export function ManualOrderTicket({
   symbol,
@@ -34,12 +40,19 @@ export function ManualOrderTicket({
   const [manualLimitPrice, setManualLimitPrice] = useState("");
   const [manualReason, setManualReason] = useState("");
   const [manualConfirm, setManualConfirm] = useState("");
+  const request = useRef<Parameters<typeof queueManualOrder>[0] | undefined>(
+    readManualRetry(sessionStorage)
+  );
+  const [clearRetry, setClearRetry] = useState(false),
+    [clearConfirm, setClearConfirm] = useState("");
 
   const manualMutation = useMutation({
     mutationFn: async () => {
       if (!operator || riskEngaged) throw new Error("Manual trading unavailable");
-      if (manualConfirm !== "QUEUE") throw new Error("Manual order confirmation required");
-      return queueManualOrder({
+      if (!request.current && manualConfirm !== "QUEUE")
+        throw new Error("Manual order confirmation required");
+      request.current ??= {
+        requestId: crypto.randomUUID(),
         symbol,
         side: manualSide,
         type: manualType,
@@ -47,9 +60,13 @@ export function ManualOrderTicket({
         ...(manualType === "LIMIT" ? { limitPrice: manualLimitPrice.trim() } : {}),
         reason: manualReason.trim(),
         confirm: "QUEUE_MANUAL_ORDER"
-      });
+      };
+      saveManualRetry(sessionStorage, request.current);
+      return queueManualOrder(request.current);
     },
     onSuccess: () => {
+      request.current = undefined;
+      clearManualRetry(sessionStorage);
       setManualQuantity("");
       setManualLimitPrice("");
       setManualReason("");
@@ -89,7 +106,11 @@ export function ManualOrderTicket({
           {riskEngaged ? "Blocked" : operator ? "Operator armed" : "Read only"}
         </StatusBadge>
       </div>
-      <div className="manual-ticket-grid">
+      <fieldset
+        className="manual-ticket-grid"
+        disabled={!!request.current || manualMutation.isPending}
+        style={{ border: 0, padding: 0, margin: 0 }}
+      >
         <label className="manual-field">
           Instrument
           <select value={symbol} onChange={(event) => onSymbol(event.target.value)}>
@@ -187,7 +208,7 @@ export function ManualOrderTicket({
             }}
           />
         </label>
-      </div>
+      </fieldset>
       <div className="manual-ticket-footer">
         <dl className="workspace-readings">
           <div>
@@ -206,16 +227,41 @@ export function ManualOrderTicket({
           </div>
         </dl>
         <div className="manual-submit-stack">
+          {request.current && (
+            <>
+              <p role="status">
+                Pending {request.current.side} {request.current.quantity} {request.current.symbol};
+                retries use these original inputs.
+              </p>
+              <button
+                type="button"
+                disabled={manualMutation.isPending}
+                onClick={() => {
+                  setClearConfirm("");
+                  setClearRetry(true);
+                }}
+              >
+                Start a separate request
+              </button>
+            </>
+          )}
           <button
             type="button"
             className={`manual-submit manual-submit-${manualSide.toLowerCase()}`}
-            disabled={!manualReady || manualMutation.isPending}
+            disabled={
+              (!request.current && !manualReady) ||
+              manualMutation.isPending ||
+              !operator ||
+              riskEngaged
+            }
             onClick={() => manualMutation.mutate()}
           >
             <Send size={15} />
             {manualMutation.isPending
               ? "Queueing"
-              : `${manualSide} ${manualType.toLowerCase()} order`}
+              : request.current
+                ? "Retry original request"
+                : `${manualSide} ${manualType.toLowerCase()} order`}
           </button>
           {manualMutation.isSuccess && (
             <p className="manual-feedback positive" role="status">
@@ -224,11 +270,33 @@ export function ManualOrderTicket({
           )}
           {manualMutation.isError && (
             <p className="manual-feedback negative" role="alert">
-              Manual order not queued. Check role, confirmation, risk state and inputs.
+              Queue outcome unconfirmed. Retry keeps the original order identity and inputs; inspect
+              orders if it has expired.
             </p>
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={clearRetry}
+        title="Start a separate order request"
+        description="Check Orders first: the original request may already have executed. A separate identity can create another order."
+        confirmLabel="Release retry identity"
+        tone="danger"
+        disabled={clearConfirm !== "NEW REQUEST" || manualMutation.isPending}
+        onCancel={() => setClearRetry(false)}
+        onConfirm={() => {
+          clearManualRetry(sessionStorage);
+          request.current = undefined;
+          manualMutation.reset();
+          setManualConfirm("");
+          setClearRetry(false);
+        }}
+      >
+        <label>
+          Type NEW REQUEST
+          <input value={clearConfirm} onChange={(event) => setClearConfirm(event.target.value)} />
+        </label>
+      </ConfirmDialog>
     </section>
   );
 }

@@ -3,6 +3,12 @@ import { loadRiskConfig } from "./risk-config.js";
 import { authorizeRiskControl } from "./risk-control-cli.js";
 
 describe("risk configuration and control authentication", () => {
+  it("supports a fail-closed manual-only allowlist", () => {
+    expect(loadRiskConfig({ EXECUTOR_ALLOWED_STRATEGIES: "manual" }).allowedStrategies).toEqual([
+      "manual"
+    ]);
+    expect(() => loadRiskConfig({ EXECUTOR_ALLOWED_STRATEGIES: "" })).toThrow();
+  });
   it("supports per-symbol and per-strategy overrides", () => {
     const config = loadRiskConfig({
       EXECUTOR_SYMBOL_RISK_LIMITS: '{"ETHUSDT":{"maxQuantity":"0.1","maxPosition":"1"}}',

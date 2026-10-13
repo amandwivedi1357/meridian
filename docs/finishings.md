@@ -134,3 +134,12 @@ Use these labels when adding items:
 - `architecture`
 - `prototype-gap`
 - `resume-polish`
+
+## Order And Report Safety Follow-Up (2026-10-13)
+
+Manual request retry identity/expiry and query-before-cancel recovery are implemented
+and locally tested. Reports require bounded complete history; the 100 USDT ledger
+baseline is explicitly a hypothetical model, not real allocation or wallet equity.
+Future work: durable configured opening cash/inventory, third-asset fee conversion
+and large-history reporting beyond 10,000 fills. Do not infer real PnL from the
+recent 100-fill stream snapshot. See current-state for verification scope.

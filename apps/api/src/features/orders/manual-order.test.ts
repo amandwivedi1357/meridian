@@ -13,8 +13,19 @@ describe("manual order API", () => {
   function setup(options: { failDb?: boolean; failRedis?: boolean } = {}) {
     const server = Fastify();
     registerApiAuth(server, { viewerToken, operatorToken });
-    const query = vi.fn(async () => {
+    const records = new Map<string, unknown>();
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
       if (options.failDb) throw new Error("database unavailable");
+      if (sql.includes("SELECT details"))
+        return {
+          rows: records.has(String(values?.[1]))
+            ? [{ details: records.get(String(values?.[1])) }]
+            : []
+        };
+      if (sql.includes("INSERT INTO audit_log")) {
+        const details = JSON.parse(String(values?.[1]));
+        records.set(details.requestId, details);
+      }
       return { rows: [] };
     });
     const redis = {
@@ -23,7 +34,11 @@ describe("manual order API", () => {
         return "1791890000000-0";
       })
     };
-    registerManualOrderRoute(server, { query } as unknown as Pool, redis);
+    registerManualOrderRoute(
+      server,
+      { connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool,
+      redis
+    );
     return { server, query, redis };
   }
 
@@ -52,15 +67,9 @@ describe("manual order API", () => {
         payload: manualOrder({ reason: " small test buy " })
       });
       expect(response.statusCode).toBe(200);
-      expect(query).toHaveBeenCalledWith(expect.stringContaining("api-manual-order-requested"), [
+      expect(query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO audit_log"), [
         "operator-token",
-        expect.stringMatching(/^manual_\d+_[a-f0-9]{12}$/),
-        "BTCUSDT",
-        "BUY",
-        "MARKET",
-        "0.0002",
-        null,
-        "small test buy"
+        expect.any(String)
       ]);
       expect(redis.sendCommand).toHaveBeenCalledWith([
         "XADD",
@@ -69,7 +78,7 @@ describe("manual order API", () => {
         "kind",
         "signal",
         "signalId",
-        expect.stringMatching(/^manual_\d+_[a-f0-9]{12}$/),
+        expect.stringMatching(/^manual_[a-f0-9]{32}$/),
         "payload",
         expect.any(String)
       ]);
@@ -170,11 +179,57 @@ describe("manual order API", () => {
       expect(response.statusCode).toBe(503);
       expect(response.json()).toEqual({
         error: "manual_order_unavailable",
-        message: "Manual order could not be queued"
+        message: "Queue outcome is unconfirmed; retry the same request identity"
       });
       expect(response.body).not.toMatch(/redis unavailable/);
     } finally {
       await failingRedis.server.close();
+    }
+  });
+  it("response-loss retries preserve payload, identity and expiry", async () => {
+    const f = setup();
+    try {
+      const post = (payload = manualOrder()) =>
+        f.server.inject({
+          method: "POST",
+          url: "/api/orders/manual",
+          headers: { authorization: `Bearer ${operatorToken}` },
+          payload
+        });
+      await post();
+      await post();
+      expect(f.redis.sendCommand.mock.calls).toHaveLength(2);
+      expect(f.redis.sendCommand.mock.calls[0]).toEqual(f.redis.sendCommand.mock.calls[1]);
+      expect((await post(manualOrder({ quantity: "0.0003" }))).statusCode).toBe(409);
+      expect(f.redis.sendCommand).toHaveBeenCalledTimes(2);
+      const stored = JSON.parse(firstRedisCommand(f.redis.sendCommand).at(-1) as string);
+      const clock = vi.spyOn(Date, "now").mockReturnValue(stored.validUntilMs + 1);
+      try {
+        expect((await post()).statusCode).toBe(409);
+        expect(f.redis.sendCommand).toHaveBeenCalledTimes(2);
+      } finally {
+        clock.mockRestore();
+      }
+    } finally {
+      await f.server.close();
+    }
+  });
+  it("an uncertain Redis result retries the original durable signal", async () => {
+    const f = setup();
+    f.redis.sendCommand.mockRejectedValueOnce(new Error("response lost"));
+    const post = () =>
+      f.server.inject({
+        method: "POST",
+        url: "/api/orders/manual",
+        headers: { authorization: `Bearer ${operatorToken}` },
+        payload: manualOrder()
+      });
+    try {
+      expect((await post()).statusCode).toBe(503);
+      expect((await post()).statusCode).toBe(200);
+      expect(f.redis.sendCommand.mock.calls[0]).toEqual(f.redis.sendCommand.mock.calls[1]);
+    } finally {
+      await f.server.close();
     }
   });
 });
@@ -197,6 +252,7 @@ function manualOrder(
     quantity: "0.0002",
     reason: "manual test order",
     confirm: "QUEUE_MANUAL_ORDER",
+    requestId: "00000000-0000-4000-8000-000000000001",
     ...override
   };
 }

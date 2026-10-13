@@ -20,9 +20,10 @@ const order = (state: string): OrderRecord => ({
   createdAtMs: 1,
   updatedAtMs: 2
 });
-describe("seven-page workspace", () => {
-  it("supports deep links for all seven pages and a safe default", () => {
-    expect(pages).toHaveLength(7);
+describe("workspace navigation", () => {
+  it("supports deep links for all eight pages including Reports and a safe default", () => {
+    expect(pages).toHaveLength(8);
+    expect(pages.some((page) => page.id === "reports")).toBe(true);
     for (const p of pages) expect(pageFromHash(`#/${p.id}`)).toBe(p.id);
     expect(pageFromHash("#/unknown")).toBe("overview");
   });

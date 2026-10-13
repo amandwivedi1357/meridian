@@ -69,8 +69,18 @@ export function loadRiskConfig(env: NodeJS.ProcessEnv = process.env) {
   const maxDrawdown = positive(env.EXECUTOR_MAX_DRAWDOWN ?? "0.1", "drawdown");
   if (maxDrawdown.gt(1)) throw new Error("Invalid drawdown");
   const quoteAsset = env.EXECUTOR_RISK_QUOTE_ASSET ?? "USDT";
+  const allowedStrategies = env.EXECUTOR_ALLOWED_STRATEGIES?.split(",").map((value) =>
+    value.trim()
+  );
+  if (
+    allowedStrategies &&
+    (!allowedStrategies.length ||
+      allowedStrategies.some((value) => !/^[A-Za-z0-9_-]{1,64}$/.test(value)))
+  )
+    throw new Error("Invalid allowed strategies");
   if (!/^[A-Z0-9]{1,20}$/.test(quoteAsset)) throw new Error("Invalid risk quote asset");
   return {
+    allowedStrategies,
     quoteAsset,
     symbol: (symbol: string) => symbols.get(symbol) ?? defaults,
     strategy: (strategy: string) => strategies.get(strategy) ?? { ordersPerMinute, dailyLoss },

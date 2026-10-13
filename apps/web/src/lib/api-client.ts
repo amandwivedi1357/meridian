@@ -291,6 +291,7 @@ export async function getOrders(
 }
 
 export interface ManualOrderRequest {
+  readonly requestId: string;
   readonly symbol: string;
   readonly side: "BUY" | "SELL";
   readonly type: "MARKET" | "LIMIT";
@@ -311,6 +312,11 @@ export interface ManualOrderResponse {
 
 export async function queueManualOrder(order: ManualOrderRequest): Promise<ManualOrderResponse> {
   return postJson("/api/orders/manual", order);
+}
+export async function getFillReport(
+  signal?: AbortSignal
+): Promise<{ checkedAt: number; complete: boolean; fills: readonly FillRecord[] }> {
+  return getJson("/api/fills/report", signal);
 }
 
 export interface CancelOrderRequest {

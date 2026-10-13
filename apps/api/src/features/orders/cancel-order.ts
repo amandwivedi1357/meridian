@@ -8,6 +8,10 @@ import type { Pool } from "pg";
 import { currentPrincipal, requireOperator } from "../../app/auth.js";
 
 export interface CancelOrderClient {
+  readonly queryOrder: (input: {
+    readonly symbol: string;
+    readonly clientOrderId: string;
+  }) => Promise<BinanceOrderResponse>;
   readonly cancelOrder: (input: {
     readonly symbol: string;
     readonly clientOrderId: string;
@@ -62,10 +66,14 @@ export function registerCancelOrderRoute(
       let client: CancelOrderClient | undefined;
       try {
         client = await createClient();
-        const canceled = await client.cancelOrder({
+        const lookup = {
           symbol: claimed.order.symbol,
           clientOrderId: claimed.order.client_order_id
-        });
+        };
+        const observed = await client.queryOrder(lookup);
+        const canceled = ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(observed.status)
+          ? observed
+          : await client.cancelOrder(lookup);
         await persistCanceledOrder(pool, canceled, actor, reason);
         return {
           checkedAt: Date.now(),
@@ -85,7 +93,7 @@ export function registerCancelOrderRoute(
           message: "Order cancellation could not be confirmed"
         });
       } finally {
-        await client?.close?.();
+        await Promise.resolve(client?.close?.()).catch(() => undefined);
       }
     }
   );
@@ -106,7 +114,7 @@ async function claimCancel(
         SET state = 'PENDING_CANCEL',
             updated_at = now()
         WHERE client_order_id = $1
-          AND state IN ('NEW', 'PARTIALLY_FILLED', 'UNKNOWN')
+          AND state IN ('NEW', 'PARTIALLY_FILLED', 'UNKNOWN', 'PENDING_CANCEL')
         RETURNING client_order_id, symbol, $2::text AS state
       ),
       audit AS (

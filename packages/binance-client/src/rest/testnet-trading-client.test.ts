@@ -53,6 +53,40 @@ function setup(overrides: Partial<TestnetTradingClientOptions> = {}) {
 }
 
 describe("createTestnetTradingClient", () => {
+  it.each(["order", "account"] as const)(
+    "refreshes time after limiter waiting before signing %s requests",
+    async (kind) => {
+      let waited = false;
+      const f = setup({ autoSynchronizeTime: true });
+      f.acquire.mockImplementation(async (weight) => {
+        if (weight !== 1 && !waited) {
+          waited = true;
+          f.setNow(72100);
+        }
+      });
+      f.fetch.mockImplementation(
+        async (input) =>
+          new Response(
+            JSON.stringify(
+              String(input).endsWith("/time")
+                ? { serverTime: 72100 }
+                : kind === "account"
+                  ? { balances: [] }
+                  : order
+            )
+          )
+      );
+      if (kind === "order")
+        await expect(f.client.queryOrder(lookup)).resolves.toMatchObject({ orderId: 123 });
+      else await expect(f.client.getBalances()).resolves.toEqual([]);
+      expect(f.fetch.mock.calls.filter(([input]) => !String(input).endsWith("/time"))).toHaveLength(
+        1
+      );
+      expect(f.fetch.mock.calls.filter(([input]) => String(input).endsWith("/time"))).toHaveLength(
+        2
+      );
+    }
+  );
   it("refreshes stale time on opt-in signed operations without resending mutations", async () => {
     const { client, fetch, setNow } = setup({ autoSynchronizeTime: true });
     await client.queryOrder(lookup);

@@ -125,6 +125,15 @@ function lossFills(): RiskFill[] {
     { ...base, side: "SELL", price: new Decimal(40), eventTimeMs: 2000 }
   ];
 }
+it("manual-only activation rejects automated signals before readiness/snapshot/reservation", async () => {
+  const f = fixture({ EXECUTOR_ALLOWED_STRATEGIES: "manual" });
+  expect(await f.engine.evaluate(f.signal)).toMatchObject({ reason: "strategy-not-enabled" });
+  expect(f.readSnapshot).not.toHaveBeenCalled();
+  expect(f.repo.reserve).not.toHaveBeenCalled();
+  expect(await f.engine.evaluate({ ...f.signal, strategyId: "manual" })).toMatchObject({
+    approved: true
+  });
+});
 describe("Phase 3.4 risk engine", () => {
   it("exports validated scoped drawdown and clears values after dependency failures", async () => {
     const f = fixture({ EXECUTOR_MAX_DRAWDOWN: "0.1" });

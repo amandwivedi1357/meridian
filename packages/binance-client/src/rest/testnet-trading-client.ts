@@ -66,6 +66,7 @@ export function createTestnetTradingClient(options: TestnetTradingClientOptions)
     ...options,
     fetch: fetchRequest,
     rateLimiter,
+    prepareSignedRequest: prepareSignedOperation,
     now: clock.now
   });
 
@@ -73,6 +74,7 @@ export function createTestnetTradingClient(options: TestnetTradingClientOptions)
     ...options,
     fetch: fetchRequest,
     rateLimiter,
+    prepareSignedRequest: prepareSignedOperation,
     now: clock.now
   });
   let synchronization: Promise<void> | undefined;

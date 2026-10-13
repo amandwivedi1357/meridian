@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 import { Decimal, serializeSignal, type OrderType, type Side } from "@meridian/core";
@@ -12,6 +12,7 @@ interface ManualOrderRedis {
 }
 
 interface ManualOrderRequest {
+  readonly requestId: string;
   readonly symbol: string;
   readonly side: Side;
   readonly type: Extract<OrderType, "MARKET" | "LIMIT">;
@@ -36,7 +37,7 @@ export function registerManualOrderRoute(
 
     const actor = currentPrincipal(request)?.actor ?? "unknown-api-operator";
     const now = Date.now();
-    const signalId = `manual_${now}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+    const signalId = `manual_${createHash("sha256").update(`${actor}:${order.requestId}`).digest("hex").slice(0, 32)}`;
     const signal = {
       signalId,
       strategyId: "manual",
@@ -51,37 +52,69 @@ export function registerManualOrderRoute(
         reason: `manual:${order.reason}`
       }
     };
-    const payload = JSON.stringify(serializeSignal(signal));
+    let payload = JSON.stringify(serializeSignal(signal));
+    const fingerprint = JSON.stringify({
+      symbol: order.symbol,
+      side: order.side,
+      type: order.type,
+      quantity: order.quantity.toFixed(),
+      limitPrice: order.limitPrice?.toFixed() ?? null,
+      reason: order.reason
+    });
 
     try {
-      await pool.query(
-        `
-            INSERT INTO audit_log (actor, action, details)
-            VALUES (
-              $1,
-              'api-manual-order-requested',
-              jsonb_build_object(
-                'signalId', $2::text,
-                'symbol', $3::text,
-                'side', $4::text,
-                'type', $5::text,
-                'quantity', $6::text,
-                'limitPrice', $7::text,
-                'reason', $8::text
-              )
-            )
-          `,
-        [
-          actor,
-          signal.signalId,
-          order.symbol,
-          order.side,
-          order.type,
-          order.quantity.toFixed(),
-          order.limitPrice?.toFixed() ?? null,
-          order.reason
-        ]
-      );
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SET LOCAL lock_timeout = '2s'");
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [signalId]);
+        const previous = await client.query<{ details: { fingerprint: string; payload: string } }>(
+          "SELECT details FROM audit_log WHERE actor=$1 AND action='api-manual-order-requested' AND details->>'requestId'=$2 ORDER BY id LIMIT 1",
+          [actor, order.requestId]
+        );
+        if (previous.rows[0]) {
+          if (previous.rows[0].details.fingerprint !== fingerprint) {
+            await client.query("ROLLBACK");
+            return reply.code(409).send({
+              error: "manual_request_conflict",
+              message: "Request identity already belongs to a different order"
+            });
+          }
+          payload = previous.rows[0].details.payload;
+        } else {
+          await client.query(
+            "INSERT INTO audit_log (actor, action, details) VALUES ($1, 'api-manual-order-requested', $2::jsonb)",
+            [
+              actor,
+              JSON.stringify({
+                requestId: order.requestId,
+                signalId,
+                fingerprint,
+                payload,
+                symbol: order.symbol,
+                side: order.side,
+                type: order.type,
+                quantity: order.quantity.toFixed(),
+                limitPrice: order.limitPrice?.toFixed() ?? null,
+                reason: order.reason
+              })
+            ]
+          );
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+      // Re-publication may duplicate a stream entry, never the stable Executor order identity.
+      // Preserve the original expiry even after response loss or an API restart.
+      if (JSON.parse(payload).validUntilMs <= Date.now())
+        return reply.code(409).send({
+          error: "manual_request_expired",
+          message: "Request expired; inspect its order status before creating a new request"
+        });
       const streamId = await redis.sendCommand([
         "XADD",
         signalsStream,
@@ -106,7 +139,7 @@ export function registerManualOrderRoute(
     } catch {
       return reply.code(503).send({
         error: "manual_order_unavailable",
-        message: "Manual order could not be queued"
+        message: "Queue outcome is unconfirmed; retry the same request identity"
       });
     }
   });
@@ -115,6 +148,11 @@ export function registerManualOrderRoute(
 function readManualOrder(body: FastifyRequest["body"]): ManualOrderRequest | null {
   if (body === null || typeof body !== "object") return null;
   const record = body as Record<string, unknown>;
+  if (
+    typeof record.requestId !== "string" ||
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(record.requestId)
+  )
+    return null;
   if (record.confirm !== "QUEUE_MANUAL_ORDER") return null;
   const symbol = readSymbol(record.symbol);
   const side = readSide(record.side);
@@ -130,6 +168,7 @@ function readManualOrder(body: FastifyRequest["body"]): ManualOrderRequest | nul
   if (type === "LIMIT" && maybeLimitPrice === undefined) return null;
   if (type === "MARKET" && maybeLimitPrice !== undefined) return null;
   return {
+    requestId: record.requestId.toLowerCase(),
     symbol,
     side,
     type,

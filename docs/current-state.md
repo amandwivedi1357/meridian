@@ -15,6 +15,99 @@ This file is the quick resume point for the project. Use it with `docs/implement
 
 ## New Chat Handoff
 
+Market trade drawer (2026-10-13): Market heading now has a top-right Trade button.
+The inline ticket below the chart is removed; native modal dialog slides in from
+the right (430px desktop, full-width on small mobile). Book/tape/chart layout stays
+unchanged; health remains below. Ticket stays mounted while the drawer closes so
+draft/pending mutation state is preserved; sessionStorage retry identity still
+survives reload. Escape, close button and backdrop dismiss; background is inert,
+body scroll locked and focus returns to Trade. Nested NEW REQUEST confirmation
+Escape dismisses only that confirmation, not the drawer. Reduced-motion supported.
+Trading-page inline ticket and all trading limits/confirmation/risk rules unchanged.
+
+Verified: 53 UI tests, build/typecheck/affected lint pass. Real viewer desktop/mobile
+market flow checks live charts/tape, drawer draft reopen, Escape/focus/backdrop and
+post-animation full mobile bounds, with zero trading mutations. Mocked operator
+browser checks nested confirmation and reload retry identical identity/inputs;
+no real trading request. Evidence logs/verification/instruments/trade-drawer-*.png,
+browser.json and logs/verification/order-fixes/browser.json. Existing UI5173 updated;
+no backend/Executor refresh, kill reset, order placement or commit for this UI change.
+
+Market layout polish (2026-10-13): book and recent tape now occupy a compact,
+aligned right-hand column beside the chart, rather than being pushed below the
+manual ticket. Nearest eight levels per side show exact cumulative base quantities,
+subtle relative depth bars, midpoint/spread and asset-specific column labels.
+Latest 30 trades use a bounded scroll area with fixed rows. Empty book states keep
+stable dimensions. Manual ticket/health move below; mobile order is chart, book/
+tape, then ticket/health. Trading controls, Testnet limits, strategy gate and
+backend feed unchanged. User trading may have advanced the ledger since prior
+activation snapshots; this UI verification does not assert live orders/fills zero.
+
+53 UI tests pass; build/typecheck/affected lint pass. Actual viewer browser checks
+BTC/ETH/SOL/BNB live trades, connection readiness, nonblank charts, desktop/mobile
+overflow and mobile panel ordering; zero trading control mutations. Updated
+verify-instruments.cjs for the tape rows. Screenshots/report:
+logs/verification/instruments/{BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,mobile}.png and
+browser.json. Existing Vite5173 serves updates; no trading runtime refresh or commit.
+
+User-authorized manual Testnet activation (2026-10-13): approved BTCUSDT-only,
+100 USDT dedicated allocation, <=25 USDT and <=0.0002 BTC per order, one open
+order. Private .env profile/admin credential configured with setup-manual-testnet.cjs;
+no secret printed or committed. Allocation created through authenticated audited
+CLI while kill remained engaged; real read-only snapshot equity100/managedBTC0,
+zero exchange open orders/signals/ledger orders. Executor allowed-strategy gate
+configured to manual; Engine remains off. Executor PID14860 runs hidden locally,
+not an automatic startup task. Kill reset is audited and now disengaged. No test
+order or cancellation placed by Codex; subsequent user manual actions can trade
+Testnet within these limits. Requires operator login; other instruments fail the
+BTC-only allocation scope, not multi-asset trading support.
+
+First activation failed closed on expired signed clock (risk-monitor-unavailable).
+Fixed signed preparation immediately before signature construction, after limiter
+waiting, without relaxing clock limits or retrying signed mutations. Mock tests
+cover account/order limiter delay; 123 transport/client regressions plus32 risk
+tests pass. Initial failed attempts are not passes. Refreshed blocked Executor,
+then performed one authenticated activation retry; eight read-only samples over
+80 seconds remain disengaged with orders/fills0/0 and ready200. This is startup/
+clock-boundary readiness, not real manual-fill/cancellation/soak acceptance. API
+also refreshed to show configured allocation; existing UI5173 stays. Wallet equity
+UI remains exchange-wallet scope, not the Executor's 100 USDT allocation.
+Existing Phase5/long-run/deployment gates unchanged. Manual trades may now execute;
+UI emergency stop re-engages the global kill. No Engine, production activation,
+scheduled trading automation or commit created.
+
+Order/report review fixes (2026-10-13): manual API requires a UUID requestId,
+derives a stable actor-scoped signal identity and persists original payload/expiry
+in audit_log under a bounded transaction advisory lock. Reusing the ID with other
+inputs conflicts; expired requests never gain a new execution window. Redis reply
+loss may republish the same signal, not create an independent Executor order ID.
+Browser sessionStorage preserves pending original inputs across navigation/reload;
+controls freeze during uncertainty and NEW REQUEST confirmation is required before
+releasing the retry identity. Cancellation accepts PENDING_CANCEL retries, queries
+exchange state before canceling and persists terminal status without cancel resend.
+
+Reports uses a separate complete-history GET /api/fills/report (10,000-row bound;
+overflow returns complete=false and no partial financial ledger). Marks are keyed
+by actual instrument; another selected instrument cannot overwrite a BTC mark.
+Incomplete history, missing opening inventory/marks and unsupported fee valuation
+withhold model equity/PnL. The fixed 100 USDT baseline is explicitly hypothetical,
+not allocated/exchange-wallet equity. No new trading control or allocation activated.
+
+Verification: 218 broad API/Web tests pass (33 opt-in skips), plus one separately
+executed disposable PostgreSQL integration passes: eight concurrent requests across
+two API instances, one durable payload/audit identity, conflict protection and
+failed-cancel recovery. New unit tests cover expiry, uncertain Redis outcome,
+terminal query/no resend, >100-fill accounting and incomplete-history caps.
+Mocked desktop/mobile browser verifies reload retry identical inputs/identity,
+complete reports and withheld incomplete figures; every API request intercepted,
+zero real trading requests. Evidence logs/verification/order-fixes/browser.json and
+report screenshots. Updated old seven-page navigation test for Reports/eight pages.
+Build/typecheck/affected lint and whitespace checks pass. Idle API refreshed as
+PID15784 after activeChildren=0; only conhost was the earlier API child. New GET endpoint live200
+with complete=true/fills0. Original Vite5173 remains; temporary5174 and disposable DB
+removed. No shared orders/control mutations, no commit requested/made. Phase5 gates
+and deployment deferral are unchanged.
+
 User scope decision (2026-10-12): keep the project local-first for now. Cloud/VPS
 deployment,public HTTPS/provider secret stores,deploy-CD and provider/offsite backup
 integration are deferred,not completed and not prerequisites for a local prototype

@@ -117,6 +117,11 @@ const success: Record<string, z.ZodTypeAny> = {
     })
   }),
   "/api/fills": z.object({ ...checked, fills: z.array(fill).max(100) }),
+  "/api/fills/report": z.object({
+    ...checked,
+    complete: z.boolean(),
+    fills: z.array(fill).max(10000)
+  }),
   "/api/risk/events": z.object({ ...checked, events: z.array(event).max(100) }),
   "/api/strategies": z.object({ ...checked, strategies: z.array(strategy).max(100) }),
   "/api/trading/state": z.object({

@@ -67,12 +67,12 @@ async function main() {
           const tape = sections.find(
             (section) => section.querySelector("h2")?.textContent === "Recent trade tape"
           );
-          return (tape?.querySelectorAll("tbody tr").length ?? 0) >= 3;
+          return (tape?.querySelectorAll(".tape-print").length ?? 0) >= 3;
         },
         undefined,
         { timeout: 60000 }
       );
-      assert((await tape.locator("tbody").textContent()).trim().length > 10);
+      assert((await tape.locator(".tape-scroll").textContent()).trim().length > 10);
       let connectionHealthy = false;
       for (let attempt = 0; attempt < 20; attempt++) {
         const response = await fetch("http://127.0.0.1:9401/metrics", {
@@ -111,8 +111,51 @@ async function main() {
       await page.screenshot({ path: path.join(output, `${symbol}.png`), fullPage: true });
       results.push({ symbol, liveTrades: true, connectionHealthy, chartPixels: pixels });
     }
+    const tradeButton = page.getByRole("button", { name: "Trade", exact: true });
+    await tradeButton.click();
+    const drawer = page.getByRole("dialog", { name: "Trade", exact: true });
+    await drawer.waitFor();
+    await drawer.evaluate((element) =>
+      Promise.all(element.getAnimations().map((animation) => animation.finished))
+    );
+    await drawer.getByLabel(`Quantity / BNB`).fill("0.0001");
+    await page.screenshot({ path: path.join(output, "trade-drawer-desktop.png"), fullPage: false });
+    await page.keyboard.press("Escape");
+    await drawer.waitFor({ state: "hidden" });
+    assert.equal(await tradeButton.evaluate((element) => element === document.activeElement), true);
+    await tradeButton.click();
+    assert.equal(await drawer.getByLabel("Quantity / BNB").inputValue(), "0.0001");
+    await drawer.getByRole("button", { name: "Close trade drawer" }).click();
+    await tradeButton.click();
+    await drawer.evaluate((element) =>
+      Promise.all(element.getAnimations().map((animation) => animation.finished))
+    );
+    await page.mouse.click(10, 120);
+    await drawer.waitFor({ state: "hidden" });
     await page.setViewportSize({ width: 390, height: 844 });
+    const chartBounds = await page.locator(".market-primary").boundingBox();
+    const feedBounds = await page.locator(".market-microstructure").boundingBox();
+    const ticketBounds = await page.locator(".market-secondary").boundingBox();
+    assert.ok(feedBounds.y >= chartBounds.y + chartBounds.height, "Mobile feed follows chart");
+    assert.ok(
+      ticketBounds.y >= feedBounds.y + feedBounds.height,
+      "Mobile health follows feed panels"
+    );
     await page.screenshot({ path: path.join(output, "mobile.png"), fullPage: true });
+    await tradeButton.click();
+    await drawer.waitFor();
+    await drawer.evaluate((element) =>
+      Promise.all(element.getAnimations().map((animation) => animation.finished))
+    );
+    const drawerBounds = await drawer.boundingBox();
+    assert.ok(
+      drawerBounds.x >= 0 &&
+        drawerBounds.x + drawerBounds.width <= 390 &&
+        drawerBounds.height <= 844
+    );
+    await page.screenshot({ path: path.join(output, "trade-drawer-mobile.png"), fullPage: false });
+    await drawer.getByRole("button", { name: "Close trade drawer" }).click();
+    assert.equal(await page.locator(".market-secondary .manual-trade-panel").count(), 0);
     assert.equal(
       await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
       false
@@ -126,6 +169,7 @@ async function main() {
       visibleFailureRetry: true,
       results,
       mobile: true,
+      tradeDrawer: true,
       tradingMutations: 0
     };
     await fs.writeFile(path.join(output, "browser.json"), JSON.stringify(result, null, 2));

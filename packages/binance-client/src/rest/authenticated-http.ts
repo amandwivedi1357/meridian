@@ -10,6 +10,7 @@ export interface AuthenticatedHttpOptions {
   readonly recvWindowMs?: number;
   readonly timeoutMs?: number;
   readonly fetch?: typeof globalThis.fetch;
+  readonly prepareSignedRequest?: () => Promise<void>;
 }
 
 export interface AuthenticatedHttpRequest {
@@ -62,6 +63,7 @@ export function createAuthenticatedHttp(options: AuthenticatedHttpOptions) {
       if (!/^\/api\/v3\/[A-Za-z0-9]+(?:\/[A-Za-z0-9]+)*$/.test(request.path)) {
         throw new Error("Authenticated request requires a plain /api/v3/ endpoint path");
       }
+      await options.prepareSignedRequest?.();
       const signedParameters = builder.build(request.parameters ?? {});
       const url = new URL(request.path, baseUrl);
       const headers = new Headers({ "X-MBX-APIKEY": apiKey });

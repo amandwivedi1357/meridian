@@ -204,7 +204,20 @@ ignored evidence under `logs/verification/phase-5/backups/`, and prunes old loca
 dumps while keeping seven by default. The local Windows wrapper adds failure
 alerts; provider/offsite upload and retention remain deferred with deployment.
 
-## Telegram Alerts
+## Bounded Manual Testnet Profile
+
+`node scripts/setup-manual-testnet.cjs --confirm-btc-100-usdt` configures the
+user-approved private `.env` profile: BTCUSDT, 100 USDT allocation, 25 USDT /
+0.0002 BTC per order, one open order and `EXECUTOR_ALLOWED_STRATEGIES=manual`.
+It creates a private risk-admin token if absent; prints no secrets and does not
+initialize allocation, start services, place orders or reset kill by itself.
+Existing incompatible allocation configuration is refused. Initialization/reset
+use the authenticated existing risk-control CLI with explicit confirmations.
+Do not activate Engine for this manual-only setup. The running Executor is not
+scheduled for automatic login/reboot startup. UI emergency stop remains available.
+Never copy risk-admin/Testnet credentials into chat, logs or tracked files.
+
+## Telegram Setup
 
 After setting `TELEGRAM_BOT_TOKEN` (or `MERIDO_BOT_TOKEN`) in ignored `.env` and
 sending `/start` to the bot, run `node --env-file=.env scripts/setup-telegram-alerts.cjs`.
