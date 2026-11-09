@@ -1,6 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Pause, Play, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  Pause,
+  Play,
+  RefreshCw,
+  ShieldAlert,
+  XCircle
+} from "lucide-react";
 import { Decimal } from "decimal.js";
 import type { PageId } from "../../app/navigation.js";
 import { pages } from "../../app/navigation.js";
@@ -28,7 +36,51 @@ import { age, sampleFresh } from "../dashboard/health-model.js";
 import { ManualOrderTicket } from "./ManualOrderTicket.js";
 import { MarketPanels } from "./MarketPanels.js";
 import { TradeDrawer } from "./TradeDrawer.js";
-import { activity, openOrders, uncertainOrders } from "./workspace-model.js";
+import { openOrders, uncertainOrders } from "./workspace-model.js";
+import { OverviewContent } from "./OverviewContent.js";
+import { CandleInterval } from "./CandleInterval.js";
+import { usePageEntrance, type EntranceSequence } from "../../lib/use-page-entrance.js";
+import "./market.css";
+import "./trading.css";
+import "./risk.css";
+
+const marketEntrance: EntranceSequence = [
+  [".workspace-heading", 0, "translateX(-24px)"],
+  [".market-toolbar", 80, "translateY(20px)"],
+  [".market-primary", 140, "translateX(-32px)"],
+  [".order-depth-panel", 220, "translateX(28px)"],
+  [".recent-tape-panel", 300, "translateX(28px)"],
+  [".market-secondary", 380, "translateY(24px)"]
+];
+
+const tradingEntrance: EntranceSequence = [
+  [".workspace-heading", 0, "translateX(-24px)"],
+  [".trading-ticket", 80, "translateX(-28px)"],
+  [".live-trading-cockpit", 150, "translateY(24px)"],
+  [".trading-protection", 230, "translateY(20px)"],
+  [".trading-records", 310, "translateY(24px)"]
+];
+
+const riskEntrance: EntranceSequence = [
+  [".workspace-heading", 0, "translateX(-24px)"],
+  [".risk-controls > section:first-child", 80, "translateY(24px)"],
+  [".risk-controls > section:last-child", 150, "translateX(24px)"],
+  [".risk-exposure", 220, "translateY(20px)"],
+  [".risk-ledgers", 300, "translateY(24px)"]
+];
+
+const strategyEntrance: EntranceSequence = [
+  [".workspace-heading", 0, "translateX(-24px)"],
+  [".strategy-layout > section:first-child", 80, "translateX(-24px)"],
+  [".strategy-layout > section:last-child", 160, "translateY(24px)"]
+];
+const systemEntrance: EntranceSequence = [
+  [".workspace-heading", 0, "translateX(-24px)"],
+  [".system-workspace > .workspace-grid:first-child > section:first-child", 80, "translateY(24px)"],
+  [".system-workspace > .workspace-grid:first-child > section:last-child", 150, "translateX(24px)"],
+  [".system-workspace > .workspace-grid:last-child > section:first-child", 220, "translateY(24px)"],
+  [".system-workspace > .workspace-grid:last-child > section:last-child", 300, "translateY(24px)"]
+];
 
 type Action =
   | { kind: "kill" }
@@ -86,6 +138,19 @@ export function WorkspacePage({
   onRetryInstruments?: () => void;
   onSymbol: (value: string) => void;
 }) {
+  const entranceRef = usePageEntrance<HTMLElement>(
+    view,
+    view === "strategies"
+      ? strategyEntrance
+      : view === "system"
+        ? systemEntrance
+        : view === "risk"
+          ? riskEntrance
+          : view === "trading"
+            ? tradingEntrance
+            : marketEntrance,
+    ["market", "trading", "risk", "strategies", "system"].includes(view)
+  );
   const { account, market, health, principal, marketConnection, accountConnection, transport } =
     useTerminalStore();
   const [now, setNow] = useState(Date.now());
@@ -184,7 +249,6 @@ export function WorkspacePage({
   const position = account?.portfolio?.positions.find((p) => p.symbol === symbol);
   const strategy =
     account?.strategies.find((s) => s.strategyId === selected) ?? account?.strategies[0];
-  const events = activity(account);
   const orders = openOrders(account);
   const unknown = uncertainOrders(account);
   const protectedPosition = account?.portfolio?.positions.find((p) => p.symbol === symbol);
@@ -265,41 +329,6 @@ export function WorkspacePage({
         <AlertTriangle size={16} /> Engage kill switch
       </button>
     </>
-  );
-  const accountSummary = (
-    <div className="overview-metrics">
-      {[
-        ["Allocated equity / USDT", "Not reported"],
-        ["Wallet equity / USDT", formatUsd(account?.portfolio?.equity)],
-        [`Managed ${baseAsset} position`, position?.quantity ?? "--"],
-        ["Open orders / loaded", account ? String(orders.length) : "--"],
-        ["Recent fills / loaded", account ? String(account.fills.length) : "--"],
-        ["Risk state", control ? (control.engaged ? "BLOCKED" : "DISENGAGED") : "UNKNOWN"]
-      ].map(([label, value]) => (
-        <div key={label}>
-          <span>{label}</span>
-          <strong>{value}</strong>
-        </div>
-      ))}
-    </div>
-  );
-  const timeline = (
-    <div className="activity-timeline">
-      {events.length ? (
-        events.map((e) => (
-          <div key={e.id}>
-            <time>{formatTime(e.time)}</time>
-            <span className={e.kind === "Risk" ? "negative" : "positive"}>{e.kind}</span>
-            <div>
-              <strong>{e.title}</strong>
-              <p>{e.detail}</p>
-            </div>
-          </div>
-        ))
-      ) : (
-        <div className="terminal-empty compact">No recent activity</div>
-      )}
-    </div>
   );
   const marketHealth = (
     <>
@@ -442,136 +471,94 @@ export function WorkspacePage({
     ]);
   }
   return (
-    <main className={`workspace-page workspace-${view}`}>
-      <header className="workspace-heading">
-        <div>
-          <h1>{pages.find((p) => p.id === view)!.label}</h1>
-          <span>
-            {view === "market" ? `${symbol} / Binance Spot` : "Meridian / Testnet account"}
-          </span>
-        </div>
-        <div className="workspace-header-actions">
-          {status(
-            view === "market"
-              ? marketFresh
-                ? marketConnection
-                : "Market stale"
-              : accountFresh
-                ? accountConnection
-                : "Account stale"
-          )}
-          {view === "market" && (
-            <TradeDrawer
-              symbol={symbol}
-              baseAsset={baseAsset}
-              quoteAsset={quoteAsset}
-              instruments={instruments}
-              onSymbol={onSymbol}
-              operator={operator}
-              riskEngaged={control?.engaged ?? false}
-              lastPrice={market.trades.at(-1)?.price}
-            />
-          )}
-        </div>
-      </header>
+    <main className={`workspace-page workspace-${view}`} ref={entranceRef}>
+      {view !== "overview" && (
+        <header className="workspace-heading">
+          <div>
+            <h1>{pages.find((p) => p.id === view)!.label}</h1>
+            <span>
+              {view === "market" ? "Binance Spot / Testnet" : "Meridian / Testnet account"}
+            </span>
+          </div>
+          <div className="workspace-header-actions">
+            {status(
+              view === "market"
+                ? marketFresh
+                  ? marketConnection
+                  : "Market stale"
+                : accountFresh
+                  ? accountConnection
+                  : "Account stale"
+            )}
+            {view === "market" && (
+              <TradeDrawer
+                symbol={symbol}
+                baseAsset={baseAsset}
+                quoteAsset={quoteAsset}
+                instruments={instruments}
+                onSymbol={onSymbol}
+                operator={operator}
+                riskEngaged={control?.engaged ?? false}
+                lastPrice={market.trades.at(-1)?.price}
+              />
+            )}
+          </div>
+        </header>
+      )}
       {view === "overview" && (
-        <>
-          <div className="service-strip">
-            {serviceRows.map(([label, value]) => (
-              <div key={label}>
-                <span>{label}</span>
-                {value}
-              </div>
-            ))}
-          </div>
-          {accountSummary}
-          <div className="workspace-grid">
-            <Section
-              title={`${symbol} / ${timeframe}`}
-              extra={formatUsd(market.trades.at(-1)?.price)}
-            >
-              <div className="overview-chart">
-                <MarketChart
-                  candles={market.candles}
-                  baseAsset={baseAsset}
-                  fills={(account?.fills ?? []).filter((fill) => fill.symbol === symbol)}
-                />
-              </div>
-            </Section>
-            <Section title="Active strategies">
-              <Readings
-                rows={(account?.strategies ?? []).map((s) => [
-                  s.strategyId,
-                  s.paused ? "Paused" : "Not paused"
-                ])}
-              />
-              {!account?.strategies.length && (
-                <div className="terminal-empty compact">No strategy state</div>
-              )}
-              <h3>Recent fills</h3>
-              <DataTable
-                columns={["Time", "Side", "Quantity", "Price"]}
-                rows={(account?.fills ?? [])
-                  .slice(0, 5)
-                  .map((f) => [formatTime(f.eventTimeMs), f.side, f.quantity, formatUsd(f.price)])}
-                emptyLabel="No fills"
-              />
-            </Section>
-          </div>
-          <Section title="Trading & risk activity">{timeline}</Section>
-        </>
+        <OverviewContent
+          symbol={symbol}
+          baseAsset={baseAsset}
+          quoteAsset={quoteAsset}
+          timeframe={timeframe}
+          onTimeframe={onTimeframe}
+          now={now}
+        />
       )}
       {view === "market" && (
         <div className="market-page-layout">
-          <div className="market-primary">
-            <div className="chart-header">
-              <div>
-                <h2>{symbol}</h2>
-                <strong>{formatUsd(market.trades.at(-1)?.price)}</strong>
-              </div>
-              <label className="instrument-picker">
-                Instrument
-                <select
-                  value={symbol}
-                  disabled={instrumentsLoading}
-                  onChange={(event) => onSymbol(event.target.value)}
-                >
-                  {instruments.map((instrument) => (
-                    <option key={instrument.symbol} value={instrument.symbol}>
-                      {instrument.baseAsset} / {instrument.quoteAsset}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="timeframe-strip" role="group" aria-label="Candle interval">
-                {["1m", "15m", "1h"].map((t) => (
-                  <button
-                    key={t}
-                    aria-pressed={timeframe === t}
-                    className={timeframe === t ? "active" : ""}
-                    onClick={() => onTimeframe(t)}
-                  >
-                    {t}
-                  </button>
+          <div className="chart-header market-toolbar">
+            <label className="instrument-picker">
+              Instrument
+              <select
+                value={symbol}
+                disabled={instrumentsLoading}
+                onChange={(event) => onSymbol(event.target.value)}
+              >
+                {instruments.map((instrument) => (
+                  <option key={instrument.symbol} value={instrument.symbol}>
+                    {instrument.baseAsset} / {instrument.quoteAsset}
+                  </option>
                 ))}
-              </div>
+              </select>
+            </label>
+            <div className="market-quote">
+              <span>Last trade / {quoteAsset}</span>
+              <strong>{formatUsd(market.trades.at(-1)?.price)}</strong>
             </div>
-            {instrumentError && (
-              <div className="instrument-error" role="alert">
-                <span>{instrumentError}</span>
-                <button
-                  type="button"
-                  title="Retry instrument list"
-                  aria-label="Retry instrument list"
-                  disabled={instrumentsLoading}
-                  onClick={onRetryInstruments}
-                >
-                  <RefreshCw size={14} />
-                </button>
-              </div>
-            )}
+            <div className="market-interval-control">
+              <span>Candle interval</span>
+              <CandleInterval timeframe={timeframe} onTimeframe={onTimeframe} />
+            </div>
+          </div>
+          {instrumentError && (
+            <div className="instrument-error" role="alert">
+              <span>{instrumentError}</span>
+              <button
+                type="button"
+                title="Retry instrument list"
+                aria-label="Retry instrument list"
+                disabled={instrumentsLoading}
+                onClick={onRetryInstruments}
+              >
+                <RefreshCw size={14} />
+              </button>
+            </div>
+          )}
+          <div className="market-primary">
             <div className="main-market-chart">
               <MarketChart
+                appearance="overview"
                 key={`${symbol}:${timeframe}`}
                 baseAsset={baseAsset}
                 candles={market.candles.filter((c) => c.interval === timeframe)}
@@ -588,16 +575,42 @@ export function WorkspacePage({
             />
           </aside>
           <div className="market-secondary">
-            <Section title="Market data health" extra={refresh}>
-              {marketHealth}
-            </Section>
+            <details className="market-diagnostics">
+              <summary>
+                <span
+                  className={`market-feed-dot ${marketFresh && marketConnection === "live" ? "is-live" : ""}`}
+                  aria-hidden="true"
+                />
+                <span className="market-feed-label">Market data</span>
+                <strong>
+                  {marketFresh && marketConnection === "live" ? "Live" : "Awaiting feed"}
+                </strong>
+                <span className="market-feed-age">
+                  {market.updatedAt === null
+                    ? "No event received"
+                    : `Last event ${age(market.updatedAt, now)} ago`}
+                </span>
+                <span className="market-diagnostics-toggle">
+                  Diagnostics <ChevronDown size={14} aria-hidden="true" />
+                </span>
+              </summary>
+              <div className="market-diagnostics-body">
+                <div className="panel-title">
+                  <h2>Market data health</h2>
+                  {refresh}
+                </div>
+                {marketHealth}
+              </div>
+            </details>
           </div>
         </div>
       )}
       {view === "trading" && (
-        <>
-          <div className="trading-control-grid">
+        <div className="trading-workspace">
+          <aside className="trading-ticket" aria-label="Order entry">
             <ManualOrderTicket
+              showExecutionPath={false}
+              description="Create a market or limit order for this Testnet account."
               symbol={symbol}
               baseAsset={baseAsset}
               quoteAsset={quoteAsset}
@@ -607,202 +620,245 @@ export function WorkspacePage({
               riskEngaged={control?.engaged ?? false}
               lastPrice={market.trades.at(-1)?.price}
             />
-            <section className="protective-order-panel" aria-labelledby="protective-orders-title">
-              <div className="manual-trade-head">
+          </aside>
+          <div className="trading-monitor">
+            <section className="live-trading-cockpit" aria-labelledby="live-trading-title">
+              <div className="live-cockpit-hero">
                 <div>
-                  <h2 id="protective-orders-title">Protective orders</h2>
-                  <p>Stop-loss / take-profit automation is not armed yet.</p>
+                  <span className="eyebrow">Live position</span>
+                  <h2 id="live-trading-title">
+                    {baseAsset} / {quoteAsset}
+                  </h2>
+                  <p>
+                    {protectedPosition?.status ?? "No managed position"} /{" "}
+                    {accountFresh ? "account feed live" : "account feed stale"}
+                  </p>
                 </div>
-                <StatusBadge tone="amber">Designing</StatusBadge>
+                <div className="live-pnl-stack">
+                  <span>Unrealized PnL / {quoteAsset}</span>
+                  <strong className={toneForNumber(liveUnrealizedPnl)}>
+                    {formatSignedUsd(liveUnrealizedPnl)}
+                  </strong>
+                  <em className={toneForNumber(liveReturnPct)}>
+                    {liveReturnPct === null
+                      ? "Position return unavailable"
+                      : `${formatSignedPercent(liveReturnPct)} at ${formatUsd(liveMarkPrice)}`}
+                  </em>
+                </div>
               </div>
-              <Readings
-                rows={[
-                  ["Symbol", symbol],
-                  [`Managed ${baseAsset}`, protectedPosition?.quantity ?? "--"],
-                  ["Average entry", formatUsd(protectedPosition?.avgEntry)],
-                  ["Mark", formatUsd(liveMarkPrice)],
-                  ["Required before arming", "cancel + reconciliation + trigger monitor"]
-                ]}
-              />
-              <div className="protective-draft-grid">
-                <label className="manual-field">
-                  Stop-loss / {quoteAsset}
-                  <input disabled placeholder="Next slice" />
-                </label>
-                <label className="manual-field">
-                  Take-profit / {quoteAsset}
-                  <input disabled placeholder="Next slice" />
-                </label>
+              <div className="live-cockpit-grid">
+                <div>
+                  <span>Quantity / {baseAsset}</span>
+                  <strong>{protectedPosition?.quantity ?? "--"}</strong>
+                </div>
+                <div>
+                  <span>Average entry</span>
+                  <strong>{formatUsd(protectedPosition?.avgEntry)}</strong>
+                </div>
+                <div>
+                  <span>Mark price</span>
+                  <strong>{formatUsd(liveMarkPrice)}</strong>
+                </div>
+                <div>
+                  <span>Position notional</span>
+                  <strong>{formatUsd(liveNotional)}</strong>
+                </div>
+                <div>
+                  <span>Realized PnL</span>
+                  <strong className={toneForNumber(protectedPosition?.realizedPnl)}>
+                    {formatSignedUsd(protectedPosition?.realizedPnl)}
+                  </strong>
+                </div>
+                <div>
+                  <span>Working orders</span>
+                  <strong>{activeSymbolOrders.length}</strong>
+                </div>
+              </div>
+              <div className="live-cockpit-lanes">
+                <div>
+                  <div className="lane-title">
+                    <strong>Working orders</strong>
+                    <small>{activeSymbolOrders.length} active</small>
+                  </div>
+                  <div className="working-order-stack">
+                    {activeSymbolOrders.length ? (
+                      activeSymbolOrders.slice(0, 5).map((order) => (
+                        <div className="working-order-card" key={order.clientOrderId}>
+                          <div>
+                            <strong className={order.side === "BUY" ? "positive" : "negative"}>
+                              {order.side} {order.type}
+                            </strong>
+                            <span>{order.quantity} requested</span>
+                          </div>
+                          <div>
+                            <span>{order.state}</span>
+                            <strong>{order.executedQuantity} filled</strong>
+                          </div>
+                          <div>
+                            <span>Limit</span>
+                            <strong>{formatUsd(order.limitPrice)}</strong>
+                          </div>
+                          {canCancel(order) ? (
+                            <button
+                              className="terminal-row-action danger"
+                              type="button"
+                              onClick={() => request({ kind: "cancel", order })}
+                            >
+                              <XCircle size={13} />
+                              Cancel
+                            </button>
+                          ) : (
+                            <span className="muted">No action</span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="terminal-empty compact">No working orders for {symbol}</div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="lane-title">
+                    <strong>Recent fills</strong>
+                    <small>{recentSymbolFills.length} shown</small>
+                  </div>
+                  <div className="recent-fill-stack">
+                    {recentSymbolFills.length ? (
+                      recentSymbolFills.map((fill) => (
+                        <div
+                          className="recent-fill-row"
+                          key={`${fill.clientOrderId}:${fill.tradeId}`}
+                        >
+                          <time>{formatTime(fill.eventTimeMs)}</time>
+                          <strong className={fill.side === "BUY" ? "positive" : "negative"}>
+                            {fill.side}
+                          </strong>
+                          <span>{fill.quantity}</span>
+                          <span>{formatUsd(fill.price)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="terminal-empty compact">No fills for {symbol}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <details className="trading-protection">
+              <summary>
+                <span>Protective orders</span>
+                <span className="trading-protection-state">Unavailable</span>
+                <ChevronDown size={15} aria-hidden="true" />
+              </summary>
+              <section className="protective-order-panel" aria-labelledby="protective-orders-title">
+                <div className="manual-trade-head">
+                  <div>
+                    <h2 id="protective-orders-title">Protective orders</h2>
+                    <p>Stop-loss / take-profit automation is not armed yet.</p>
+                  </div>
+                  <StatusBadge tone="amber">Unavailable</StatusBadge>
+                </div>
+                <Readings
+                  rows={[
+                    ["Symbol", symbol],
+                    [`Managed ${baseAsset}`, protectedPosition?.quantity ?? "--"],
+                    ["Average entry", formatUsd(protectedPosition?.avgEntry)],
+                    ["Mark", formatUsd(liveMarkPrice)],
+                    ["Required before arming", "cancel + reconciliation + trigger monitor"]
+                  ]}
+                />
+                <div className="protective-draft-grid">
+                  <label className="manual-field">
+                    Stop-loss / {quoteAsset}
+                    <input disabled placeholder="Unavailable" />
+                  </label>
+                  <label className="manual-field">
+                    Take-profit / {quoteAsset}
+                    <input disabled placeholder="Unavailable" />
+                  </label>
+                </div>
+                <p className="workspace-footnote">
+                  Stop-loss and take-profit orders are not available yet.
+                </p>
+              </section>
+            </details>
+            <section className="trading-records" aria-label="Trading records">
+              <div className="overview-metrics">
+                <div>
+                  <span>Open orders / loaded</span>
+                  <strong>{account ? orders.length : "--"}</strong>
+                </div>
+                <div>
+                  <span>Awaiting lifecycle confirmation</span>
+                  <strong>{account ? unknown.length : "--"}</strong>
+                </div>
+                <div>
+                  <span>Snapshot</span>
+                  <strong>
+                    {account?.checkedAt ? `${age(account.checkedAt, now)} old` : "Unavailable"}
+                  </strong>
+                </div>
+              </div>
+              <div className="bottom-tabs" role="tablist" aria-label="Trading views">
+                {["orders", "fills", "positions", "reconciliation"].map((t) => (
+                  <button
+                    role="tab"
+                    key={t}
+                    className={tab === t ? "active" : ""}
+                    aria-selected={tab === t}
+                    id={`trading-tab-${t}`}
+                    aria-controls="trading-record-panel"
+                    tabIndex={tab === t ? 0 : -1}
+                    onKeyDown={(event) => {
+                      const tabs = ["orders", "fills", "positions", "reconciliation"];
+                      const index = tabs.indexOf(t);
+                      const next =
+                        event.key === "ArrowRight"
+                          ? (index + 1) % tabs.length
+                          : event.key === "ArrowLeft"
+                            ? (index + tabs.length - 1) % tabs.length
+                            : event.key === "Home"
+                              ? 0
+                              : event.key === "End"
+                                ? tabs.length - 1
+                                : -1;
+                      if (next < 0) return;
+                      event.preventDefault();
+                      setTab(tabs[next]!);
+                      document.getElementById(`trading-tab-${tabs[next]}`)?.focus();
+                    }}
+                    onClick={() => setTab(t)}
+                  >
+                    {t === "reconciliation"
+                      ? "Unknown / reconciliation"
+                      : t[0]!.toUpperCase() + t.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <div
+                role="tabpanel"
+                id="trading-record-panel"
+                aria-labelledby={`trading-tab-${tab}`}
+                tabIndex={0}
+              >
+                <DataTable
+                  columns={columns}
+                  rows={rows}
+                  emptyLabel={account ? "No records in loaded snapshot" : "Account unavailable"}
+                />
               </div>
               <p className="workspace-footnote">
-                For now, close the position manually with an opposite market order. Brackets will be
-                enabled only after durable trigger handling is implemented.
+                Latest 100 records per feed. Pending submissions/cancellations require lifecycle
+                confirmation; UNKNOWN requires reconciliation.
               </p>
             </section>
           </div>
-          <section className="live-trading-cockpit" aria-labelledby="live-trading-title">
-            <div className="live-cockpit-hero">
-              <div>
-                <span className="eyebrow">Live position</span>
-                <h2 id="live-trading-title">{symbol}</h2>
-                <p>
-                  {protectedPosition?.status ?? "No managed position"} /{" "}
-                  {accountFresh ? "account feed live" : "account feed stale"}
-                </p>
-              </div>
-              <div className="live-pnl-stack">
-                <span>Unrealized PnL / {quoteAsset}</span>
-                <strong className={toneForNumber(liveUnrealizedPnl)}>
-                  {formatSignedUsd(liveUnrealizedPnl)}
-                </strong>
-                <em className={toneForNumber(liveReturnPct)}>
-                  {formatSignedPercent(liveReturnPct)} at {formatUsd(liveMarkPrice)}
-                </em>
-              </div>
-            </div>
-            <div className="live-cockpit-grid">
-              <div>
-                <span>Quantity / {baseAsset}</span>
-                <strong>{protectedPosition?.quantity ?? "--"}</strong>
-              </div>
-              <div>
-                <span>Average entry</span>
-                <strong>{formatUsd(protectedPosition?.avgEntry)}</strong>
-              </div>
-              <div>
-                <span>Mark price</span>
-                <strong>{formatUsd(liveMarkPrice)}</strong>
-              </div>
-              <div>
-                <span>Position notional</span>
-                <strong>{formatUsd(liveNotional)}</strong>
-              </div>
-              <div>
-                <span>Realized PnL</span>
-                <strong className={toneForNumber(protectedPosition?.realizedPnl)}>
-                  {formatSignedUsd(protectedPosition?.realizedPnl)}
-                </strong>
-              </div>
-              <div>
-                <span>Working orders</span>
-                <strong>{activeSymbolOrders.length}</strong>
-              </div>
-            </div>
-            <div className="live-cockpit-lanes">
-              <div>
-                <div className="lane-title">
-                  <strong>Working orders</strong>
-                  <small>{activeSymbolOrders.length} active</small>
-                </div>
-                <div className="working-order-stack">
-                  {activeSymbolOrders.length ? (
-                    activeSymbolOrders.slice(0, 5).map((order) => (
-                      <div className="working-order-card" key={order.clientOrderId}>
-                        <div>
-                          <strong className={order.side === "BUY" ? "positive" : "negative"}>
-                            {order.side} {order.type}
-                          </strong>
-                          <span>{order.quantity} requested</span>
-                        </div>
-                        <div>
-                          <span>{order.state}</span>
-                          <strong>{order.executedQuantity} filled</strong>
-                        </div>
-                        <div>
-                          <span>Limit</span>
-                          <strong>{formatUsd(order.limitPrice)}</strong>
-                        </div>
-                        {canCancel(order) ? (
-                          <button
-                            className="terminal-row-action danger"
-                            type="button"
-                            onClick={() => request({ kind: "cancel", order })}
-                          >
-                            <XCircle size={13} />
-                            Cancel
-                          </button>
-                        ) : (
-                          <span className="muted">No action</span>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="terminal-empty compact">No working orders for {symbol}</div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <div className="lane-title">
-                  <strong>Recent fills</strong>
-                  <small>{recentSymbolFills.length} shown</small>
-                </div>
-                <div className="recent-fill-stack">
-                  {recentSymbolFills.length ? (
-                    recentSymbolFills.map((fill) => (
-                      <div
-                        className="recent-fill-row"
-                        key={`${fill.clientOrderId}:${fill.tradeId}`}
-                      >
-                        <time>{formatTime(fill.eventTimeMs)}</time>
-                        <strong className={fill.side === "BUY" ? "positive" : "negative"}>
-                          {fill.side}
-                        </strong>
-                        <span>{fill.quantity}</span>
-                        <span>{formatUsd(fill.price)}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="terminal-empty compact">No fills for {symbol}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-          <div className="overview-metrics">
-            <div>
-              <span>Open orders / loaded</span>
-              <strong>{account ? orders.length : "--"}</strong>
-            </div>
-            <div>
-              <span>Awaiting lifecycle confirmation</span>
-              <strong>{account ? unknown.length : "--"}</strong>
-            </div>
-            <div>
-              <span>Snapshot</span>
-              <strong>{age(account?.checkedAt ?? null, now)} old</strong>
-            </div>
-          </div>
-          <div className="bottom-tabs" role="tablist" aria-label="Trading views">
-            {["orders", "fills", "positions", "reconciliation"].map((t) => (
-              <button
-                role="tab"
-                key={t}
-                className={tab === t ? "active" : ""}
-                aria-selected={tab === t}
-                onClick={() => setTab(t)}
-              >
-                {t === "reconciliation"
-                  ? "Unknown / reconciliation"
-                  : t[0]!.toUpperCase() + t.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div role="tabpanel" aria-label={tab}>
-            <DataTable
-              columns={columns}
-              rows={rows}
-              emptyLabel={account ? "No records in loaded snapshot" : "Account unavailable"}
-            />
-          </div>
-          <p className="workspace-footnote">
-            Latest 100 records per feed. Pending submissions/cancellations require lifecycle
-            confirmation; UNKNOWN requires reconciliation.
-          </p>
-        </>
+        </div>
       )}
       {view === "risk" && (
-        <>
-          <div className="workspace-grid">
+        <div className="risk-workspace">
+          <div className="workspace-grid risk-controls">
             <Section title="Global kill switch">{risk}</Section>
             <Section title="Risk limits">
               <Readings
@@ -821,52 +877,62 @@ export function WorkspacePage({
               </p>
             </Section>
           </div>
-          <Section title="Current exposure">
-            <Readings
-              rows={[
-                [`${baseAsset} managed position`, position?.quantity ?? "--"],
-                [
-                  "Managed notional / USDT",
-                  position?.quantity != null && position.markPrice != null
-                    ? new Decimal(position.quantity).abs().mul(position.markPrice).toFixed(2)
-                    : "--"
-                ],
-                ["Wallet reconciliation", account?.portfolio?.wallet?.reconciliation ?? "--"]
-              ]}
-            />
-          </Section>
-          <Section title="Risk events">
-            <DataTable
-              columns={["Time", "Type", "Details"]}
-              rows={(account?.riskEvents ?? []).map((r) => [
-                formatTime(r.tsMs),
-                r.type,
-                JSON.stringify(r.details)
-              ])}
-              emptyLabel="No risk events"
-            />
-          </Section>
-          <Section title="Audit log preview">
-            <DataTable
-              columns={["Time", "Actor", "Action"]}
-              rows={(summary.data?.audits ?? []).map((a) => [
-                formatTime(Number(a.tsMs)),
-                a.actor,
-                a.action
-              ])}
-              emptyLabel={summary.data?.audits ? "No audit entries" : "Audit snapshot unavailable"}
-            />
-            <button
-              className="icon-button"
-              title="Refresh audit and configuration"
-              aria-label="Refresh audit and configuration"
-              disabled={summary.isFetching}
-              onClick={() => void summary.refetch()}
+          <div className="risk-exposure">
+            <Section title="Current exposure">
+              <Readings
+                rows={[
+                  [`${baseAsset} managed position`, position?.quantity ?? "--"],
+                  [
+                    "Managed notional / USDT",
+                    position?.quantity != null && position.markPrice != null
+                      ? new Decimal(position.quantity).abs().mul(position.markPrice).toFixed(2)
+                      : "--"
+                  ],
+                  ["Wallet reconciliation", account?.portfolio?.wallet?.reconciliation ?? "--"]
+                ]}
+              />
+            </Section>
+          </div>
+          <div className="risk-ledgers">
+            <Section title="Risk events">
+              <DataTable
+                columns={["Time", "Type", "Details"]}
+                rows={(account?.riskEvents ?? []).map((r) => [
+                  formatTime(r.tsMs),
+                  r.type,
+                  JSON.stringify(r.details)
+                ])}
+                emptyLabel="No risk events"
+              />
+            </Section>
+            <Section
+              title="Audit log preview"
+              extra={
+                <button
+                  className="icon-button"
+                  title="Refresh audit and configuration"
+                  aria-label="Refresh audit and configuration"
+                  disabled={summary.isFetching}
+                  onClick={() => void summary.refetch()}
+                >
+                  <RefreshCw size={15} />
+                </button>
+              }
             >
-              <RefreshCw size={15} />
-            </button>
-          </Section>
-        </>
+              <DataTable
+                columns={["Time", "Actor", "Action"]}
+                rows={(summary.data?.audits ?? []).map((a) => [
+                  formatTime(Number(a.tsMs)),
+                  a.actor,
+                  a.action
+                ])}
+                emptyLabel={
+                  summary.data?.audits ? "No audit entries" : "Audit snapshot unavailable"
+                }
+              />
+            </Section>
+          </div>
+        </div>
       )}
       {view === "strategies" && (
         <div className="workspace-grid strategy-layout">
@@ -876,6 +942,7 @@ export function WorkspacePage({
                 <button
                   className={`strategy-select ${strategy?.strategyId === s.strategyId ? "active" : ""}`}
                   key={s.strategyId}
+                  aria-pressed={strategy?.strategyId === s.strategyId}
                   onClick={() => setSelected(s.strategyId)}
                 >
                   <strong>{s.strategyId}</strong>
@@ -888,20 +955,28 @@ export function WorkspacePage({
             )}
           </Section>
           <Section title={strategy?.strategyId ?? "Strategy detail"}>
-            <Readings
-              rows={[
-                ["Control status", strategy ? (strategy.paused ? "Paused" : "Not paused") : "--"],
-                ["Control updated", strategy ? formatTime(strategy.updatedAtMs) : "--"],
-                ["Control reason", strategy?.reason ?? "--"],
-                ["Symbol", strategy ? symbol : "--"],
-                ["Interval", "Not reported"],
-                ["Last signal", "Not reported"],
-                ["Last run", "Not reported"],
-                ["Strategy position", "Not reported"],
-                ["Strategy PnL", "Not reported"],
-                ["Last input candle", "Not reported"]
-              ]}
-            />
+            {strategy ? (
+              <Readings
+                rows={[
+                  ["Control status", strategy ? (strategy.paused ? "Paused" : "Not paused") : "--"],
+                  ["Control updated", strategy ? formatTime(strategy.updatedAtMs) : "--"],
+                  ["Control reason", strategy?.reason ?? "--"],
+                  ["Symbol", strategy ? symbol : "--"],
+                  ["Interval", "Not reported"],
+                  ["Last signal", "Not reported"],
+                  ["Last run", "Not reported"],
+                  ["Strategy position", "Not reported"],
+                  ["Strategy PnL", "Not reported"],
+                  ["Last input candle", "Not reported"]
+                ]}
+              />
+            ) : (
+              <div className="strategy-detail-empty">
+                <h3>No strategy selected</h3>
+                <p>Controls and activity appear when strategy state is reported.</p>
+              </div>
+            )}
+
             <div className="strategy-actions">
               <button
                 className="terminal-button terminal-button-ghost"
@@ -943,7 +1018,7 @@ export function WorkspacePage({
         </div>
       )}
       {view === "system" && (
-        <>
+        <div className="system-workspace">
           <div className="workspace-grid">
             <Section title="Services">
               <Readings
@@ -962,7 +1037,20 @@ export function WorkspacePage({
             <Section title="Stream health">
               <SystemHealthPanel now={now} />
             </Section>
-            <Section title="Runtime configuration">
+            <Section
+              title="Runtime configuration"
+              extra={
+                <button
+                  className="icon-button"
+                  title="Refresh migrations and configuration"
+                  aria-label="Refresh migrations and configuration"
+                  disabled={summary.isFetching}
+                  onClick={() => void summary.refetch()}
+                >
+                  <RefreshCw size={15} />
+                </button>
+              }
+            >
               <Readings
                 rows={[
                   ["Dashboard symbol", symbol],
@@ -993,18 +1081,9 @@ export function WorkspacePage({
                     : "Migration snapshot unavailable"
                 }
               />
-              <button
-                className="icon-button"
-                title="Refresh migrations and configuration"
-                aria-label="Refresh migrations and configuration"
-                disabled={summary.isFetching}
-                onClick={() => void summary.refetch()}
-              >
-                <RefreshCw size={15} />
-              </button>
             </Section>
           </div>
-        </>
+        </div>
       )}
       <ConfirmDialog
         open={action !== null}

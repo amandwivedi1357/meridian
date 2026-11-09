@@ -1,3 +1,4 @@
+import { ThemeToggle } from "./ThemeToggle.js";
 import { pages, type PageId } from "../../app/navigation.js";
 
 export function NavigationRail({ view }: { view: PageId }) {
@@ -18,6 +19,7 @@ export function NavigationRail({ view }: { view: PageId }) {
           <span className="rail-tooltip">{label}</span>
         </a>
       ))}
+      <ThemeToggle />
     </nav>
   );
 }

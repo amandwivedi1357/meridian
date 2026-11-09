@@ -1,0 +1,143 @@
+.terminal-shell.terminal-shell-porcelain,
+.trade-drawer-porcelain {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --bg: #f5f6f8;
+  --surface-1: #ffffff;
+  --surface-2: #f0f1f7;
+  --surface-3: #eeedfb;
+  --border: #dde1e8;
+  --border-strong: #bdc2d2;
+  --text: #202432;
+  --muted: #667085;
+  --green: #1c7b58;
+  --red: #bb3f50;
+  --amber: #8a5a16;
+  --blue: #5558c9;
+  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100dvh;
+}
+.terminal-shell-porcelain .navigation-rail,
+.terminal-shell-porcelain .terminal-topbar {
+  background: var(--theme-panel, #ffffff);
+  border-color: var(--border);
+}
+.terminal-shell-porcelain .brand-mark {
+  background: var(--theme-accent-solid, #5558c9);
+  color: #ffffff;
+}
+.terminal-shell-porcelain .navigation-rail a.active {
+  color: var(--theme-accent, #5558c9);
+  background: var(--theme-accent-wash, #eeedfb);
+  box-shadow: inset 2px 0 var(--theme-accent-solid, #5558c9);
+}
+.terminal-shell-porcelain .rail-tooltip {
+  background: var(--theme-panel, #ffffff);
+  color: var(--theme-ink, #202432);
+  box-shadow: 0 3px 12px var(--theme-shadow, #20243212);
+}
+.terminal-shell-porcelain .ticker-strip span {
+  color: var(--theme-ink, #202432);
+  border-color: var(--border);
+}
+.terminal-shell-porcelain .icon-button {
+  color: var(--theme-muted, #626b7d);
+}
+.terminal-shell-porcelain .session-state {
+  background: var(--theme-canvas, #f5f6f8);
+}
+.terminal-shell-porcelain .confirm-dialog {
+  background: var(--theme-panel, #ffffff);
+  box-shadow: 0 24px 80px var(--theme-shadow, #20243226);
+}
+.terminal-shell-porcelain .dialog-backdrop {
+  background: var(--theme-backdrop, #20243240);
+}
+.terminal-shell-porcelain .terminal-button-primary {
+  color: #ffffff;
+  border-color: var(--theme-accent-solid, #5558c9);
+  background: var(--theme-accent-solid, #5558c9);
+}
+.terminal-shell-porcelain :is(.navigation-rail a, .icon-button, .terminal-button):focus-visible {
+  outline: 2px solid var(--theme-accent, #5558c9);
+  outline-offset: 3px;
+}
+.terminal-shell-porcelain,
+.terminal-shell-porcelain * {
+  scrollbar-color: var(--theme-border, #bfc5d2) transparent;
+}
+.terminal-shell-porcelain ::-webkit-scrollbar-thumb {
+  background-color: var(--theme-border, #bfc5d2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .terminal-shell-porcelain .navigation-rail a:hover {
+    background: var(--theme-accent-wash, #eeedfb);
+    color: var(--theme-accent, #5558c9);
+  }
+  .terminal-shell-porcelain .icon-button:hover {
+    background: var(--theme-accent-wash, #eeedfb);
+    color: var(--theme-accent, #5558c9);
+  }
+}
+
+:root[data-theme="dark"] {
+  --theme-canvas: #11131b;
+  --theme-panel: #191c27;
+  --theme-raised: #242838;
+  --theme-subtle: #1e2230;
+  --theme-overlay: #191c27f0;
+  --theme-ink: #edf0f7;
+  --theme-soft-ink: #d0d5e5;
+  --theme-muted: #adb5c9;
+  --theme-border: #353c50;
+  --theme-accent: #b3b6ff;
+  --theme-accent-solid: #6265cf;
+  --theme-accent-hover: #5154b9;
+  --theme-accent-wash: #2b2e4c;
+  --theme-accent-border: #56598b;
+  --theme-success: #6cc8a1;
+  --theme-danger: #f0929f;
+  --theme-warning: #e6bd75;
+  --theme-success-wash: #213a31;
+  --theme-danger-wash: #3c2832;
+  --theme-success-border: #3d6b59;
+  --theme-danger-border: #78505e;
+  --theme-bid-fill: #6cc8a112;
+  --theme-ask-fill: #f0929f12;
+  --theme-backdrop: #07091199;
+  --theme-shadow: #00000040;
+}
+:root[data-theme="dark"] :is(.terminal-shell.terminal-shell-porcelain, .trade-drawer-porcelain) {
+  --bg: var(--theme-canvas);
+  --surface-1: var(--theme-panel);
+  --surface-2: var(--theme-raised);
+  --surface-3: var(--theme-accent-wash);
+  --border: var(--theme-border);
+  --border-strong: #535e79;
+  --text: var(--theme-ink);
+  --muted: var(--theme-muted);
+  --green: var(--theme-success);
+  --red: var(--theme-danger);
+  --amber: var(--theme-warning);
+  --blue: var(--theme-accent);
+  color-scheme: dark;
+}
+:root[data-theme="dark"]
+  .terminal-shell-porcelain
+  :is(
+    .terminal-status-green,
+    .terminal-status-red,
+    .terminal-status-amber,
+    .terminal-status-blue,
+    .terminal-status-muted
+  ) {
+  background: var(--theme-subtle);
+}
+.terminal-shell-porcelain .chart-source span {
+  color: var(--muted);
+}
+.terminal-shell-porcelain .terminal-table td {
+  color: var(--text);
+}

@@ -5,6 +5,7 @@ import { ManualOrderTicket } from "./ManualOrderTicket.js";
 
 export function TradeDrawer(props: ComponentProps<typeof ManualOrderTicket>) {
   const [open, setOpen] = useState(false);
+  const [motion, setMotion] = useState("none");
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -28,7 +29,10 @@ export function TradeDrawer(props: ComponentProps<typeof ManualOrderTicket>) {
         aria-haspopup="dialog"
         aria-expanded={open}
         title="Open Testnet trade ticket"
-        onClick={() => setOpen(true)}
+        onClick={(event) => {
+          setMotion(event.detail === 0 ? "keyboard" : "pointer");
+          setOpen(true);
+        }}
       >
         <ArrowRightLeft size={15} />
         Trade
@@ -36,7 +40,8 @@ export function TradeDrawer(props: ComponentProps<typeof ManualOrderTicket>) {
       {createPortal(
         <dialog
           ref={dialog}
-          className="trade-drawer"
+          className="trade-drawer trade-drawer-porcelain"
+          data-motion={motion}
           aria-labelledby="trade-drawer-title"
           onCancel={(event) => {
             event.preventDefault();

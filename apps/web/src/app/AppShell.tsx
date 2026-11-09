@@ -17,6 +17,8 @@ import {
 import { startLiveSession } from "../lib/live-session.js";
 import { instrumentCatalog } from "../lib/instrument-catalog.js";
 import { useTerminalStore } from "../lib/terminal-store.js";
+import "../styles/porcelain.css";
+import "../styles/workspaces.css";
 import { LogIn, X } from "lucide-react";
 
 export function AppShell() {
@@ -151,7 +153,7 @@ export function AppShell() {
       : undefined
   );
   return (
-    <div className="terminal-shell">
+    <div className={`terminal-shell terminal-shell-porcelain terminal-shell-${view}`}>
       <NavigationRail view={view} />
       <TopBar
         instrumentLabel={(() => {

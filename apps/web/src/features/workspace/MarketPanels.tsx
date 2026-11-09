@@ -52,7 +52,7 @@ export function MarketPanels({
     <>
       <section className="market-data-panel order-depth-panel" aria-labelledby="market-depth-title">
         <header>
-          <h2 id="market-depth-title">Order book depth</h2>
+          <h2 id="market-depth-title">Order book</h2>
           <small>Limited depth</small>
         </header>
         <div className="depth-labels">
@@ -60,24 +60,26 @@ export function MarketPanels({
           <span>Amount / {baseAsset}</span>
           <span>Total / {baseAsset}</span>
         </div>
-        {complete ? (
-          <>
-            {ladder(asks.slice().reverse(), "ask")}
-            <div className="depth-spread">
-              <strong>{formatUsd(mid?.toFixed())}</strong>
-              <span>
-                Spread <b>{spread?.toFixed(2)}</b> {quoteAsset}
-              </span>
-            </div>
-            {ladder(bids, "bid")}
-          </>
-        ) : (
-          <div className="market-panel-empty">Book unavailable</div>
-        )}
+        <div className="depth-scroll" tabIndex={0} aria-label="Order book levels">
+          {complete ? (
+            <>
+              {ladder(asks.slice().reverse(), "ask")}
+              <div className="depth-spread">
+                <strong>{formatUsd(mid?.toFixed())}</strong>
+                <span>
+                  Spread <b>{spread?.toFixed(2)}</b> {quoteAsset}
+                </span>
+              </div>
+              {ladder(bids, "bid")}
+            </>
+          ) : (
+            <div className="market-panel-empty">Book unavailable</div>
+          )}
+        </div>
       </section>
       <section className="market-data-panel recent-tape-panel" aria-labelledby="market-tape-title">
         <header>
-          <h2 id="market-tape-title">Recent trade tape</h2>
+          <h2 id="market-tape-title">Recent trades</h2>
           <small>
             {baseAsset} / {quoteAsset}
           </small>

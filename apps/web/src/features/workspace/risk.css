@@ -1,0 +1,220 @@
+.workspace-page.workspace-risk {
+  padding: 24px 28px;
+  min-height: calc(100dvh - 48px);
+  background: var(--bg);
+  color: var(--text);
+}
+.workspace-risk .workspace-heading {
+  min-height: 0;
+  border: 0;
+  margin-bottom: 22px;
+}
+.workspace-risk .workspace-heading h1 {
+  font-size: 27px;
+  line-height: 1.25;
+  letter-spacing: -0.8px;
+  margin-bottom: 6px;
+}
+.workspace-risk .workspace-heading > div > span {
+  font-size: 12px;
+}
+.workspace-risk .workspace-heading .terminal-status-green {
+  color: var(--green);
+  background: var(--theme-success-wash, #f0f7f3);
+}
+.workspace-risk .workspace-heading .terminal-status-amber {
+  color: var(--amber);
+}
+.workspace-risk .risk-workspace {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.workspace-risk .risk-controls {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+}
+.workspace-risk .workspace-section {
+  padding: 22px;
+  border: 0;
+}
+.workspace-risk .workspace-section h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.workspace-risk .risk-controls > section + section {
+  border-left: 1px solid var(--border);
+}
+.workspace-risk .risk-state-banner {
+  padding: 16px;
+  gap: 12px;
+  margin-bottom: 16px;
+  background: var(--theme-subtle, #f8f9fc);
+  border-radius: 6px;
+  align-items: flex-start;
+}
+.workspace-risk .risk-state-banner > svg {
+  color: var(--amber);
+}
+.workspace-risk .risk-state-banner strong {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.workspace-risk .risk-state-banner p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.workspace-risk .risk-state-banner .terminal-status {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.workspace-risk .workspace-readings {
+  margin: 0;
+  font-size: 12px;
+}
+.workspace-risk .workspace-readings > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, 0.8fr);
+  gap: 20px;
+  padding: 11px 0;
+  border-color: var(--border);
+}
+.workspace-risk .workspace-readings dd {
+  max-width: none;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.workspace-risk .workspace-footnote {
+  font-size: 11px;
+  line-height: 1.6;
+}
+.workspace-risk .emergency-button {
+  margin-top: 20px;
+  min-height: 40px;
+  border-color: var(--theme-danger-border, #e2b4be);
+  background: var(--theme-danger-wash, #fff1f3);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+}
+.workspace-risk .risk-exposure {
+  border-top: 1px solid var(--border);
+}
+.workspace-risk .risk-exposure .workspace-readings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.workspace-risk .risk-exposure .workspace-readings > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  border: 0;
+  padding: 0;
+}
+.workspace-risk .risk-exposure .workspace-readings dd {
+  text-align: left;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+}
+.workspace-risk .risk-ledgers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+}
+.workspace-risk .risk-ledgers > section {
+  min-width: 0;
+}
+.workspace-risk .risk-ledgers > section + section {
+  border-left: 1px solid var(--border);
+}
+.workspace-risk .terminal-table-wrap {
+  overflow-x: auto;
+}
+.workspace-risk .terminal-table {
+  min-width: 400px;
+  width: 100%;
+}
+.workspace-risk .terminal-table :is(th, td) {
+  border-color: var(--border);
+  font-size: 12px;
+}
+.workspace-risk .terminal-table th {
+  color: var(--muted);
+  background: var(--theme-subtle, #f8f9fc);
+  font-weight: 500;
+}
+.workspace-risk .terminal-table tbody tr:hover {
+  background: var(--theme-subtle, #f8f9fc);
+}
+.workspace-risk .terminal-empty {
+  padding: 32px 0;
+  font-size: 12px;
+  min-height: 92px;
+}
+.workspace-risk .icon-button {
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.workspace-risk :is(button, input):focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.workspace-risk :is(.emergency-button, .icon-button) {
+  transition:
+    transform 100ms var(--ease-out),
+    background-color 125ms ease;
+}
+.workspace-risk :is(.emergency-button, .icon-button):active:not(:disabled):not(:focus-visible) {
+  transform: scale(0.97);
+  transition-duration: 160ms;
+}
+.workspace-risk :is(.emergency-button, .icon-button):focus-visible {
+  transition: none;
+}
+@media (max-width: 1000px) {
+  .workspace-risk .risk-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-risk .risk-controls > section + section {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+@media (max-width: 600px) {
+  .workspace-page.workspace-risk {
+    padding: 20px 12px;
+  }
+  .workspace-risk .workspace-section {
+    padding: 18px 16px;
+  }
+  .workspace-risk .risk-state-banner {
+    flex-wrap: wrap;
+    padding: 14px;
+  }
+  .workspace-risk .risk-state-banner > div {
+    flex: 1;
+    min-width: 150px;
+  }
+  .workspace-risk .risk-exposure .workspace-readings {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .workspace-risk .risk-ledgers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-risk .risk-ledgers > section + section {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-risk :is(.emergency-button, .icon-button) {
+    transition: none;
+  }
+  .workspace-risk :is(.emergency-button, .icon-button):active:not(:disabled):not(:focus-visible) {
+    transform: none;
+  }
+}

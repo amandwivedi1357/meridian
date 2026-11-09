@@ -1,0 +1,516 @@
+.workspace-page.workspace-trading {
+  background: var(--bg);
+  color: var(--text);
+  min-height: calc(100dvh - 48px);
+  padding: 24px 28px;
+}
+.workspace-trading .workspace-heading {
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  margin-bottom: 22px;
+}
+.workspace-trading .workspace-heading h1 {
+  font-size: 27px;
+  letter-spacing: -0.8px;
+  line-height: 1.25;
+  margin-bottom: 6px;
+}
+.workspace-trading .workspace-heading > div > span {
+  font-size: 12px;
+}
+.workspace-trading .workspace-heading .terminal-status-green {
+  color: var(--green);
+  background: var(--theme-success-wash, #f0f7f3);
+}
+.workspace-trading .workspace-heading .terminal-status-amber {
+  color: var(--amber);
+}
+.workspace-trading .trading-workspace {
+  display: grid;
+  grid-template-columns: 350px minmax(0, 1fr);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.workspace-trading .trading-ticket {
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+.workspace-trading .manual-trade-panel {
+  margin: 0;
+  border: 0;
+  border-radius: 8px 0 0 0;
+  background: transparent;
+  box-shadow: none;
+}
+.workspace-trading .manual-trade-head {
+  padding: 20px;
+  gap: 12px;
+  align-items: flex-start;
+}
+.workspace-trading .manual-trade-head h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.workspace-trading .manual-trade-head p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.workspace-trading .manual-trade-head .terminal-status {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.workspace-trading .manual-ticket-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  background: transparent;
+  padding: 20px !important;
+}
+.workspace-trading .manual-field {
+  padding: 0;
+  background: transparent;
+  min-width: 0;
+  text-transform: none;
+  font-size: 12px;
+  gap: 7px;
+}
+.workspace-trading .manual-ticket-grid > :is(:first-child, .manual-field-wide, :last-child) {
+  grid-column: 1 / -1;
+}
+.workspace-trading .manual-field :is(input, select) {
+  height: 38px;
+  background: var(--theme-subtle, #f8f9fc);
+  color: var(--text);
+  font-size: 13px;
+}
+.workspace-trading .manual-field input:disabled {
+  background: var(--theme-raised, #f0f1f7);
+  color: var(--muted);
+}
+.workspace-trading .manual-field input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.workspace-trading .manual-segmented button {
+  height: 38px;
+  background: var(--theme-subtle, #f8f9fc);
+  color: var(--theme-muted, #596478);
+  font-size: 11px;
+  font-weight: 600;
+}
+.workspace-trading .manual-segmented button.active[data-side="buy"] {
+  color: var(--green);
+  background: var(--theme-success-wash, #eef7f2);
+  border-color: var(--theme-success-border, #a0cbb5);
+}
+.workspace-trading .manual-segmented button.active[data-side="sell"] {
+  color: var(--red);
+  background: var(--theme-danger-wash, #fff1f3);
+  border-color: var(--theme-danger-border, #e2b4be);
+}
+.workspace-trading .manual-segmented button.active:not([data-side]) {
+  color: var(--blue);
+  background: var(--theme-accent-wash, #eeedfb);
+  border-color: var(--theme-accent-border, #d2d2f0);
+}
+.workspace-trading .manual-ticket-footer {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0 20px 20px;
+  gap: 18px;
+}
+.workspace-trading .workspace-readings {
+  margin: 0;
+  font-size: 12px;
+}
+.workspace-trading .workspace-readings > div {
+  gap: 14px;
+  border-color: var(--border);
+}
+.workspace-trading .workspace-readings :is(dt, dd) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workspace-trading .manual-submit {
+  background: var(--theme-accent-solid, var(--blue));
+  border: 1px solid var(--blue);
+  color: #fff;
+  min-height: 40px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.workspace-trading .trading-monitor {
+  min-width: 0;
+}
+.workspace-trading .live-trading-cockpit {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+}
+.workspace-trading .live-cockpit-hero {
+  padding: 24px;
+  gap: 24px;
+}
+.workspace-trading .eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+}
+.workspace-trading .live-cockpit-hero h2 {
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  margin: 8px 0;
+}
+.workspace-trading .live-cockpit-hero p,
+.workspace-trading .live-pnl-stack :is(span, em) {
+  font-size: 12px;
+}
+.workspace-trading .live-pnl-stack strong {
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.workspace-trading .live-cockpit-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 6px 8px;
+}
+.workspace-trading .live-cockpit-grid > div {
+  padding: 16px;
+  border: 0;
+  gap: 9px;
+}
+.workspace-trading .live-cockpit-grid span {
+  font-size: 12px;
+}
+.workspace-trading .live-cockpit-grid strong {
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.workspace-trading .live-cockpit-lanes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  background: transparent;
+}
+.workspace-trading .live-cockpit-lanes > div {
+  background: transparent;
+  padding: 22px;
+}
+.workspace-trading .live-cockpit-lanes > div + div {
+  border-left: 1px solid var(--border);
+}
+.workspace-trading .lane-title {
+  margin-bottom: 20px;
+}
+.workspace-trading .lane-title strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.workspace-trading .lane-title small {
+  font-size: 11px;
+}
+.workspace-trading .terminal-empty.compact {
+  background: transparent;
+  min-height: 70px;
+  padding: 22px 0;
+  font-size: 12px;
+  text-align: left;
+}
+.workspace-trading .working-order-card {
+  background: var(--theme-subtle, #f8f9fc);
+  border-color: var(--border);
+  border-radius: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  font-size: 12px;
+}
+.workspace-trading .recent-fill-row {
+  border-color: var(--border);
+  font-size: 12px;
+  gap: 7px;
+  padding-inline: 0;
+  grid-template-columns: 58px 36px minmax(0, 1fr) minmax(64px, 1fr);
+}
+.workspace-trading .recent-fill-row span:last-child {
+  display: block;
+}
+.workspace-trading .trading-protection {
+  border-top: 1px solid var(--border);
+}
+.workspace-trading .trading-protection > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 22px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+}
+.workspace-trading .trading-protection > summary::-webkit-details-marker {
+  display: none;
+}
+.workspace-trading .trading-protection-state {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.workspace-trading .trading-protection > summary svg {
+  color: var(--muted);
+}
+.workspace-trading .trading-protection[open] > summary svg {
+  transform: rotate(180deg);
+}
+.workspace-trading .protective-order-panel {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  margin: 0;
+}
+.workspace-trading .protective-order-panel .workspace-readings {
+  padding: 0 22px;
+}
+.workspace-trading .protective-draft-grid {
+  gap: 16px;
+  padding: 18px 22px;
+  border: 0;
+}
+.workspace-trading .protective-order-panel .workspace-footnote {
+  padding: 0 22px 20px;
+  line-height: 1.6;
+}
+.workspace-trading .trading-records {
+  min-width: 0;
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+}
+.workspace-trading .overview-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding: 16px 22px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+.workspace-trading .overview-metrics > div {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 0;
+  border: 0;
+}
+.workspace-trading .overview-metrics span {
+  font-size: 12px;
+}
+.workspace-trading .overview-metrics strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.workspace-trading .bottom-tabs {
+  background: transparent;
+  padding: 0 18px;
+  margin: 0;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.workspace-trading .bottom-tabs button {
+  padding: 14px 6px;
+  white-space: nowrap;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-size: 12px;
+  background: transparent;
+}
+.workspace-trading .bottom-tabs button.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+  background: transparent;
+}
+.workspace-trading .terminal-table-wrap {
+  overflow-x: auto;
+  border: 0;
+}
+.workspace-trading .terminal-table {
+  min-width: 1050px;
+  background: transparent;
+}
+.workspace-trading .terminal-table :is(th, td) {
+  border-color: var(--border);
+  font-size: 12px;
+}
+.workspace-trading .terminal-table th {
+  background: var(--theme-subtle, #f8f9fc);
+  color: var(--muted);
+  font-weight: 500;
+}
+.workspace-trading .terminal-table tbody tr:hover {
+  background: var(--theme-subtle, #f5f6fa);
+}
+.workspace-trading .trading-records .terminal-empty {
+  min-height: 100px;
+  padding: 34px 22px;
+  font-size: 12px;
+}
+.workspace-trading .trading-records > .workspace-footnote {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  line-height: 1.6;
+  margin: 0;
+}
+.workspace-trading :is(button, input, select, summary, [role="tabpanel"]):focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.workspace-trading :is(.manual-segmented button, .manual-submit, .terminal-row-action) {
+  transition:
+    transform 100ms var(--ease-out),
+    background-color 125ms ease,
+    border-color 125ms ease;
+}
+.workspace-trading
+  :is(.manual-segmented button, .manual-submit, .terminal-row-action):active:not(:disabled):not(
+    :focus-visible
+  ) {
+  transform: scale(0.97);
+  transition-duration: 160ms;
+}
+.workspace-trading
+  :is(.manual-segmented button, .manual-submit, .terminal-row-action):focus-visible {
+  transform: none;
+  transition: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .workspace-trading .manual-submit:hover:not(:disabled) {
+    background: var(--theme-accent-hover, #4649b5);
+  }
+  .workspace-trading .bottom-tabs button:hover {
+    color: var(--blue);
+  }
+}
+@media (max-width: 1200px) {
+  .workspace-trading .trading-workspace {
+    grid-template-columns: 330px minmax(0, 1fr);
+  }
+  .workspace-trading .live-cockpit-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .workspace-trading .live-pnl-stack {
+    justify-items: start;
+  }
+  .workspace-trading .live-cockpit-lanes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-trading .live-cockpit-lanes > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+@media (max-width: 900px) {
+  .workspace-page.workspace-trading {
+    padding: 22px;
+  }
+  .workspace-trading .trading-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-trading .trading-ticket {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .workspace-trading .manual-trade-head {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+  .workspace-trading .live-cockpit-hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .workspace-trading .live-pnl-stack {
+    justify-items: end;
+  }
+  .workspace-trading .live-cockpit-lanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-trading .live-cockpit-lanes > div + div {
+    border-left: 1px solid var(--border);
+    border-top: 0;
+  }
+}
+@media (max-width: 600px) {
+  .workspace-page.workspace-trading {
+    padding: 20px 12px;
+  }
+  .workspace-trading .manual-trade-head {
+    padding: 18px 16px;
+  }
+  .workspace-trading .manual-ticket-grid {
+    padding: 18px 16px !important;
+  }
+  .workspace-trading .manual-ticket-grid > div {
+    grid-column: 1 / -1;
+  }
+  .workspace-trading .manual-ticket-footer {
+    padding: 0 16px 18px;
+  }
+  .workspace-trading .live-cockpit-hero {
+    padding: 20px 16px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-trading .live-pnl-stack {
+    justify-items: start;
+  }
+  .workspace-trading .live-cockpit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 6px 0;
+  }
+  .workspace-trading .live-cockpit-grid > div {
+    padding: 14px 16px;
+  }
+  .workspace-trading .live-cockpit-lanes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-trading .live-cockpit-lanes > div {
+    padding: 20px 16px;
+  }
+  .workspace-trading .live-cockpit-lanes > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .workspace-trading .trading-protection > summary {
+    padding-inline: 16px;
+  }
+  .workspace-trading .protective-draft-grid {
+    padding-inline: 16px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-trading .overview-metrics {
+    padding: 16px;
+    gap: 12px 20px;
+  }
+  .workspace-trading .bottom-tabs {
+    padding-inline: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-trading :is(.manual-segmented button, .manual-submit, .terminal-row-action) {
+    transition: none;
+  }
+  .workspace-trading
+    :is(.manual-segmented button, .manual-submit, .terminal-row-action):active:not(:disabled):not(
+      :focus-visible
+    ) {
+    transform: none;
+  }
+}
+
+.workspace-trading [role="tabpanel"] {
+  overflow-x: auto;
+}
+.workspace-trading [role="tabpanel"] .terminal-table-wrap {
+  overflow: visible;
+}

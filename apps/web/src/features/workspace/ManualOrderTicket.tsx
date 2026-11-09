@@ -22,6 +22,8 @@ export function ManualOrderTicket({
   operator,
   riskEngaged,
   lastPrice,
+  description = "Routes through risk, write-ahead storage and executor.",
+  showExecutionPath = true,
   compact = false
 }: {
   readonly symbol: string;
@@ -33,6 +35,8 @@ export function ManualOrderTicket({
   readonly riskEngaged: boolean;
   readonly lastPrice?: string | undefined;
   readonly compact?: boolean;
+  readonly description?: string;
+  readonly showExecutionPath?: boolean;
 }) {
   const [manualSide, setManualSide] = useState<"BUY" | "SELL">("BUY");
   const [manualType, setManualType] = useState<"MARKET" | "LIMIT">("MARKET");
@@ -100,7 +104,7 @@ export function ManualOrderTicket({
       <div className="manual-trade-head">
         <div>
           <h2 id="manual-trade-title">Manual order ticket</h2>
-          <p>Routes through risk, write-ahead storage and executor.</p>
+          <p>{description}</p>
         </div>
         <StatusBadge tone={operator && !riskEngaged ? "green" : "amber"}>
           {riskEngaged ? "Blocked" : operator ? "Operator armed" : "Read only"}
@@ -215,12 +219,14 @@ export function ManualOrderTicket({
             <dt>Estimated notional</dt>
             <dd>{manualNotional}</dd>
           </div>
-          <div>
-            <dt>Execution path</dt>
-            <dd>
-              signals {"->"} executor {"->"} risk {"->"} write-ahead {"->"} gateway
-            </dd>
-          </div>
+          {showExecutionPath && (
+            <div>
+              <dt>Execution path</dt>
+              <dd>
+                signals {"->"} executor {"->"} risk {"->"} write-ahead {"->"} gateway
+              </dd>
+            </div>
+          )}
           <div>
             <dt>Risk status</dt>
             <dd>{riskEngaged ? "Kill switch engaged" : "Risk hook required"}</dd>

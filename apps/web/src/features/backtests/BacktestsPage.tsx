@@ -9,6 +9,22 @@ import { useTerminalStore } from "../../lib/terminal-store.js";
 import { ApiError } from "../../lib/api-client.js";
 import { DataTable } from "../../components/terminal/DataTable.js";
 import { formatUsd } from "../../lib/format.js";
+import { usePageEntrance, type EntranceSequence } from "../../lib/use-page-entrance.js";
+import "./backtests.css";
+
+const backtestEntrance: EntranceSequence = [
+  [".backtests-heading", 0, "translateX(-24px)"],
+  [".backtest-sidebar", 80, "translateX(-24px)"],
+  [".backtest-results", 160, "translateY(24px)"]
+];
+const parameterLabels: Record<string, string> = {
+  initialEquity: "Initial equity",
+  quantity: "Order quantity",
+  fastPeriod: "Fast EMA period",
+  slowPeriod: "Slow EMA period",
+  takerFeeRate: "Taker fee rate",
+  slippageBps: "Slippage / bps"
+};
 
 const useBacktestState = create<{ selected: string; jobId: string; attempt: JobRequest | null }>(
   () => ({ selected: "", jobId: "", attempt: null })
@@ -38,6 +54,7 @@ const jobError = (reason: string | null) =>
         : "Simulation failed";
 
 export function BacktestsPage() {
+  const entranceRef = usePageEntrance<HTMLElement>("backtests", backtestEntrance);
   const principal = useTerminalStore((s) => s.principal),
     { selected, jobId, attempt } = useBacktestState();
   const actor = principal?.actor ?? "",
@@ -145,7 +162,7 @@ export function BacktestsPage() {
     </div>
   );
   return (
-    <main className="backtests-page">
+    <main className="backtests-page backtests-porcelain" ref={entranceRef}>
       <header className="backtests-heading">
         <div>
           <h1>Backtests</h1>
@@ -156,9 +173,11 @@ export function BacktestsPage() {
       <div className="backtests-layout">
         <aside className="backtest-sidebar">
           <details className="simulation-disclosure">
-            <summary>New simulation</summary>
-            <form onSubmit={launch} className="backtest-launcher">
-              <h2>New simulation</h2>
+            <summary>
+              <span>New simulation</span>
+              <ChevronDown size={15} aria-hidden="true" />
+            </summary>
+            <form onSubmit={launch} className="backtest-launcher" aria-label="New simulation">
               <label>
                 Strategy
                 <select aria-label="Strategy" defaultValue="ema">
@@ -168,7 +187,7 @@ export function BacktestsPage() {
               <label>
                 Market
                 <select aria-label="Market" defaultValue="BTCUSDT">
-                  <option value="BTCUSDT">BTCUSDT</option>
+                  <option value="BTCUSDT">BTC / USDT</option>
                 </select>
               </label>
               <label>
@@ -295,7 +314,12 @@ export function BacktestsPage() {
         </aside>
         <section className="backtest-results" aria-label="Backtest results">
           {!runId ? (
-            <div className="terminal-empty">No saved results</div>
+            <div className="backtest-empty">
+              <FlaskConical size={28} aria-hidden="true" />
+              <h2>No saved results</h2>
+              <p>Select a saved run, or open New simulation to configure a backtest.</p>
+              <span>Simulation only / no live orders</span>
+            </div>
           ) : (
             <>
               {detail.isPending && <p role="status">Loading result</p>}
@@ -386,17 +410,24 @@ export function BacktestsPage() {
                     </div>
                     {fills.isError &&
                       retry(fills.error, () => void fills.refetch(), "Fill history unavailable")}
-                    <DataTable
-                      columns={["Time", "Side", "Quantity", "Price / USDT", "Fee"]}
-                      rows={trades.map((t) => [
-                        date(t.tsMs),
-                        t.side,
-                        t.quantity,
-                        formatUsd(t.price),
-                        `${t.fee} ${t.feeAsset}`
-                      ])}
-                      emptyLabel={fills.isPending ? "Loading fills" : "No simulated fills"}
-                    />
+                    <div
+                      className="backtest-fill-scroll"
+                      role="region"
+                      aria-label="Simulated fill ledger"
+                      tabIndex={0}
+                    >
+                      <DataTable
+                        columns={["Time", "Side", "Quantity", "Price / USDT", "Fee"]}
+                        rows={trades.map((t) => [
+                          date(t.tsMs),
+                          t.side,
+                          t.quantity,
+                          formatUsd(t.price),
+                          `${t.fee} ${t.feeAsset}`
+                        ])}
+                        emptyLabel={fills.isPending ? "Loading fills" : "No simulated fills"}
+                      />
+                    </div>
                     {fills.hasNextPage && (
                       <button
                         className="terminal-button terminal-button-ghost"
@@ -423,7 +454,7 @@ export function BacktestsPage() {
                         "slippageBps"
                       ].map((key) => (
                         <div key={key}>
-                          <dt>{key}</dt>
+                          <dt>{parameterLabels[key] ?? key}</dt>
                           <dd>
                             {typeof run.params?.[key] === "string" ||
                             typeof run.params?.[key] === "number"

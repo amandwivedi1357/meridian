@@ -1,0 +1,246 @@
+.backtests-porcelain .backtests-heading > svg {
+  color: var(--blue);
+}
+.backtests-porcelain .backtests-layout {
+  grid-template-columns: 310px minmax(0, 1fr);
+  min-height: 500px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+.backtests-porcelain .backtest-sidebar {
+  padding: 22px;
+}
+.backtests-porcelain h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.backtests-porcelain .simulation-disclosure {
+  margin-bottom: 22px;
+}
+.backtests-porcelain .simulation-disclosure summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  list-style: none;
+}
+.backtests-porcelain .simulation-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+.backtests-porcelain .simulation-disclosure summary svg {
+  color: var(--muted);
+}
+.backtests-porcelain .simulation-disclosure[open] summary svg {
+  transform: rotate(180deg);
+}
+.backtests-porcelain .backtest-launcher {
+  gap: 16px;
+}
+.backtests-porcelain .backtest-launcher label {
+  font-size: 12px;
+}
+.backtests-porcelain .backtest-launcher :is(input, select) {
+  color-scheme: inherit;
+  background: var(--theme-subtle, #f8f9fc);
+  font-size: 13px;
+  min-height: 38px;
+}
+.backtests-porcelain .simulation-settings {
+  padding: 14px 0;
+  border-block: 1px solid var(--border);
+  font-size: 11px;
+  gap: 11px;
+}
+.backtests-porcelain .simulation-settings :is(span, b) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.backtests-porcelain .terminal-button {
+  min-height: 38px;
+  font-size: 12px;
+}
+.backtests-porcelain .backtest-notice {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.backtests-porcelain .backtest-job {
+  padding: 16px;
+  background: var(--theme-subtle, #f8f9fc);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.backtests-porcelain .backtest-saved .panel-title {
+  margin-bottom: 8px;
+}
+.backtests-porcelain .backtest-saved > p {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 14px 0;
+  line-height: 1.6;
+}
+.backtests-porcelain .saved-run-row {
+  color: var(--text);
+  padding: 16px 12px;
+  border-radius: 4px;
+}
+.backtests-porcelain .saved-run-row.active {
+  background: var(--theme-accent-wash, #eeedfb);
+  border-left-color: var(--blue);
+}
+.backtests-porcelain .saved-run-row strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.backtests-porcelain .saved-run-row span {
+  font-size: 12px;
+}
+.backtests-porcelain .saved-run-row small {
+  font-size: 11px;
+}
+.backtests-porcelain .backtest-results {
+  padding: 24px;
+  min-width: 0;
+}
+.backtests-porcelain .backtest-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 430px;
+  text-align: center;
+  padding: 32px 16px;
+}
+.backtests-porcelain .backtest-empty > svg {
+  color: var(--blue);
+}
+.backtests-porcelain .backtest-empty h2 {
+  font-size: 19px;
+  font-weight: 500;
+}
+.backtests-porcelain .backtest-empty p {
+  max-width: 360px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.backtests-porcelain .backtest-empty > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.backtests-porcelain .backtest-result-heading {
+  gap: 10px;
+}
+.backtests-porcelain .backtest-result-heading h2 {
+  font-size: 20px;
+  letter-spacing: -0.5px;
+  overflow-wrap: anywhere;
+}
+.backtests-porcelain .backtest-result-heading p {
+  font-size: 12px;
+}
+.backtests-porcelain .backtest-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  padding: 22px 0;
+}
+.backtests-porcelain .backtest-metrics span {
+  font-size: 12px;
+}
+.backtests-porcelain .backtest-metrics strong {
+  font-size: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.backtests-porcelain .report-link {
+  display: inline-block;
+  margin-bottom: 22px;
+  color: var(--blue);
+  font-size: 12px;
+  text-underline-offset: 3px;
+}
+.backtests-porcelain .backtest-curves {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.backtests-porcelain .backtest-curves .panel-title {
+  margin-bottom: 14px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.backtests-porcelain .backtest-curves small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.backtests-porcelain .backtest-result-chart {
+  height: 260px;
+  background: var(--surface-1);
+}
+.backtests-porcelain .backtest-trades .panel-title {
+  margin-bottom: 18px;
+}
+.backtests-porcelain .backtest-trades small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.backtests-porcelain .backtest-fill-scroll {
+  overflow: auto;
+  max-height: 360px;
+}
+.backtests-porcelain .backtest-fill-scroll .terminal-table-wrap {
+  overflow: visible;
+  max-height: none;
+}
+.backtests-porcelain .terminal-table {
+  min-width: 640px;
+}
+.backtests-porcelain .backtest-parameters {
+  gap: 18px;
+}
+.backtests-porcelain .backtest-parameters dt {
+  font-size: 12px;
+}
+.backtests-porcelain .backtest-parameters dd {
+  font-size: 13px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .backtests-porcelain .saved-run-row:hover {
+    background: var(--theme-subtle, #f8f9fc);
+  }
+}
+@media (max-width: 1100px) {
+  .backtests-porcelain .backtests-layout {
+    grid-template-columns: 270px minmax(0, 1fr);
+  }
+  .backtests-porcelain .backtest-curves {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .backtests-porcelain .backtest-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 800px) {
+  .backtests-porcelain .backtests-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .backtests-porcelain .backtest-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .backtests-porcelain .backtest-empty {
+    min-height: 300px;
+  }
+}
+@media (max-width: 600px) {
+  .backtests-porcelain :is(.backtest-sidebar, .backtest-results) {
+    padding: 18px 16px;
+  }
+  .backtests-porcelain .backtest-parameters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

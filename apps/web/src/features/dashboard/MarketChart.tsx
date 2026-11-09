@@ -20,16 +20,36 @@ import {
 } from "lightweight-charts";
 import type { FillRecord, MarketCandle } from "../../lib/api-client.js";
 import { formatUsd } from "../../lib/format.js";
+import { getTheme, useTheme } from "../../lib/theme.js";
+
+const darkChartColors: Record<string, string> = {
+  "#ffffff": "#191c27",
+  "#667085": "#adb5c9",
+  "#edf0f5": "#2b3142",
+  "#8b90a0": "#7885a1",
+  "#5558c9": "#b3b6ff",
+  "#dde1e8": "#353c50",
+  "#268568": "#66bc97",
+  "#d65161": "#e48091",
+  "#4a9b80": "#417b64",
+  "#c97580": "#925363"
+};
+function chartColor(light: string) {
+  return getTheme() === "dark" ? (darkChartColors[light] ?? light) : light;
+}
 
 export function MarketChart({
   candles,
   baseAsset = "BTC",
-  fills = []
+  fills = [],
+  appearance = "terminal"
 }: {
   candles: readonly MarketCandle[];
   baseAsset?: string;
   fills?: readonly FillRecord[];
+  appearance?: "terminal" | "overview";
 }) {
+  const theme = useTheme();
   const shell = useRef<HTMLDivElement>(null),
     container = useRef<HTMLDivElement>(null),
     chartRef = useRef<IChartApi>();
@@ -60,21 +80,36 @@ export function MarketChart({
     const chart = createChart(container.current!, {
       autoSize: true,
       layout: {
-        background: { type: ColorType.Solid, color: "#080d11" },
-        textColor: "#a3b1bd",
+        background: {
+          type: ColorType.Solid,
+          color: appearance === "overview" ? chartColor("#ffffff") : "#080d11"
+        },
+        textColor: appearance === "overview" ? chartColor("#667085") : "#a3b1bd",
         fontSize: 11
       },
-      grid: { vertLines: { color: "#131d25" }, horzLines: { color: "#131d25" } },
+      grid: {
+        vertLines: { color: appearance === "overview" ? chartColor("#edf0f5") : "#131d25" },
+        horzLines: { color: appearance === "overview" ? chartColor("#edf0f5") : "#131d25" }
+      },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: "#73818d", labelBackgroundColor: "#263540" },
-        horzLine: { color: "#73818d", labelBackgroundColor: "#263540" }
+        vertLine: {
+          color: appearance === "overview" ? chartColor("#8b90a0") : "#73818d",
+          labelBackgroundColor: appearance === "overview" ? chartColor("#5558c9") : "#263540"
+        },
+        horzLine: {
+          color: appearance === "overview" ? chartColor("#8b90a0") : "#73818d",
+          labelBackgroundColor: appearance === "overview" ? chartColor("#5558c9") : "#263540"
+        }
       },
-      rightPriceScale: { borderColor: "#26333d", scaleMargins: { top: 0.12, bottom: 0.23 } },
+      rightPriceScale: {
+        borderColor: appearance === "overview" ? chartColor("#dde1e8") : "#26333d",
+        scaleMargins: { top: 0.12, bottom: 0.23 }
+      },
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        borderColor: "#26333d",
+        borderColor: appearance === "overview" ? chartColor("#dde1e8") : "#26333d",
         rightOffset: 5,
         barSpacing: 9
       },
@@ -82,15 +117,15 @@ export function MarketChart({
     });
     chartRef.current = chart;
     series.current = chart.addCandlestickSeries({
-      upColor: "#00c896",
-      downColor: "#ff4d6d",
-      wickUpColor: "#00c896",
-      wickDownColor: "#ff4d6d",
+      upColor: appearance === "overview" ? chartColor("#268568") : "#00c896",
+      downColor: appearance === "overview" ? chartColor("#d65161") : "#ff4d6d",
+      wickUpColor: appearance === "overview" ? chartColor("#268568") : "#00c896",
+      wickDownColor: appearance === "overview" ? chartColor("#d65161") : "#ff4d6d",
       borderVisible: false,
       priceFormat: { type: "price", precision: 2, minMove: 0.01 }
     });
     line.current = chart.addLineSeries({
-      color: "#4ea1ff",
+      color: appearance === "overview" ? chartColor("#5558c9") : "#4ea1ff",
       lineWidth: 2,
       visible: false,
       priceFormat: { type: "price", precision: 2, minMove: 0.01 }
@@ -128,7 +163,34 @@ export function MarketChart({
       chartRef.current = undefined;
       fitted.current = false;
     };
-  }, []);
+  }, [appearance]);
+  useEffect(() => {
+    if (appearance !== "overview") return;
+    // Recolor the existing canvas instead of recreating it: retain zoom, pan and chart mode.
+    chartRef.current?.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: chartColor("#ffffff") },
+        textColor: chartColor("#667085")
+      },
+      grid: {
+        vertLines: { color: chartColor("#edf0f5") },
+        horzLines: { color: chartColor("#edf0f5") }
+      },
+      crosshair: {
+        vertLine: { color: chartColor("#8b90a0"), labelBackgroundColor: chartColor("#5558c9") },
+        horzLine: { color: chartColor("#8b90a0"), labelBackgroundColor: chartColor("#5558c9") }
+      },
+      rightPriceScale: { borderColor: chartColor("#dde1e8") },
+      timeScale: { borderColor: chartColor("#dde1e8") }
+    });
+    series.current?.applyOptions({
+      upColor: chartColor("#268568"),
+      downColor: chartColor("#d65161"),
+      wickUpColor: chartColor("#268568"),
+      wickDownColor: chartColor("#d65161")
+    });
+    line.current?.applyOptions({ color: chartColor("#5558c9") });
+  }, [theme, appearance]);
   useEffect(() => {
     const interval = candles.at(-1)?.interval;
     if (
@@ -158,7 +220,14 @@ export function MarketChart({
       candles.map((c) => ({
         time: Math.floor(c.openTimeMs / 1000) as UTCTimestamp,
         value: Number(c.volume),
-        color: Number(c.close) >= Number(c.open) ? "#126650" : "#702a3b"
+        color:
+          Number(c.close) >= Number(c.open)
+            ? appearance === "overview"
+              ? chartColor("#4a9b80")
+              : "#126650"
+            : appearance === "overview"
+              ? chartColor("#c97580")
+              : "#702a3b"
       }))
     );
     if (!fitted.current && candles.length) {
@@ -167,14 +236,14 @@ export function MarketChart({
     }
     if (hoveredTime.current !== undefined)
       setHovered(candles.find((c) => c.openTimeMs === hoveredTime.current));
-  }, [candles]);
+  }, [candles, appearance, theme]);
   useEffect(() => {
-    series.current?.setMarkers(executionMarkers(candles, fills));
-  }, [candles, fills]);
+    series.current?.setMarkers(executionMarkers(candles, fills, appearance));
+  }, [candles, fills, appearance, theme]);
   useEffect(() => {
     series.current?.applyOptions({ visible: mode === "candles" });
     line.current?.applyOptions({ visible: mode === "line" });
-  }, [mode]);
+  }, [mode, appearance]);
   const zoom = (factor: number) => {
     const scale = chartRef.current?.timeScale(),
       range = scale?.getVisibleLogicalRange();
@@ -304,7 +373,8 @@ export function MarketChart({
 
 function executionMarkers(
   candles: readonly MarketCandle[],
-  fills: readonly FillRecord[]
+  fills: readonly FillRecord[],
+  appearance: "terminal" | "overview"
 ): SeriesMarker<UTCTimestamp>[] {
   if (!candles.length || !fills.length) return [];
   const first = candles[0]!;
@@ -325,7 +395,14 @@ function executionMarkers(
       const marker: SeriesMarker<UTCTimestamp> = {
         time: Math.floor(candle.openTimeMs / 1000) as UTCTimestamp,
         position: fill.side === "BUY" ? "belowBar" : "aboveBar",
-        color: fill.side === "BUY" ? "#00c896" : "#ff4d6d",
+        color:
+          fill.side === "BUY"
+            ? appearance === "overview"
+              ? chartColor("#268568")
+              : "#00c896"
+            : appearance === "overview"
+              ? chartColor("#d65161")
+              : "#ff4d6d",
         shape: fill.side === "BUY" ? "arrowUp" : "arrowDown",
         text: `${fill.side} ${fill.quantity} @ ${formatUsd(fill.price)}`
       };
