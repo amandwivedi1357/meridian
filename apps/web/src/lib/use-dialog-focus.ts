@@ -9,10 +9,10 @@ export function useDialogFocus(ref: RefObject<HTMLElement>, open: boolean, dismi
     const previous = document.activeElement as HTMLElement | null;
     const items = () => [
       ...dialog.querySelectorAll<HTMLElement>(
-        "button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex='0']"
+        "button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex='0']"
       )
     ];
-    items()[0]?.focus();
+    (dialog.querySelector<HTMLElement>("[data-autofocus]") ?? items()[0])?.focus();
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape" && dismissRef.current) {
         event.preventDefault();

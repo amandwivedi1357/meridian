@@ -17,18 +17,25 @@ export function TopBar({
   pageLabel: string;
   instrumentLabel?: string;
 }) {
-  const { principal, market, account, marketConnection, accountConnection } = useTerminalStore();
+  const { principal, market, account, marketConnection, accountConnection, transport } =
+    useTerminalStore();
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
   const stale = market.updatedAt === null || now - market.updatedAt > 15000;
-  const connected = !stale && marketConnection === "live" && accountConnection === "live";
+  const accountFresh =
+    !!account &&
+    transport.account.lastReceivedAt !== null &&
+    now - transport.account.lastReceivedAt <= 45000;
+  const connected =
+    !stale && marketConnection === "live" && accountConnection === "live" && accountFresh;
   const pnl = account?.portfolio?.totals.find((t) => t.quoteAsset === "USDT")?.realizedPnl;
   const walletUsdt = account?.portfolio?.wallet?.assets.find((asset) => asset.asset === "USDT");
-  const freeUsdt = walletUsdt?.total ?? null;
-  const equity = account?.portfolio?.equity ?? walletUsdt?.value ?? walletUsdt?.total ?? null;
+
+  const equity = account?.portfolio?.equity;
+  const displayedBalance = equity ?? walletUsdt?.total ?? null;
   const openBtc = account?.portfolio?.positions.find((position) => position.symbol === "BTCUSDT");
   return (
     <header className="terminal-topbar">
@@ -44,8 +51,11 @@ export function TopBar({
         </span>
       </div>
       <div className="account-strip">
-        <MetricBadge label="Equity / USDT" value={formatUsd(equity)} />
-        <MetricBadge label="Free USDT" value={formatUsd(freeUsdt)} />
+        <MetricBadge
+          label={equity != null ? "Equity / USDT" : "USDT balance"}
+          value={formatUsd(displayedBalance)}
+        />
+
         <MetricBadge label="Open BTC" value={openBtc?.quantity ?? "--"} />
         <MetricBadge label="Realized P/L" value={formatSignedUsd(pnl)} />
       </div>
@@ -57,7 +67,9 @@ export function TopBar({
             ? "Streaming"
             : stale && marketConnection === "live"
               ? "Market stale"
-              : "Reconnecting"}
+              : !accountFresh && accountConnection === "live"
+                ? "Account stale"
+                : "Reconnecting"}
       </div>
       <div className="session-controls">
         <span>

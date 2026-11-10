@@ -896,6 +896,7 @@ export function WorkspacePage({
           <div className="risk-ledgers">
             <Section title="Risk events">
               <DataTable
+                label="Risk events"
                 columns={["Time", "Type", "Details"]}
                 rows={(account?.riskEvents ?? []).map((r) => [
                   formatTime(r.tsMs),
@@ -920,6 +921,7 @@ export function WorkspacePage({
               }
             >
               <DataTable
+                label="Audit log"
                 columns={["Time", "Actor", "Action"]}
                 rows={(summary.data?.audits ?? []).map((a) => [
                   formatTime(Number(a.tsMs)),
@@ -1001,6 +1003,7 @@ export function WorkspacePage({
             </div>
             <h3>Recent decisions / risk approval</h3>
             <DataTable
+              label="Strategy decisions"
               columns={["Time", "Type", "Reason"]}
               rows={(account?.riskEvents ?? [])
                 .filter(
@@ -1073,6 +1076,7 @@ export function WorkspacePage({
               />
               <h3>Applied migrations</h3>
               <DataTable
+                label="Applied migrations"
                 columns={["Migration", "Applied at"]}
                 rows={(summary.data?.migrations ?? []).map((m) => [m.id, m.appliedAt])}
                 emptyLabel={

@@ -1,5 +1,5 @@
-import { useRef, type ReactNode } from "react";
-import { useDialogFocus } from "../../lib/use-dialog-focus.js";
+import { useEffect, useId, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export function ConfirmDialog({
   open,
@@ -24,39 +24,54 @@ export function ConfirmDialog({
   readonly busy?: boolean;
   readonly disabled?: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useDialogFocus(ref, open, busy ? undefined : onCancel);
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!open || !dialog) return;
+    const previous = document.activeElement as HTMLElement | null;
+    dialog.showModal();
+    return () => {
+      dialog.close();
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [open]);
   if (!open) return null;
 
-  return (
-    <div className="dialog-backdrop" role="presentation">
-      <div
-        ref={ref}
-        className="confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-title"
-      >
-        <h2 id="confirm-title">{title}</h2>
-        <p>{description}</p>
-        {children}
-        <div className="dialog-actions">
-          <button
-            className="terminal-button terminal-button-ghost"
-            onClick={onCancel}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-          <button
-            className={`terminal-button terminal-button-${tone}`}
-            onClick={onConfirm}
-            disabled={busy || disabled}
-          >
-            {busy ? "Saving" : confirmLabel}
-          </button>
-        </div>
+  return createPortal(
+    <dialog
+      ref={ref}
+      className="confirm-dialog confirm-dialog-porcelain"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={`${titleId}-description`}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!busy) onCancel();
+      }}
+    >
+      <h2 id={titleId}>{title}</h2>
+      <p id={`${titleId}-description`}>{description}</p>
+      {children}
+      <div className="dialog-actions">
+        <button
+          type="button"
+          className="terminal-button terminal-button-ghost"
+          onClick={onCancel}
+          disabled={busy}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={`terminal-button terminal-button-${tone}`}
+          onClick={onConfirm}
+          disabled={busy || disabled}
+        >
+          {busy ? "Saving" : confirmLabel}
+        </button>
       </div>
-    </div>
+    </dialog>,
+    document.body
   );
 }

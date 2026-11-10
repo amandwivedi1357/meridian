@@ -18,6 +18,7 @@ import { startLiveSession } from "../lib/live-session.js";
 import { instrumentCatalog } from "../lib/instrument-catalog.js";
 import { useTerminalStore } from "../lib/terminal-store.js";
 import "../styles/porcelain.css";
+import "../styles/overlays.css";
 import "../styles/workspaces.css";
 import { LogIn, X } from "lucide-react";
 
@@ -249,7 +250,7 @@ export function AppShell() {
             <label className="dialog-field">
               Dashboard credential
               <input
-                autoFocus
+                data-autofocus
                 type="password"
                 autoComplete="off"
                 value={credential}

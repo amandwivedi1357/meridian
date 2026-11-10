@@ -1,0 +1,57 @@
+.terminal-shell-porcelain .dialog-backdrop {
+  z-index: 100;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.terminal-shell-porcelain .confirm-dialog,
+.confirm-dialog.confirm-dialog-porcelain {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+.confirm-dialog.confirm-dialog-porcelain {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  min-height: 0;
+  color: var(--text);
+  background: var(--surface-1);
+  border-color: var(--border-strong);
+  box-shadow: 0 24px 80px var(--theme-shadow, #20243226);
+}
+.confirm-dialog-porcelain::backdrop {
+  background: #20243240;
+}
+:root[data-theme="dark"] .confirm-dialog-porcelain::backdrop {
+  background: #07091199;
+}
+.confirm-dialog-porcelain .terminal-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+.confirm-dialog-porcelain .terminal-button-primary {
+  background: var(--theme-accent-solid, #5558c9);
+  color: #fff;
+}
+.confirm-dialog-porcelain .terminal-button-ghost {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.confirm-dialog-porcelain .terminal-button-danger {
+  background: var(--theme-danger-wash, #fff1f3);
+  color: var(--red);
+  border-color: var(--theme-danger-border, #e2b4be);
+}
+.confirm-dialog-porcelain :is(button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+body:has(.dialog-backdrop),
+body:has(.confirm-dialog-porcelain[open]) {
+  overflow: hidden;
+}

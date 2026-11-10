@@ -44,19 +44,45 @@ export function usePageEntrance<T extends HTMLElement>(
         )
       );
     }
-    // Settle moving targets as soon as someone wants to use the page.
-    const settle = () => animations.forEach((animation) => animation.cancel());
+    // Freeze under the pointer until its click is delivered; moving on pointer-down can swallow taps.
+    let pointerActive = false;
+    let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      pointerActive = false;
+      clearTimeout(releaseTimer);
+      animations.forEach((animation) => animation.cancel());
+    };
+    const holdPointer = () => {
+      pointerActive = true;
+      animations.forEach((animation) => {
+        if (animation.playState === "running") animation.pause();
+      });
+    };
+    const releasePointer = () => {
+      if (pointerActive) releaseTimer = setTimeout(settle, 0);
+    };
+    const settleKeyboardFocus = () => {
+      if (!pointerActive) settle();
+    };
     const onPreferenceChange = () => {
       if (preference.matches) settle();
     };
-    node.addEventListener("pointerdown", settle, { capture: true, once: true });
-    node.addEventListener("focusin", settle, { once: true });
+    node.addEventListener("pointerdown", holdPointer, { capture: true, once: true });
+    node.addEventListener("click", settle, { once: true });
+    node.addEventListener("focusin", settleKeyboardFocus);
+    window.addEventListener("pointerup", releasePointer);
+    window.addEventListener("pointercancel", settle);
+    window.addEventListener("blur", settle);
     preference.addEventListener("change", onPreferenceChange);
     window.addEventListener("resize", settle, { once: true });
     return () => {
       settle();
-      node.removeEventListener("pointerdown", settle, true);
-      node.removeEventListener("focusin", settle);
+      node.removeEventListener("pointerdown", holdPointer, true);
+      node.removeEventListener("click", settle);
+      node.removeEventListener("focusin", settleKeyboardFocus);
+      window.removeEventListener("pointerup", releasePointer);
+      window.removeEventListener("pointercancel", settle);
+      window.removeEventListener("blur", settle);
       preference.removeEventListener("change", onPreferenceChange);
       window.removeEventListener("resize", settle);
     };

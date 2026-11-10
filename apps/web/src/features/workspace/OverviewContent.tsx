@@ -282,7 +282,7 @@ export function OverviewContent({
               </a>
             </div>
             {fills.length ? (
-              <div className="ov-table-scroll">
+              <div className="ov-table-scroll" role="region" aria-label="Recent fills" tabIndex={0}>
                 <table className="ov-table">
                   <thead>
                     <tr>

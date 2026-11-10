@@ -1,0 +1,33 @@
+.navigation-rail .rail-brand {
+  margin-bottom: 14px;
+}
+.navigation-rail .navigation-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  padding: 5px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.rail-tooltip-portal {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  border: 1px solid var(--theme-border, #dde1e8);
+  border-radius: 5px;
+  background: var(--theme-panel, #fff);
+  color: var(--theme-ink, #202432);
+  box-shadow: 0 3px 12px var(--theme-shadow, #20243212);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
